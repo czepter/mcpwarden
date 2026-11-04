@@ -14,12 +14,23 @@
     "typecheck": "nuxt typecheck",
     "lint": "eslint .",
     "env:init": "sh scripts/init-env.sh",
-    "test": "vitest run -c tests/vitest.config.ts"
+    "test": "vitest run -c tests/vitest.config.ts",
+    "test:unit": "vitest run -c tests/vitest.config.ts --project unit",
+    "test:int": "vitest run -c tests/vitest.config.ts --project integration",
+    "db:schema": "sh scripts/gen-auth-schema.sh",
+    "db:generate": "drizzle-kit generate",
+    "db:check": "drizzle-kit check",
+    "test:pg": "docker compose -p mcpw-0a -f compose.test.yaml up -d --wait && (TEST_BACKEND=postgres TEST_PG_ADMIN_URL=${TEST_PG_ADMIN_URL:-postgres://postgres:test@localhost:${TEST_PG_PORT:-54329}/postgres} vitest run -c tests/vitest.config.ts --project integration; s=$?; docker compose -p mcpw-0a -f compose.test.yaml down -v; exit $s)"
   },
   "dependencies": {
+    "@better-auth/drizzle-adapter": "1.7.17",
     "@modelcontextprotocol/server": "2.4.0",
+    "@electric-sql/pglite": "0.5.15",
+    "better-auth": "1.7.17",
     "drizzle-orm": "0.45.4",
+    "h3": "1.15.11",
     "nuxt": "4.5.2",
+    "pg": "8.23.1",
     "vue": "3.5.44",
     "vue-router": "5.4.0",
     "zod": "4.6.7"
@@ -28,6 +39,8 @@
     "@modelcontextprotocol/client": "2.4.0",
     "@nuxt/eslint-config": "1.17.0",
     "@types/node": "^24.0.0",
+    "@types/pg": "8.23.1",
+    "drizzle-kit": "0.31.11",
     "eslint": "10.14.0",
     "typescript": "5.9.3",
     "vitest": "5.1.0",

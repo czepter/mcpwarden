@@ -1,19 +1,28 @@
-import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'vitest/config'
 
-const root = fileURLToPath(new URL('..', import.meta.url))
+const root = new URL('..', import.meta.url).pathname
 
-// Minimale Konfiguration fuer Unit-Tests (Phase 0b, Teil 1). 0a liefert die vollstaendige Fassung
-// samt Integrations-Harness; beim Merge gilt 0a, die Aliase unten muessen erhalten bleiben.
+const alias = {
+  '#shared': `${root}shared`,
+  '~~': root,
+}
+
 export default defineConfig({
-  root,
-  resolve: {
-    alias: {
-      '#shared': `${root}shared`,
-      '~~': root,
-    },
-  },
   test: {
-    include: ['tests/unit/**/*.test.ts'],
+    projects: [
+      { resolve: { alias }, test: { name: 'unit', root, include: ['tests/unit/**/*.test.ts'] } },
+      {
+        resolve: { alias },
+        test: {
+          name: 'integration',
+          root,
+          include: ['tests/integration/**/*.test.ts'],
+          globalSetup: ['tests/integration/global-setup.ts'],
+          testTimeout: 60_000,
+          hookTimeout: 120_000,
+          fileParallelism: false,
+        },
+      },
+    ],
   },
 })

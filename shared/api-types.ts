@@ -15,14 +15,34 @@
  *    geändert (Regel 3), nicht die Abweichung verschwiegen.
  */
 
-// --- Phase 0b: OAuth-Provider, Consent, PATs, Clients (docs/plans/phase-0b.md, Abschnitt 4.1) ---
+export type Role = 'admin' | 'user'
 
-/** Ein Fehlerkörper der eigenen Routen (h3 `createError`), Form nach Plan 0b E19. */
-export type ApiErrorBody = {
+/** Nutzer in der Antwort von `GET /api/auth/get-session` (Teilmenge der Better-Auth-Felder). */
+export interface AuthSessionUser {
+  id: string
+  name: string
+  email: string
+  role: Role
+  banned: boolean
+}
+
+/** Fehlerform von Nitro (`createError`); `/api/auth/*` liefert stattdessen `AuthErrorBody`. */
+export interface ApiErrorBody {
   statusCode: number
-  statusMessage?: string
+  statusMessage: string
   data?: { code?: string, field?: string, message?: string }
 }
+
+/** Fehlerform der Better-Auth-Endpunkte unter `/api/auth/*`. */
+export interface AuthErrorBody {
+  code?: string
+  message: string
+}
+
+/** Stabiler Fehlercode (HTTP 403) von `POST /api/auth/sign-up/email`, wenn die Registrierung gesperrt ist. */
+export const REGISTRATION_CLOSED = 'REGISTRATION_CLOSED'
+
+// --- Phase 0b: OAuth-Provider, Consent, PATs, Clients (docs/plans/phase-0b.md, Abschnitt 4.1) ---
 
 export type DcrMode = 'off' | 'allowlist' | 'open'
 export type DcrPolicy = { mode: DcrMode } // Standard 'open'
