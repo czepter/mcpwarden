@@ -86,8 +86,9 @@ export function createGateway(deps: GatewayDeps) {
       if (request.method !== 'POST') return methodNotAllowed() // (b) Methode
       const auth = await deps.authenticate(request) // (c)+(d) Token und Zusatzpruefung
       if (auth instanceof Response) return auth
+      const listen = await isListen(request) // vor fetch: danach ist der Body verbraucht
       const res = await handlerFor(auth.ctx.userId).fetch(request, { authInfo: toAuthInfo(auth.ctx, auth.token) }) // (e)
-      return (await isListen(request)) ? limitStream(res, deps.streamMaxMs ?? 300_000) : res
+      return listen ? limitStream(res, deps.streamMaxMs ?? 300_000) : res
     },
     /** Meldet `tools/list_changed` an die offenen Listen-Streams genau dieses Nutzers. */
     notifyToolsChanged(userId: string): void {
