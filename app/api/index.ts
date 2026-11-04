@@ -1,7 +1,7 @@
 import type {
   AdminLimitsInput, AdminSettings, AdminSettingsResult, AdminUserList, AllowlistEntry, AllowlistInput, AllowlistList,
   AuditList, AuthSession, Capabilities, ConnectionList, ConsentInfo, Dashboard, DcrMode, DcrPolicy, InviteCheck, InviteCreated,
-  InviteList, LinkInfo, LinkTestResult, OAuthClientAdmin, OAuthClientAdminList, PatCreated, PatList, SecretInput, SecretResult,
+  InviteList, LinkInfo, LinkTestResult, OAuthClientAdminList, PatCreated, PatList, SecretInput, SecretResult,
   StatsSummary, StatsWindow, StdioDraft, TestResult, ToolList, UpstreamDetail, UpstreamInput, UpstreamList, UpstreamPatch, UpstreamTool, AdminUser,
 } from '#shared/api-types'
 import { API_PATHS } from '#shared/api-types'
@@ -54,8 +54,8 @@ export const upstreamApi = {
 
 export const adminApi = {
   users: () => get<AdminUserList>('/api/admin/users'),
-  ban: (id: string, reason?: string) => post<void>(`/api/admin/users/${enc(id)}/ban`, { reason }),
-  unban: (id: string) => post<void>(`/api/admin/users/${enc(id)}/unban`),
+  ban: (id: string, reason?: string) => post<undefined>(`/api/admin/users/${enc(id)}/ban`, { reason }),
+  unban: (id: string) => post<undefined>(`/api/admin/users/${enc(id)}/unban`),
   removeUser: (id: string) => del(`/api/admin/users/${enc(id)}`),
   setLimits: (id: string, b: AdminLimitsInput) => put<AdminUser>(`/api/admin/users/${enc(id)}/limits`, b),
   invites: () => get<InviteList>('/api/admin/invites'),

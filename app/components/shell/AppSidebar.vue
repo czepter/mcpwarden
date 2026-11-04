@@ -26,7 +26,7 @@ const initials = computed(() => (user.value?.name ?? '?').split(/\s+/).map(s => 
     </SidebarHeader>
     <SidebarContent>
       <nav aria-label="Hauptnavigation" class="flex min-h-0 flex-1 flex-col">
-        <SidebarGroup v-for="g in groups" :key="g.label">
+        <SidebarGroup v-for="g in groups" :key="g.label ?? ''">
           <SidebarGroupLabel class="text-[11px] font-semibold tracking-[0.04em] text-muted-foreground uppercase group-data-[collapsible=icon]:hidden">{{ g.label }}</SidebarGroupLabel>
           <SidebarSeparator class="hidden group-data-[collapsible=icon]:block" />
           <SidebarMenu>

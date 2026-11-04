@@ -59,7 +59,7 @@ export const upstreamHandlers = [
   }),
   route('delete', '/api/upstreams/:id', ({ params }) => {
     const s = getState(); if (!find(params.id)) return NF()
-    s.upstreams = s.upstreams.filter(u => u.id !== params.id); delete s.tools[String(params.id)]; save(); return noContent()
+    s.upstreams = s.upstreams.filter(u => u.id !== params.id); Reflect.deleteProperty(s.tools, String(params.id)); save(); return noContent()
   }),
   route('put', '/api/upstreams/:id/secret', async ({ params, request }) => {
     const u = find(params.id); if (!u) return NF()

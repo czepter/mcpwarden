@@ -1,12 +1,13 @@
 import { toTypedSchema } from '@vee-validate/zod'
 import { useForm } from 'vee-validate'
+import type { GenericObject } from 'vee-validate'
 import { nextTick, ref } from 'vue'
 import type { z } from 'zod'
 import { ApiError } from '~/api/http'
 
 /** vee-validate + zod. Serverfehler mit `field` landen am Feld, alle anderen im `formError` (Alert ueber dem Formular). */
 export function useZodForm<S extends z.ZodType>(schema: S, initialValues: z.input<S>) {
-  const form = useForm({ validationSchema: toTypedSchema(schema as never), initialValues: initialValues as never })
+  const form = useForm<z.input<S> & GenericObject, z.output<S> & GenericObject>({ validationSchema: toTypedSchema(schema as never) as never, initialValues: initialValues as never })
   const formError = ref('')
   const busy = ref(false)
   const focusFirst = () => nextTick(() => document.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus())

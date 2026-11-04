@@ -7,7 +7,6 @@ const ahead = (min: number) => new Date(Date.now() + min * 60_000).toISOString()
 
 export const DEFAULT_LIMITS: UserLimits = { maxUpstreams: 50, callsPerMin: 120, maxConnections: 20, stdioMaxProcs: 5, stdioIdleMin: 10 }
 
-type U = [string, string, 'http' | 'stdio' | 'rest', UpstreamDetail['status'], number, number, string | null, string | null, Array<'ok' | 'warn' | 'err' | 'none'>, number | null]
 const bars = (s: string) => s.split('').map(c => ({ g: 'ok', y: 'warn', r: 'err', n: 'none' } as const)[c as 'g'])
 const SRC: Array<[string, string, string, 'http' | 'stdio' | 'rest', UpstreamDetail['status'], number, number, string | null, string, number | null]> = [
   ['github', 'GitHub', 'api.githubcopilot.com/mcp', 'http', 'healthy', 38, 42, null, 'gggggggggggggggggggggggg', 212],

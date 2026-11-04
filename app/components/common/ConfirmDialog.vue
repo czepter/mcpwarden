@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '~/components/ui/alert-dialog'
 
-withDefaults(defineProps<{ open: boolean, title: string, description?: string, confirmLabel?: string, destructive?: boolean }>(), { confirmLabel: 'Bestätigen', destructive: true })
+withDefaults(defineProps<{ open: boolean, title: string, description?: string, confirmLabel?: string, destructive?: boolean }>(), { confirmLabel: 'Bestätigen', destructive: true, description: '' })
 const emit = defineEmits<{ 'update:open': [v: boolean], 'confirm': [] }>()
 </script>
 
