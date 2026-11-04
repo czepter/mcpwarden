@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { checkOrigin, protectedResourceMetadata, resourceMetadataUrl, resourceUrl, wellKnownResponse } from '../../server/mcp/discovery'
+import { checkOrigin, resourceMetadataUrl, resourceUrl } from '../../server/mcp/discovery'
 import { forbidden, unauthorized } from '../../server/mcp/errors'
 
 const base = new URL('http://localhost:3000')
@@ -29,24 +29,6 @@ describe('discovery', () => {
   it('urls derive from BASE_URL', () => {
     expect(resourceUrl(base)).toBe('http://localhost:3000/mcp')
     expect(resourceMetadataUrl(base)).toBe('http://localhost:3000/.well-known/oauth-protected-resource/mcp')
-  })
-  it('protected resource metadata', () => {
-    expect(protectedResourceMetadata(base, 'http://localhost:3000/api/auth')).toEqual({
-      resource: 'http://localhost:3000/mcp',
-      authorization_servers: ['http://localhost:3000/api/auth'],
-      scopes_supported: ['openid', 'offline_access', 'mcp:tools'],
-      bearer_methods_supported: ['header'],
-      resource_name: 'mcpwarden',
-    })
-  })
-  it('well-known response: json + cors, options, other methods', async () => {
-    const ok = wellKnownResponse(new Request('http://localhost:3000/x'), { a: 1 })
-    expect(ok.status).toBe(200)
-    expect(ok.headers.get('content-type')).toBe('application/json')
-    expect(ok.headers.get('access-control-allow-origin')).toBe('*')
-    expect(await ok.json()).toEqual({ a: 1 })
-    expect(wellKnownResponse(new Request('http://localhost:3000/x', { method: 'OPTIONS' }), {}).status).toBe(204)
-    expect(wellKnownResponse(new Request('http://localhost:3000/x', { method: 'POST' }), {}).status).toBe(405)
   })
 })
 

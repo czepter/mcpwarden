@@ -4,10 +4,12 @@ import { count } from 'drizzle-orm'
 import { getDb } from '../db'
 import { user } from '../db/schema'
 import { getConfig } from '../utils/config'
+import { getRegistrationPolicy, recordClientMeta, seedAllowlist } from './dcr-store'
 import { buildAuthOptions } from './options'
 
 function create() {
-  return getDb().then((db) => {
+  return getDb().then(async (db) => {
+    await seedAllowlist(db)
     const cfg = getConfig()
     return betterAuth({
       ...buildAuthOptions({
@@ -16,6 +18,10 @@ function create() {
         allowedOrigins: cfg.allowedOrigins,
         rateLimitEnabled: cfg.rateLimitEnabled,
         countUsers: async () => (await db.select({ n: count() }).from(user))[0]?.n ?? 0,
+        dcr: {
+          getPolicy: () => getRegistrationPolicy(db),
+          recordRegistration: (clientId, allowlisted) => recordClientMeta(db, clientId, allowlisted),
+        },
       }),
       database: drizzleAdapter(db, { provider: 'pg' }),
     })
