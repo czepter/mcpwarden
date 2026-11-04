@@ -13,7 +13,8 @@
     "postinstall": "nuxt prepare",
     "typecheck": "nuxt typecheck",
     "lint": "eslint .",
-    "env:init": "sh scripts/init-env.sh"
+    "env:init": "sh scripts/init-env.sh",
+    "test": "vitest run -c tests/vitest.config.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/server": "2.4.0",
