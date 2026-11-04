@@ -16,7 +16,6 @@ let http: Server
 let url: URL
 let gateway: ReturnType<typeof createGateway>
 const aborted = vi.fn()
-const seenSignals: boolean[] = []
 
 beforeAll(async () => {
   const tools = createDummyUpstream({ notify: id => gateway.notifyToolsChanged(id), onAbort: aborted })
