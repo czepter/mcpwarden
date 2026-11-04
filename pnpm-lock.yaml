@@ -20,6 +20,9 @@ importers:
       drizzle-orm:
         specifier: 0.45.4
         version: 0.45.4(@electric-sql/pglite@0.5.15)(@types/pg@8.23.1)(kysely@0.29.8)(pg@8.23.1)
+      h3:
+        specifier: 1.15.11
+        version: 1.15.11
       nuxt:
         specifier: 4.5.2
         version: 4.5.2(@babel/plugin-syntax-jsx@7.29.7(@babel/core@7.29.13))(@babel/plugin-syntax-typescript@7.29.7(@babel/core@7.29.13))(@electric-sql/pglite@0.5.15)(@oxc-project/types@0.156.0)(@types/node@24.19.2)(@vue/compiler-sfc@3.5.44)(bare-buffer@3.7.1)(confbox@0.3.2)(db0@0.3.4(@electric-sql/pglite@0.5.15)(drizzle-orm@0.45.4(@electric-sql/pglite@0.5.15)(@types/pg@8.23.1)(kysely@0.29.8)(pg@8.23.1)))(dotenv@17.4.2)(drizzle-orm@0.45.4(@electric-sql/pglite@0.5.15)(@types/pg@8.23.1)(kysely@0.29.8)(pg@8.23.1))(esbuild@0.28.2)(eslint@10.14.0(jiti@2.7.0))(giget@3.3.1)(ioredis@5.11.1)(lightningcss@1.33.0)(magicast@0.5.5)(optionator@0.9.4)(rolldown@1.2.16)(rollup-plugin-visualizer@7.1.2(rolldown@1.2.16)(rollup@4.67.5))(rollup@4.67.5)(srvx@0.11.22)(terser@5.51.2)(tsx@4.23.15)(typescript@5.9.3)(vite@8.3.5(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.15)(yaml@2.9.1))(vue-tsc@3.3.14(typescript@5.9.3))(yaml@2.9.1)
