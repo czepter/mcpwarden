@@ -10,7 +10,7 @@ const chain = (e: unknown) => { const out: unknown[] = []; for (let c = e, i = 0
 /** Bereinigte Meldungen: keine interne IP, kein Secret. */
 export function classifyError(e: unknown, opts: { hasAuth?: boolean, aborted?: boolean } = {}): Classified {
   const all = chain(e)
-  if (all.some(x => x instanceof SsrfBlockedError)) return { code: 'ssrf_blocked', message: SSRF_MESSAGE, counts: false, auth: false }
+  if (all.some(x => x instanceof SsrfBlockedError || (x as Error)?.message?.includes(SSRF_MESSAGE))) return { code: 'ssrf_blocked', message: SSRF_MESSAGE, counts: false, auth: false }
   if (all.some(x => x instanceof UpstreamRedirectError)) return { code: 'redirect', message: 'Upstream leitet um, bitte Ziel-URL direkt eintragen', counts: false, auth: false }
   const http = all.find((x): x is SdkHttpError => x instanceof SdkHttpError)
   const status = http?.status ?? (all.map(x => (x as { status?: number, code?: number }).status).find(s => typeof s === 'number'))

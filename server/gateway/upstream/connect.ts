@@ -17,6 +17,19 @@ export type ConnectDeps = {
   stdioTransport?: (up: UpstreamRow) => Promise<Transport>
 }
 
+/** Standard ist `legacy`; nur `auto` spricht Revision 2026-07-28 (Abbruch = Stream schließen) und fällt sonst auf `initialize` zurück. */
+export const clientOptions = (connectMs: number) => ({ versionNegotiation: { mode: 'auto' as const, probe: { timeoutMs: connectMs, maxRetries: 0 } } })
+
+/** Bricht ab, sobald das Signal feuert (die SDK-Probe beachtet `signal` nicht überall). */
+function raceAbort<T>(p: Promise<T>, signal: AbortSignal): Promise<T> {
+  return new Promise<T>((res, rej) => {
+    const onAbort = () => rej(signal.reason ?? new DOMException('aborted', 'AbortError'))
+    if (signal.aborted) return onAbort()
+    signal.addEventListener('abort', onAbort, { once: true })
+    p.then(res, rej).finally(() => signal.removeEventListener('abort', onAbort))
+  })
+}
+
 export function authHeaders(up: UpstreamRow, c: Credentials): Record<string, string> {
   const h: Record<string, string> = {}
   if (up.authType === 'bearer' && c.bearer) h.Authorization = `Bearer ${c.bearer}`
@@ -37,10 +50,10 @@ function httpTransport(kind: 'streamable' | 'sse', url: URL, headers: Record<str
 
 export type Connected = { client: Client, transport: 'streamable' | 'sse' | 'stdio' }
 
-async function connectOnce(up: UpstreamRow, kind: 'streamable' | 'sse', deps: ConnectDeps, headers: Record<string, string>, signal: AbortSignal): Promise<Client> {
-  const client = new Client(deps.clientInfo ?? { name: 'mcpwarden', version: '0.1.0' })
+async function connectOnce(up: UpstreamRow, connectMs: number, kind: 'streamable' | 'sse', deps: ConnectDeps, headers: Record<string, string>, signal: AbortSignal): Promise<Client> {
+  const client = new Client(deps.clientInfo ?? { name: 'mcpwarden', version: '0.1.0' }, clientOptions(connectMs))
   try {
-    await client.connect(httpTransport(kind, new URL(up.url!), headers, deps.safeFetch), { signal })
+    await raceAbort(client.connect(httpTransport(kind, new URL(up.url!), headers, deps.safeFetch), { signal }), signal)
     return client
   } catch (e) {
     await client.close().catch(() => {})
@@ -53,8 +66,10 @@ export async function connectUpstream(up: UpstreamRow, deps: ConnectDeps, signal
   const t = mergeTimeouts(up.timeouts)
   if (up.type === 'stdio') {
     if (!deps.stdioTransport) throw new Error('stdio not available')
-    const client = new Client(deps.clientInfo ?? { name: 'mcpwarden', version: '0.1.0' })
-    await client.connect(await deps.stdioTransport(up), { signal: AbortSignal.any([AbortSignal.timeout(Math.max(t.connectMs, 60_000)), ...(signal ? [signal] : [])]) })
+    const ms = Math.max(t.connectMs, 60_000)
+    const client = new Client(deps.clientInfo ?? { name: 'mcpwarden', version: '0.1.0' }, clientOptions(ms))
+    const sig = AbortSignal.any([AbortSignal.timeout(ms), ...(signal ? [signal] : [])])
+    await raceAbort(client.connect(await deps.stdioTransport(up), { signal: sig }), sig)
     return { client, transport: 'stdio', retries: 0 }
   }
   const headers = authHeaders(up, await deps.credentials(up))
@@ -63,7 +78,7 @@ export async function connectUpstream(up: UpstreamRow, deps: ConnectDeps, signal
     const order: Array<'streamable' | 'sse'> = up.transport === 'auto' ? ['streamable', 'sse'] : [up.transport]
     let lastErr: unknown
     for (const kind of order) {
-      try { return { client: await connectOnce(up, kind, deps, headers, sig), transport: kind } } catch (e) {
+      try { return { client: await connectOnce(up, t.connectMs, kind, deps, headers, sig), transport: kind } } catch (e) {
         lastErr = e
         const c = classifyError(e, { hasAuth: up.authType !== 'none' })
         // Fallback nur wenn der Server Streamable nicht spricht; nie bei SSRF/Redirect/Auth/Timeout.
@@ -74,7 +89,7 @@ export async function connectUpstream(up: UpstreamRow, deps: ConnectDeps, signal
   }
   const { value, retries } = await withRetry(attempt, {
     signal,
-    shouldRetry: (e) => { const c = classifyError(e, { hasAuth: up.authType !== 'none' }); return c.counts && c.code !== 'timeout' ? true : c.code === 'timeout' },
+    shouldRetry: e => classifyError(e, { hasAuth: up.authType !== 'none' }).counts,
   })
   return { ...value, retries }
 }

@@ -26,6 +26,7 @@ export async function startFakeHttp(opts: { toolNames?: string[] } = {}): Promis
     state.requests.push({ method: req.method ?? '', headers: { ...req.headers } })
     res.on('close', () => { if (!res.writableFinished) state.aborted++ })
     if (required && req.headers[required[0].toLowerCase()] !== required[1]) { res.writeHead(401, { 'content-type': 'text/plain' }).end('unauthorized'); return }
+    if (state.mode === 'hang-http') return // Antwort nie senden
     if (state.mode === 'status500' && req.method === 'POST') { res.writeHead(500).end('boom'); return }
     void node(req, res)
   })

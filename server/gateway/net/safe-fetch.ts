@@ -48,6 +48,7 @@ export function createSafeFetch(opts: SafeFetchOptions = {}): FetchLike & { clos
       throw e
     }
   }) as FetchLike & { close: () => Promise<void> }
-  f.close = () => dispatcher.close()
+  let closing: Promise<void> | null = null
+  f.close = () => (closing ??= dispatcher.close().catch(() => {}))
   return f
 }
