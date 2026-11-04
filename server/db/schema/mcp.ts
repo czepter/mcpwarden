@@ -3,8 +3,7 @@
  * Fremdschluessel auf `user` (0a) und `oauth_client` (Migration 0001).
  */
 import { boolean, index, jsonb, pgTable, primaryKey, text, timestamp, uuid } from 'drizzle-orm/pg-core'
-// TODO(merge 0a): auf `./auth` umstellen (user) bzw. den generierten OAuth-Client importieren.
-import { oauthClient, user } from '../../_stubs/auth-schema'
+import { oauthClient, user } from './auth'
 
 /** Einzige Einstellungstabelle des Projekts (Phase 1 nutzt sie mit). Schluessel `oauth.dcr_mode`. */
 export const appSetting = pgTable('app_setting', {
