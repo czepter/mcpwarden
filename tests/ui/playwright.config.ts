@@ -6,7 +6,7 @@ export default defineConfig({
   workers: 1,
   use: { baseURL: 'http://localhost:3101' },
   webServer: {
-    command: 'PORT=3101 node .output/server/index.mjs',
+    command: 'PORT=3101 node .output-mock/server/index.mjs',
     url: 'http://localhost:3101',
     reuseExistingServer: false,
     timeout: 60_000,

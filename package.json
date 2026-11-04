@@ -14,11 +14,13 @@
     "typecheck": "nuxt typecheck",
     "lint": "eslint .",
     "env:init": "sh scripts/init-env.sh",
-    "ui:dev": "VITE_API_MOCK=all nuxt dev",
-    "ui:build": "VITE_API_MOCK=all nuxt build",
+    "ui:dev": "pnpm ui:prep && VITE_API_MOCK=all nuxt dev",
+    "ui:build": "pnpm ui:prep && VITE_API_MOCK=all nuxt build",
     "ui:test": "vitest run --config tests/ui/vitest.config.ts",
     "ui:e2e": "pnpm ui:build && playwright test --config tests/ui/playwright.config.ts",
-    "ui:check": "pnpm typecheck && pnpm lint && pnpm ui:test"
+    "ui:check": "pnpm typecheck && pnpm lint && pnpm ui:test",
+    "ui:prep": "msw init .mocks-public --no-save",
+    "ui:check-build": "node tests/ui/check-no-mock.mjs .output"
   },
   "dependencies": {
     "@fontsource-variable/inter": "5.3.0",

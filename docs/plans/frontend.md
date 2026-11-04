@@ -137,7 +137,7 @@ mcpwarden/
 ├── mocks/
 │   ├── handlers/{auth,oauth,me,admin-oauth,upstreams,admin,stats,audit,links,dashboard}.ts
 │   ├── state.ts · seed.ts · scenarios.ts · browser.ts · node.ts · index.ts
-├── public/mockServiceWorker.js         # generiert, nur im Mock-Modus geladen
+├── (.mocks-public/mockServiceWorker.js)  # generiert (msw init), gitignoriert, nur bei Mock-Builds per nitro.publicAssets
 └── tests/ui/{vitest.config.ts,unit,component,contract,e2e}/
 ```
 
@@ -531,7 +531,7 @@ Reihenfolge ist verbindlich, wo eine Abhängigkeit genannt ist; sonst nach jeder
 
 ### Aufgabe 17: Härtung (Barrierefreiheit, Responsive, Leistung)
 - Zweck: F6, F7, F10 flächendeckend.
-- Schritte: axe über alle Routen und Zustände, manuelle Tastaturrunde, Bildschirmleser-Stichprobe, Breiten 320/375/768/1440, Fokusreihenfolge, Zahlen- und Zeitformate, Ladezeit (keine Blockade durch Charts: `chart` per dynamischem Import), Bundle-Größe, Entfernen des Mock-Codes aus dem Produktions-Build (Test: `rg mockServiceWorker .output` leer).
+- Schritte: axe über alle Routen und Zustände, manuelle Tastaturrunde, Bildschirmleser-Stichprobe, Breiten 320/375/768/1440, Fokusreihenfolge, Zahlen- und Zeitformate, Ladezeit (keine Blockade durch Charts: `chart` per dynamischem Import), Bundle-Größe, Entfernen des Mock-Codes aus dem Produktions-Build (Test: `pnpm ui:check-build` prüft Dateinamen und Inhalt von `.output` auf Worker-Datei, `INTEGRITY_CHECKSUM`, `startMock`, `setupWorker`, Seed-Code; in CI nach `pnpm build`; Mock-Builds schreiben nach `.output-mock`).
 - Prüfung: `ui:e2e` grün, Bericht im PR.
 - DoD: keine axe-Verstöße „serious“/„critical“; Checkliste Abschnitt 12 abgehakt.
 
