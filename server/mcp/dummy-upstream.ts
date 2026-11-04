@@ -11,6 +11,7 @@ const tools: Record<string, { def: Omit<ToolDef, 'name'>, hidable: boolean }> = 
   dummy__add: { hidable: true, def: { description: 'Addiert zwei Zahlen.', inputSchema: { type: 'object', properties: { a: { type: 'number' }, b: { type: 'number' } }, required: ['a', 'b'] } } },
   dummy__whoami: { hidable: false, def: { description: 'Zeigt Nutzer, Rolle, Token-Typ und Scopes.', inputSchema: { type: 'object', properties: {} } } },
   dummy__slow_echo: { hidable: false, def: { description: 'Antwortet nach ms Millisekunden, abbrechbar.', inputSchema: { type: 'object', properties: { text: { type: 'string' }, ms: { type: 'number' } }, required: ['text'] } } },
+  dummy__abort_count: { hidable: false, def: { description: 'Zaehlt abgebrochene slow_echo-Aufrufe dieses Nutzers (Testhilfe fuer A10).', inputSchema: { type: 'object', properties: {} } } },
   dummy__toggle_tool: { hidable: false, def: { description: 'Blendet dummy__echo aus/ein und meldet list_changed.', inputSchema: { type: 'object', properties: {} } } },
 }
 
@@ -21,6 +22,7 @@ const slowArgs = z.object({ text: z.string(), ms: z.number().min(0).max(60_000).
 /** `notify` meldet list_changed nur fuer den uebergebenen Nutzer. `onAbort` ist ein Testhaken. */
 export function createDummyUpstream(opts: { notify: (userId: string) => void, onAbort?: (name: string) => void }): ToolSource {
   const hiddenFor = new Set<string>() // userId -> dummy__echo ausgeblendet
+  const aborts = new Map<string, number>() // userId -> abgebrochene slow_echo-Aufrufe
 
   return {
     async listTools(ctx) {
@@ -46,11 +48,13 @@ export function createDummyUpstream(opts: { notify: (userId: string) => void, on
           if (!p.success) return text(`invalid arguments: ${p.error.message}`, true)
           return await new Promise<CallToolResult>((resolve) => {
             const timer = setTimeout(() => resolve(text(p.data.text)), p.data.ms)
-            const abort = () => { clearTimeout(timer); opts.onAbort?.(name); resolve(text('aborted', true)) }
+            const abort = () => { clearTimeout(timer); aborts.set(ctx.userId, (aborts.get(ctx.userId) ?? 0) + 1); opts.onAbort?.(name); resolve(text('aborted', true)) }
             if (signal.aborted) abort()
             else signal.addEventListener('abort', abort, { once: true })
           })
         }
+        case 'dummy__abort_count':
+          return text(String(aborts.get(ctx.userId) ?? 0))
         default: { // dummy__toggle_tool
           if (hiddenFor.delete(ctx.userId)) { /* wieder sichtbar */ } else hiddenFor.add(ctx.userId)
           opts.notify(ctx.userId)
