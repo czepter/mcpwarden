@@ -32,6 +32,19 @@ describe('validateAcceptedScopes', () => {
     expect(validateAcceptedScopes(['mcp:tools', 'other'], offered).ok).toBe(false)
     expect(validateAcceptedScopes(['mcp:tools'], offered).ok).toBe(false)
   })
+  it('rejects empty, non-string and unoffered entries (falsy bypass)', () => {
+    const o = buildConsentScopes(['openid', 'offline_access', 'mcp:tools'])
+    for (const sel of [['', 'mcp:tools', 'mcpwarden:admin'], [undefined, 'mcp:tools'], [123], ['', 'openid', 'offline_access', 'mcp:tools'], ['openid', 'offline_access', 'mcp:tools', 'mcpwarden:admin']]) {
+      expect(validateAcceptedScopes(sel, o).ok).toBe(false)
+    }
+  })
+  it('does not echo attacker scope text and collapses duplicates', () => {
+    const o = buildConsentScopes(['openid', 'offline_access', 'mcp:tools'])
+    const bad = validateAcceptedScopes(['<script>x</script>'], o)
+    expect(bad).toMatchObject({ ok: false })
+    expect(JSON.stringify(bad)).not.toContain('script')
+    expect(validateAcceptedScopes(['openid', 'openid', 'offline_access', 'mcp:tools', 'mcp:tools'], o)).toEqual({ ok: true, granted: ['openid', 'offline_access', 'mcp:tools'] })
+  })
 })
 
 describe('buildConsentInfo', () => {

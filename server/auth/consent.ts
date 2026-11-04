@@ -18,16 +18,20 @@ export function buildConsentScopes(requested: readonly string[], adminEnabled = 
   return out
 }
 
-/** Zustimmung mit Teilmenge: nur angebotene Scopes, `mcp:tools` ist unverzichtbar. */
-export function validateAcceptedScopes(accepted: readonly string[], offered: readonly ConsentScope[]):
-  { ok: true } | { ok: false, reason: string } {
+/**
+ * Zustimmung mit Teilmenge: nur angebotene Scopes, `mcp:tools` und alle Pflicht-Scopes sind
+ * unverzichtbar. `granted` ist die deduplizierte Schnittmenge; nur sie darf vergeben werden.
+ * Die Fehlermeldung wiederholt nie angreiferkontrollierten Text.
+ */
+export function validateAcceptedScopes(accepted: readonly unknown[], offered: readonly ConsentScope[]):
+  { ok: true, granted: string[] } | { ok: false, reason: string } {
   const offeredNames = new Set(offered.map(s => s.name))
-  if (!accepted.includes(SCOPE_MCP_TOOLS)) return { ok: false, reason: `scope ${SCOPE_MCP_TOOLS} is required` }
-  const unknown = accepted.find(s => !offeredNames.has(s))
-  if (unknown) return { ok: false, reason: `scope ${unknown} was not offered` }
-  const missing = offered.find(s => s.required && !accepted.includes(s.name))
+  if (accepted.some(s => typeof s !== 'string' || s === '' || !offeredNames.has(s))) return { ok: false, reason: 'selection contains scopes that were not offered' }
+  const granted = [...new Set(accepted as string[])]
+  if (!granted.includes(SCOPE_MCP_TOOLS)) return { ok: false, reason: `scope ${SCOPE_MCP_TOOLS} is required` }
+  const missing = offered.find(s => s.required && !granted.includes(s.name))
   if (missing) return { ok: false, reason: `scope ${missing.name} is required` }
-  return { ok: true }
+  return { ok: true, granted }
 }
 
 export type ConsentClientInput = {
