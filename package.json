@@ -13,18 +13,29 @@
     "postinstall": "nuxt prepare",
     "typecheck": "nuxt typecheck",
     "lint": "eslint .",
-    "env:init": "sh scripts/init-env.sh"
+    "env:init": "sh scripts/init-env.sh",
+    "test": "vitest run -c tests/vitest.config.ts",
+    "test:unit": "vitest run -c tests/vitest.config.ts --project unit",
+    "test:int": "vitest run -c tests/vitest.config.ts --project integration"
   },
   "dependencies": {
+    "@better-auth/drizzle-adapter": "1.7.17",
+    "@electric-sql/pglite": "0.5.15",
+    "better-auth": "1.7.17",
+    "drizzle-orm": "0.45.4",
     "nuxt": "4.5.2",
+    "pg": "8.23.1",
     "vue": "3.5.44",
     "vue-router": "5.4.0"
   },
   "devDependencies": {
     "@nuxt/eslint-config": "1.17.0",
     "@types/node": "^24.0.0",
+    "@types/pg": "8.23.1",
+    "drizzle-kit": "0.31.11",
     "eslint": "10.14.0",
     "typescript": "5.9.3",
+    "vitest": "5.1.0",
     "vue-tsc": "3.3.14"
   }
 }
