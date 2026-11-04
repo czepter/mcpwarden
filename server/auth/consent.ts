@@ -1,15 +1,11 @@
 /** Reine Consent-Logik (Plan 0b, Aufgabe 4): Scope-Auswahl, Redirect-Aufbereitung, `ConsentInfo`. */
 import type { ConsentInfo, ConsentRedirect, ConsentScope } from '../../shared/api-types'
-import { isAllowlisted, isLoopbackHost, redirectHost, sanitizeClientName, type AllowlistPattern } from './dcr-policy'
+import { isAllowlisted, redirectHost, redirectKind, sanitizeClientName, type AllowlistPattern } from './dcr-policy'
 import { SCOPE_ADMIN, SCOPE_MCP_TOOLS, SCOPES_SUPPORTED } from './scopes'
 
 export function consentRedirect(uri: string): ConsentRedirect {
-  let loopback = false
-  try {
-    const url = new URL(uri)
-    loopback = url.protocol === 'http:' && isLoopbackHost(url.hostname)
-  } catch { /* untrusted input: unparsable bleibt non-loopback */ }
-  return { uri, host: redirectHost(uri), loopback }
+  const kind = redirectKind(uri)
+  return { uri, host: redirectHost(uri), kind, loopback: kind === 'loopback' }
 }
 
 /**

@@ -46,28 +46,59 @@ function parse(uri: string): URL | null {
   }
 }
 
-/** Ist die URI als Redirect-Ziel zulaessig (unabhaengig von der Allowlist)? */
-export function checkRedirectUri(uri: string): { ok: true } | { ok: false, reason: string } {
+/** App-Schemes, die ohne Admin-Eintrag erlaubt sind (Zielclients der Builtin-Allowlist). */
+export const DEFAULT_APP_SCHEMES: readonly string[] = ['cursor', 'vscode', 'vscode-insiders', 'windsurf', 'zed']
+
+/** Vom Admin registrierte App-Schemes: Schemes aller Nicht-http(s)-Redirect-Muster der Allowlist. */
+export function registeredAppSchemes(allowlist: readonly AllowlistPattern[]): string[] {
+  const out = new Set<string>()
+  for (const e of allowlist) {
+    for (const p of e.redirectPatterns) {
+      const m = /^([a-z][a-z0-9+.-]*):\/\//i.exec(p)
+      if (m && !['http', 'https'].includes(m[1]!.toLowerCase())) out.add(m[1]!.toLowerCase())
+    }
+  }
+  return [...out]
+}
+
+/**
+ * Ist die URI als Redirect-Ziel zulaessig (unabhaengig vom Namens-Match)? Deny-by-default:
+ * https; http nur fuer kanonische Loopback-Hosts; sonst nur Schemes aus `appSchemes`.
+ */
+export function checkRedirectUri(uri: string, appSchemes: readonly string[] = DEFAULT_APP_SCHEMES): { ok: true } | { ok: false, reason: string } {
   if (typeof uri !== 'string' || uri.length === 0 || uri.length > 2048) return { ok: false, reason: 'redirect_uri has invalid length' }
   if (uri.includes('*')) return { ok: false, reason: 'wildcards are not allowed in redirect_uri' }
   const url = parse(uri)
   if (!url) return { ok: false, reason: 'redirect_uri is not a valid URI' }
+  // Defence in depth; die Allowlist unten schliesst diese Schemes ohnehin aus.
   if (FORBIDDEN_SCHEMES.has(url.protocol)) return { ok: false, reason: `scheme ${url.protocol} is not allowed` }
-  if (url.username || url.password) return { ok: false, reason: 'userinfo is not allowed in redirect_uri' }
-  if (url.hash) return { ok: false, reason: 'fragments are not allowed in redirect_uri' }
-  if (url.protocol === 'https:') return { ok: true }
-  if (url.protocol === 'http:') {
-    return isLoopbackHost(url.hostname) ? { ok: true } : { ok: false, reason: 'http is only allowed for loopback hosts' }
+  if (url.username || url.password || /^[a-z][a-z0-9+.-]*:\/\/[^/?#]*@/i.test(uri)) return { ok: false, reason: 'userinfo is not allowed in redirect_uri' }
+  if (url.hash || uri.includes('#')) return { ok: false, reason: 'fragments are not allowed in redirect_uri' }
+  if (url.protocol === 'https:' || url.protocol === 'http:') {
+    // Nicht-kanonische Hosts (127.1, 2130706433, Grossschreibung mit Punkt ...) abweisen.
+    if (!uri.toLowerCase().startsWith(url.origin.toLowerCase())) return { ok: false, reason: 'host is not in canonical form' }
+    if (url.protocol === 'http:' && !isLoopbackHost(url.hostname)) return { ok: false, reason: 'http is only allowed for loopback hosts' }
+    return { ok: true }
   }
-  // App-Scheme (cursor://, vscode://, ...): syntaktisch gueltig und nicht verboten.
-  return { ok: true }
+  const scheme = url.protocol.slice(0, -1)
+  return appSchemes.includes(scheme) ? { ok: true } : { ok: false, reason: `app scheme ${scheme} is not registered` }
 }
 
-/** Host-Teil fuer die Anzeige. App-Schemes ohne Host zeigen das Scheme. */
+export type RedirectKind = 'web' | 'loopback' | 'app'
+
+export function redirectKind(uri: string): RedirectKind {
+  const url = parse(uri)
+  if (!url) return 'app'
+  if (url.protocol === 'https:') return 'web'
+  if (url.protocol === 'http:' && isLoopbackHost(url.hostname)) return 'loopback'
+  return 'app'
+}
+
+/** Anzeige: https und Loopback als Host, alles andere mit Scheme (`evil-app://claude.ai`). */
 export function redirectHost(uri: string): string {
   const url = parse(uri)
   if (!url) return ''
-  return url.host || url.protocol
+  return redirectKind(uri) === 'app' ? `${url.protocol}//${url.host}` : url.host
 }
 
 function globToRegExp(glob: string): RegExp {
@@ -126,8 +157,9 @@ export function evaluateRegistration(mode: DcrMode, allowlist: readonly Allowlis
   if (metadata.redirectUris.length === 0) {
     return { allow: false, allowlisted: false, status: 400, error: 'invalid_redirect_uri', reason: 'at least one redirect_uri is required' }
   }
+  const appSchemes = [...DEFAULT_APP_SCHEMES, ...registeredAppSchemes(allowlist)]
   for (const uri of metadata.redirectUris) {
-    const check = checkRedirectUri(uri)
+    const check = checkRedirectUri(uri, appSchemes)
     if (!check.ok) return { allow: false, allowlisted: false, status: 400, error: 'invalid_redirect_uri', reason: check.reason }
   }
   const allowlisted = isAllowlisted(allowlist, sanitizeClientName(metadata.clientName), metadata.redirectUris)

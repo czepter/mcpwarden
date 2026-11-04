@@ -40,7 +40,7 @@ describe('buildConsentInfo', () => {
     expect(info).toEqual({
       client: {
         id: 'c1', name: 'Claude Code (x)', allowlisted: true, viaDcr: true, registeredAt: '2026-01-01T00:00:00.000Z',
-        redirects: [{ uri: 'http://127.0.0.1:5/cb', host: '127.0.0.1:5', loopback: true }],
+        redirects: [{ uri: 'http://127.0.0.1:5/cb', host: '127.0.0.1:5', kind: 'loopback', loopback: true }],
       },
       scopes: [{ name: 'openid', required: true }, { name: 'mcp:tools', required: true }],
       resource: 'http://localhost:3000/mcp',
@@ -65,6 +65,7 @@ describe('buildConsentInfo', () => {
 describe('misc', () => {
   it('consentRedirect: app scheme and garbage are non-loopback', () => {
     expect(consentRedirect('cursor://x').loopback).toBe(false)
+    expect(consentRedirect('evil-app://claude.ai')).toMatchObject({ host: 'evil-app://claude.ai', kind: 'app' })
     expect(consentRedirect('???').loopback).toBe(false)
     expect(consentRedirect('http://localhost:1/x').loopback).toBe(true)
   })

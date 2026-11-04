@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   BUILTIN_ALLOWLIST, checkRedirectUri, evaluateRegistration, matchesAllowlist, matchesRedirectPattern,
-  redirectHost, sanitizeClientName,
+  redirectHost, redirectKind, registeredAppSchemes, sanitizeClientName,
 } from '../../server/auth/dcr-policy'
 
 describe('checkRedirectUri', () => {
@@ -11,6 +11,13 @@ describe('checkRedirectUri', () => {
     ['http://127.0.0.1:1234/cb', true],
     ['http://[::1]:8080/cb', true],
     ['cursor://anysphere.cursor/mcp/callback', true],
+    ['evil-app://claude.ai/cb', false],
+    ['unknown://x', false],
+    ['ftp://example.com/x', false],
+    ['http://127.1:5/cb', false],
+    ['http://2130706433/cb', false],
+    ['https://claude.ai@evil.example/', false],
+    ['http://localhost@evil.example/', false],
     ['http://evil.com/cb', false],
     ['http://localhost.evil.com/cb', false],
     ['http://user:pw@localhost/cb', false],
@@ -99,9 +106,20 @@ describe('helpers', () => {
     expect(sanitizeClientName('x'.repeat(200))).toHaveLength(80)
     expect(sanitizeClientName(undefined)).toBe('')
   })
-  it('redirectHost', () => {
+  it('registered app schemes come from the allowlist and are accepted', () => {
+    const custom = [{ label: 'My', namePattern: 'My*', redirectPatterns: ['myapp://'] }]
+    expect(evaluateRegistration('open', [], { clientName: 'x', redirectUris: ['myapp://cb'] })).toMatchObject({ allow: false })
+    expect(evaluateRegistration('open', custom, { clientName: 'x', redirectUris: ['myapp://cb'] })).toMatchObject({ allow: true })
+    expect(registeredAppSchemes(custom)).toEqual(['myapp'])
+  })
+  it('redirectHost shows scheme for app URIs and kind classifies', () => {
+    expect(redirectHost('evil-app://claude.ai')).toBe('evil-app://claude.ai')
+    expect(redirectKind('evil-app://claude.ai')).toBe('app')
+    expect(redirectKind('https://claude.ai/cb')).toBe('web')
+    expect(redirectKind('http://[::1]:3/cb')).toBe('loopback')
     expect(redirectHost('http://127.0.0.1:53124/callback')).toBe('127.0.0.1:53124')
-    expect(redirectHost('cursor://')).toBe('cursor:')
+    expect(redirectHost('https://claude.ai/cb')).toBe('claude.ai')
+    expect(redirectHost('cursor://')).toBe('cursor://')
     expect(redirectHost('garbage')).toBe('')
   })
 })
