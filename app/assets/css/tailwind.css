@@ -1,0 +1,109 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "@fontsource-variable/inter";
+@import "@fontsource-variable/jetbrains-mono";
+
+@custom-variant dark (&:is(.dark *));
+
+/* Tokens: Hexwerte der Entwürfe (docs/plans/frontend.md, Abschnitt 7). Dunkelmodus folgt nach Phase 2. */
+:root {
+  --radius: 0.625rem;
+  --background: #f4f4f5;
+  --foreground: #18181b;
+  --card: #ffffff;
+  --card-foreground: #18181b;
+  --popover: #ffffff;
+  --popover-foreground: #18181b;
+  --primary: #3730a3;
+  --primary-foreground: #ffffff;
+  --primary-tint: #eef2ff;
+  --secondary: #f4f4f5;
+  --secondary-foreground: #3f3f46;
+  --muted: #f4f4f5;
+  --muted-foreground: #52525b;
+  --accent: #f4f4f5;
+  --accent-foreground: #18181b;
+  --destructive: #991b1b;
+  --destructive-soft: #b91c1c;
+  --destructive-border: #fecaca;
+  --border: #e4e4e7;
+  --input: #e4e4e7;
+  --input-strong: #a1a1aa;
+  --ring: #3730a3;
+  --table-head: #fafafa;
+  --nav-badge: #991b1b;
+  --chart-1: #1d4ed8;
+  --chart-2: #b45309;
+  --chart-3: #3f3f46;
+  --chart-4: #15803d;
+  --chart-5: #b91c1c;
+  --sidebar: #ffffff;
+  --sidebar-foreground: #3f3f46;
+  --sidebar-primary: #3730a3;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #f4f4f5;
+  --sidebar-accent-foreground: #18181b;
+  --sidebar-border: #e4e4e7;
+  --sidebar-ring: #3730a3;
+  --st-healthy-bg: #dcfce7; --st-healthy-fg: #166534; --st-healthy-dot: #15803d; --st-healthy-bar: #16a34a;
+  --st-degraded-bg: #fef3c7; --st-degraded-fg: #92400e; --st-degraded-dot: #b45309; --st-degraded-bar: #d97706;
+  --st-open-bg: #fee2e2; --st-open-fg: #991b1b; --st-open-dot: #b91c1c; --st-open-bar: #dc2626;
+  --st-auth_expired-bg: #dbeafe; --st-auth_expired-fg: #1e40af; --st-auth_expired-dot: #1d4ed8; --st-auth_expired-bar: #1d4ed8;
+  --st-disabled-bg: #f4f4f5; --st-disabled-fg: #3f3f46; --st-disabled-dot: #71717a; --st-disabled-bar: #e4e4e7;
+  --st-unknown-bg: #f4f4f5; --st-unknown-fg: #3f3f46; --st-unknown-dot: #71717a; --st-unknown-bar: #e4e4e7;
+}
+
+.dark { /* Platzhalter: Werte folgen nach Phase 2 (Entscheidung 8) */ }
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary-tint: var(--primary-tint);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-soft: var(--destructive-soft);
+  --color-destructive-border: var(--destructive-border);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-input-strong: var(--input-strong);
+  --color-ring: var(--ring);
+  --color-table-head: var(--table-head);
+  --color-nav-badge: var(--nav-badge);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --font-sans: 'Inter Variable', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono Variable', ui-monospace, monospace;
+}
+
+@layer base {
+  * { @apply border-border outline-ring/50; }
+  html { font-size: 16px; }
+  body { @apply bg-background text-foreground font-sans; font-size: 14px; line-height: 1.4; }
+  :focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+  code, kbd, .mono { font-family: var(--font-mono); overflow-wrap: anywhere; }
+  .tnum { font-variant-numeric: tabular-nums; }
+  @media (prefers-reduced-motion: reduce) { *, ::before, ::after { transition: none !important; animation: none !important; } }
+}
