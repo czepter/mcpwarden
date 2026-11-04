@@ -443,7 +443,7 @@ Abnahmeprotokoll: Tabelle Client × Version × Protokollrevision × Ergebnis × 
 | R12: Handler je Nutzer: Speicher/Anzahl bei vielen Nutzern | Ressourcenverbrauch | Leerlauf-Entsorgung, Single-Instance-Ziel (wenige Nutzer); Variante B (Bus-Filter) als Alternative |
 | R13: CIMD wird Standard-Pfad der Clients (DCR "nur Fallback") | CIMD-only-Clients können sich nicht registrieren | Beobachten; `@better-auth/cimd` mit derselben Allowlist als Folgeaufgabe |
 | R14: Consent-Weiterleitung hängt an Details des Better-Auth-Clientplugins; `/login` aus 0a muss die signierte Query erhalten | Aufwand im Frontend | Spike in Aufgabe 1/4, Beispiel der Doku befolgen |
-| R15: Refresh-Token-Prüfung greift nicht bei Clients ohne `offline_access` | Einzel-Token-Widerruf dort nicht sofort | Spike (Aufgabe 6); notfalls `offline_access` erzwingen |
+| R15: Refresh-Token-Prüfung greift nicht bei Clients ohne `offline_access` | Einzel-Token-Widerruf dort nicht sofort | **Entschieden (Teil 1): `offline_access` ist Pflicht-Scope.** Consent bietet immer `openid offline_access mcp:tools` an und verlangt alle; der Guard verlangt bei jedem OAuth-Token einen lebenden Refresh-Token (Tests grün). Offen (Spike, wartet auf 0a): ob das Plugin `offline_access` beim Authorize ergänzen kann; sonst Clients ohne `offline_access` mit klarem Fehler ablehnen und dokumentieren. |
 | R16: Schema-Migrationen aus parallelen Branches kollidieren im Journal | Migrationsfehler | Strikt sequentiell 0000 → 0001 → 0002 → Phase 1; `db:check` in CI |
 
 ## 8. Unverifiziertes (Sammlung)

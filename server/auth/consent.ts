@@ -13,7 +13,9 @@ export function consentRedirect(uri: string): ConsentRedirect {
  * Admin-Scope, der nur erscheint, wenn er aktiviert ist (0b: nie) und dann abwaehlbar ist.
  */
 export function buildConsentScopes(requested: readonly string[], adminEnabled = false): ConsentScope[] {
-  const out: ConsentScope[] = SCOPES_SUPPORTED.filter(s => requested.includes(s)).map(name => ({ name, required: true }))
+  // offline_access und mcp:tools sind Pflicht (R15): jede Zustimmung erzeugt einen Refresh-Token, damit
+  // dessen Widerruf sofort wirkt. Gewaehrt werden immer alle drei, auch wenn der Client weniger anfordert.
+  const out: ConsentScope[] = SCOPES_SUPPORTED.map(name => ({ name, required: true }))
   if (adminEnabled && requested.includes(SCOPE_ADMIN)) out.push({ name: SCOPE_ADMIN, required: false })
   return out
 }

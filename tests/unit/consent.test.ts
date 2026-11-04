@@ -8,13 +8,14 @@ const base = new URL('http://localhost:3000')
 const claude = { id: 'c1', name: 'Claude Code (x)', redirectUris: ['http://127.0.0.1:5/cb'], registeredAt: new Date('2026-01-01T00:00:00Z'), viaDcr: true }
 
 describe('buildConsentScopes', () => {
-  it('keeps only known scopes, all required', () => {
+  it('always offers the three mandatory scopes, ignores unknown ones, even if the client requested fewer', () => {
+    expect(buildConsentScopes(['mcp:tools'])).toEqual(buildConsentScopes([]))
     expect(buildConsentScopes(['openid', 'offline_access', 'mcp:tools', 'evil'])).toEqual([
       { name: 'openid', required: true }, { name: 'offline_access', required: true }, { name: 'mcp:tools', required: true },
     ])
   })
   it('never offers the admin scope while disabled', () => {
-    expect(buildConsentScopes(['mcp:tools', 'mcpwarden:admin']).map(s => s.name)).toEqual(['mcp:tools'])
+    expect(buildConsentScopes(['mcp:tools', 'mcpwarden:admin']).map(s => s.name)).not.toContain('mcpwarden:admin')
   })
   it('offers the admin scope as optional once enabled', () => {
     expect(buildConsentScopes(['mcp:tools', 'mcpwarden:admin'], true).at(-1)).toEqual({ name: 'mcpwarden:admin', required: false })
@@ -29,6 +30,7 @@ describe('validateAcceptedScopes', () => {
   })
   it('rejects subsets without mcp:tools, unoffered scopes, and missing required', () => {
     expect(validateAcceptedScopes(['openid', 'offline_access'], offered).ok).toBe(false)
+    expect(validateAcceptedScopes(['openid', 'mcp:tools'], offered).ok).toBe(false) // offline_access mandatory
     expect(validateAcceptedScopes(['mcp:tools', 'other'], offered).ok).toBe(false)
     expect(validateAcceptedScopes(['mcp:tools'], offered).ok).toBe(false)
   })
@@ -55,7 +57,7 @@ describe('buildConsentInfo', () => {
         id: 'c1', name: 'Claude Code (x)', allowlisted: true, viaDcr: true, registeredAt: '2026-01-01T00:00:00.000Z',
         redirects: [{ uri: 'http://127.0.0.1:5/cb', host: '127.0.0.1:5', kind: 'loopback', loopback: true }],
       },
-      scopes: [{ name: 'openid', required: true }, { name: 'mcp:tools', required: true }],
+      scopes: [{ name: 'openid', required: true }, { name: 'offline_access', required: true }, { name: 'mcp:tools', required: true }],
       resource: 'http://localhost:3000/mcp',
       loopback: true,
     })

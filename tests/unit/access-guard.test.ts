@@ -82,9 +82,10 @@ describe('authenticateMcpRequest: oauth', () => {
     const row = goodRow({ user: { ...user, banned: true, banExpires: new Date(NOW.getTime() - 1000) } })
     expect((await setup({ row }).call('Bearer x.y.z') as Response).status).toBeUndefined()
   })
-  it('token without offline_access passes on consent alone', async () => {
-    const s = setup({ claims: claims({ scopes: ['mcp:tools'] }), row: goodRow({ hasLiveRefreshToken: false }) })
-    expect(await s.call('Bearer x.y.z')).toHaveProperty('ctx')
+  it('R15: token whose client never had a refresh token -> 401, regardless of scope claim', async () => {
+    for (const scopes of [['mcp:tools'], ['openid', 'offline_access', 'mcp:tools']]) {
+      await expect401(await setup({ claims: claims({ scopes }), row: goodRow({ hasLiveRefreshToken: false }) }).call('Bearer x.y.z'))
+    }
   })
   it('missing mcp:tools -> 403 insufficient_scope', async () => {
     const res = await setup({ claims: claims({ scopes: ['openid'] }) }).call('Bearer x.y.z') as Response

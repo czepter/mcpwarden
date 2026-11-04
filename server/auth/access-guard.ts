@@ -93,8 +93,8 @@ export function createAccessGuard(deps: GuardDeps) {
     if (!row.user || isBanned(row.user, t)) return denied('user is not active')
     if (!row.client || row.client.disabled) return denied('client is not active')
     if (!row.hasConsent) return denied('consent was revoked')
-    // Ohne offline_access gibt es keinen Refresh-Token; dann zaehlt allein der Consent (Plan, offener Punkt).
-    if (claims.scopes.includes('offline_access') && !row.hasLiveRefreshToken) return denied('refresh token was revoked')
+    // Immer pruefen (offline_access ist Pflicht-Scope, R15): ohne lebenden Refresh-Token kein Zugriff.
+    if (!row.hasLiveRefreshToken) return denied('refresh token was revoked')
 
     if (!claims.scopes.includes(SCOPE_MCP_TOOLS)) return forbidden(deps.resourceMetadataUrl)
     if (allowTouch(`oauth:${claims.userId}:${claims.clientId}`)) fireAndForget(deps.store.touchConnection(claims.userId, claims.clientId, t))
