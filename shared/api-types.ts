@@ -28,7 +28,9 @@ export type DcrMode = 'off' | 'allowlist' | 'open'
 export type DcrPolicy = { mode: DcrMode } // Standard 'open'
 
 // Consent: Name, Redirect-URIs, Allowlist-Status, Scopes (ohne Titel, Titel stehen im Frontend)
-export type ConsentRedirect = { uri: string, host: string, loopback: boolean }
+// `host` ist bei kind 'app' mit Scheme (z. B. `evil-app://claude.ai`), sonst der reine Host.
+export type ConsentRedirectKind = 'web' | 'loopback' | 'app'
+export type ConsentRedirect = { uri: string, host: string, kind: ConsentRedirectKind, loopback: boolean }
 export type ConsentScope = { name: string, required: boolean }
 export type ConsentInfo = {
   client: {
