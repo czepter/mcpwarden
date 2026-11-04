@@ -1,0 +1,147 @@
+import type { CallToolResult, Tool } from '@modelcontextprotocol/client'
+import { mergeTimeouts } from '../config'
+import type { AuthContext, ToolDef, ToolSource } from '../ports'
+import { ToolNotFoundError } from '../ports'
+import type { StatsBuffer, CallStatRow } from '../stats/buffer'
+import type { Catalog } from '../upstream/catalog'
+import { classifyError } from '../upstream/errors'
+import type { Limiter } from '../upstream/limiter'
+import { PoolLimitError, type Pool } from '../upstream/pool'
+import { namespaced, parseToolName } from '../upstream/slug'
+import type { UpstreamHealth } from '../upstream/status'
+import type { GatewayStore, UpstreamRow } from '../upstream/types'
+import { errorResult, type GatewayErrorCode } from './errors'
+
+export type CoreDeps = {
+  store: GatewayStore
+  pool: Pool
+  catalog: Catalog
+  limiter: Limiter
+  stats: StatsBuffer
+  healthFor: (up: UpstreamRow) => UpstreamHealth
+  now?: () => number
+  /** Aufruf bei Katalogänderung eines Nutzers (notifyToolsChanged, 1.2.8). */
+  notifyChanged?: (userId: string) => void
+}
+
+const bytes = (v: unknown) => { try { return JSON.stringify(v)?.length ?? 0 } catch { return 0 } }
+
+export class GatewayCore implements ToolSource {
+  draining = false
+  private active = new Set<AbortController>()
+  constructor(private d: CoreDeps) {}
+
+  private stat(ctx: AuthContext, up: UpstreamRow | null, slug: string, partial: Partial<CallStatRow> & Pick<CallStatRow, 'kind' | 'status' | 'totalMs'>) {
+    this.d.stats.push({
+      ts: new Date(), userId: ctx.userId, clientId: ctx.clientId, tokenId: ctx.tokenId, upstreamId: up?.id ?? null, upstreamSlug: slug,
+      tool: null, upstreamMs: null, overheadMs: null, retries: 0, reqBytes: 0, resBytes: 0, cacheHit: false, ...partial,
+    })
+  }
+
+  async listTools(ctx: AuthContext): Promise<ToolDef[]> {
+    const t0 = performance.now()
+    const ups = await this.d.store.listEnabledUpstreams(ctx.userId)
+    const parts = await Promise.all(ups.map(async (up) => {
+      if (up.setup !== 'ready') return []
+      const h = this.d.healthFor(up)
+      const u0 = performance.now()
+      let tools: Tool[]
+      let hit = false
+      let status: CallStatRow['status'] = 'ok'
+      try {
+        if (!h.breaker.allow()) throw Object.assign(new Error('breaker'), { breaker: true })
+        const r = await this.d.catalog.list(up)
+        tools = r.tools; hit = r.cacheHit
+        h.success()
+      } catch (e) {
+        const stale = this.d.catalog.cached(up)
+        status = (e as { breaker?: boolean }).breaker ? 'breaker_open' : 'upstream_error'
+        if (!(e as { breaker?: boolean }).breaker) {
+          const c = classifyError(e, { hasAuth: up.authType !== 'none' })
+          h.failure(c.auth ? 'auth' : c.code === 'timeout' ? 'timeout' : c.status && c.status >= 500 ? 'http5xx' : 'connect')
+        }
+        if (!stale) { this.stat(ctx, up, up.slug, { kind: 'list', status, totalMs: Math.round(performance.now() - u0) }); return [] }
+        tools = stale.tools
+      }
+      const flags = await this.d.store.toolFlags(up.userId, up.id)
+      const out = tools.filter(x => flags.get(x.name) !== false).map(x => ({ ...x, name: namespaced(up.slug, x.name) }))
+      const ms = Math.round(performance.now() - u0)
+      this.stat(ctx, up, up.slug, { kind: 'list', status, totalMs: ms, upstreamMs: hit ? 0 : ms, cacheHit: hit, resBytes: bytes(out) })
+      return out
+    }))
+    void t0
+    return parts.flat() as ToolDef[]
+  }
+
+  async callTool(ctx: AuthContext, name: string, args: Record<string, unknown>, opts: { signal: AbortSignal }): Promise<CallToolResult> {
+    const t0 = performance.now()
+    const parsed = parseToolName(name)
+    if (!parsed) throw new ToolNotFoundError(name)
+    const up = await this.d.store.getUpstreamBySlug(ctx.userId, parsed.slug)
+    if (!up || !up.enabled) throw new ToolNotFoundError(name)
+    // Filter wird bei JEDEM Aufruf serverseitig geprüft; unbekannte Namen erst gegen den Katalog synchronisieren.
+    let flags = await this.d.store.toolFlags(up.userId, up.id)
+    if (!flags.has(parsed.tool) && up.setup === 'ready') {
+      try { await this.d.catalog.list(up, opts.signal); flags = await this.d.store.toolFlags(up.userId, up.id) } catch { /* unbekannt bleibt unbekannt */ }
+    }
+    if (flags.get(parsed.tool) !== true) throw new ToolNotFoundError(name)
+
+    const done = (res: CallToolResult, status: CallStatRow['status'], upstreamMs: number | null, retries = 0): CallToolResult => {
+      const total = Math.round(performance.now() - t0)
+      this.stat(ctx, up, up.slug, { kind: 'call', status, tool: parsed.tool, totalMs: total, upstreamMs: upstreamMs === null ? null : Math.round(upstreamMs), overheadMs: upstreamMs === null ? null : Math.max(0, Math.round(total - upstreamMs)), retries, reqBytes: bytes(args), resBytes: bytes(res) })
+      return res
+    }
+    const fail = (code: GatewayErrorCode, text: string, status: CallStatRow['status'], meta?: Record<string, unknown>) => done(errorResult(code, text, meta), status, null)
+
+    if (this.draining) return fail('draining', 'Gateway fährt herunter', 'upstream_error')
+    if (up.setup !== 'ready') return fail('awaiting_auth', 'Upstream ist noch nicht eingerichtet (Zugangsdaten fehlen)', 'denied')
+    const limits = await this.d.store.getLimits(ctx.userId)
+    const lease = this.d.limiter.acquire({ userId: ctx.userId, tokenId: ctx.tokenId, upstreamId: up.id, userPerMin: limits.callsPerMin, ratePerMin: up.ratePerMin, maxConcurrent: up.maxConcurrent })
+    if (!lease.ok) {
+      return fail('rate_limited', `Rate-Limit erreicht (${lease.scope}). Erneut versuchen in ${lease.retryAfterSec} s.`, 'rate_limited', { retry_after: lease.retryAfterSec, limit_scope: lease.scope === 'concurrency' ? 'upstream' : lease.scope })
+    }
+    const h = this.d.healthFor(up)
+    if (!h.breaker.allow()) {
+      lease.release()
+      return fail('breaker_open', `Upstream vorübergehend gesperrt (Breaker offen), erneut versuchen später.`, 'breaker_open', h.breaker.nextRetryAt ? { retry_after: Math.max(1, Math.ceil((h.breaker.nextRetryAt - Date.now()) / 1000)) } : undefined)
+    }
+    const ctl = new AbortController()
+    this.active.add(ctl)
+    const onAbort = () => ctl.abort()
+    opts.signal.addEventListener('abort', onAbort, { once: true })
+    const t = mergeTimeouts(up.timeouts)
+    const u0 = performance.now()
+    try {
+      const entry = await this.d.pool.get(up, ctl.signal)
+      entry.inflight++
+      try {
+        const sig = AbortSignal.any([ctl.signal, AbortSignal.timeout(t.callMs)])
+        // KEIN Retry bei tools/call (nicht-idempotent).
+        const res = await entry.client.callTool({ name: parsed.tool, arguments: args }, { signal: sig, timeout: t.callMs, maxTotalTimeout: t.callMs }) as CallToolResult
+        h.success()
+        return done(res, res.isError ? 'tool_error' : 'ok', performance.now() - u0, entry.retries)
+      } finally { entry.inflight-- }
+    } catch (e) {
+      if (e instanceof PoolLimitError) return fail('limit', 'Verbindungslimit erreicht', 'upstream_error')
+      const c = classifyError(e, { hasAuth: up.authType !== 'none', aborted: opts.signal.aborted })
+      if (c.auth) h.failure('auth')
+      else if (c.counts) h.failure(c.code === 'timeout' ? 'timeout' : c.status && c.status >= 500 ? 'http5xx' : 'connect')
+      else h.breaker.cancelProbe()
+      const status: CallStatRow['status'] = c.code === 'timeout' ? 'timeout' : 'upstream_error'
+      return done(errorResult(c.code as GatewayErrorCode, c.message), status, performance.now() - u0)
+    } finally {
+      opts.signal.removeEventListener('abort', onAbort)
+      this.active.delete(ctl)
+      lease.release()
+    }
+  }
+
+  /** Shutdown: warten bis laufende Aufrufe fertig sind (max `ms`), dann abbrechen. */
+  async drain(ms: number) {
+    this.draining = true
+    const end = Date.now() + ms
+    while (this.active.size && Date.now() < end) await new Promise(r => setTimeout(r, 25))
+    for (const c of this.active) c.abort()
+  }
+  get activeCalls() { return this.active.size }
+}
