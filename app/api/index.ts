@@ -1,6 +1,6 @@
 import type {
   AdminUserLimitsInput, AdminSettings, AdminSettingsResult, AdminUserList, AllowlistEntry, AllowlistInput, AllowlistList,
-  AuditList, AuthSession, Capabilities, PublicConfig, ConnectionList, ConsentInfo, Dashboard, DcrMode, DcrPolicy, InviteInfo, InviteCreated,
+  AuditList, AuthSession, Capabilities, PublicConfig, MeSettings, ConnectionList, ConsentInfo, Dashboard, DcrMode, DcrPolicy, InviteInfo, InviteCreated,
   InviteList, LinkInfo, LinkTestResult, OAuthClientAdminList, PatCreated, PatList, SecretInput, SecretResult,
   StatsSummary, StatsWindow, StdioDraft, UpstreamTestResult, UpstreamToolList, UpstreamDetail, UpstreamInput, UpstreamList, UpstreamPatch, UpstreamToolItem, AdminUser,
 } from '#shared/api-types'
@@ -36,6 +36,8 @@ export const oauthApi = {
 
 export const meApi = {
   capabilities: () => get<Capabilities>(API_PATHS.capabilities),
+  settings: () => get<MeSettings>(API_PATHS.meSettings),
+  patchSettings: (b: Partial<MeSettings>) => patch<MeSettings>(API_PATHS.meSettings, b),
   pats: () => get<PatList>(API_PATHS.pats),
   createPat: (name: string) => post<PatCreated>(API_PATHS.pats, { name }),
   revokePat: (id: string) => del(`${API_PATHS.pats}/${enc(id)}`),
@@ -64,7 +66,7 @@ export const adminApi = {
   removeUser: (id: string) => del(`/api/admin/users/${enc(id)}`),
   setLimits: (id: string, b: AdminUserLimitsInput) => put<AdminUser>(`/api/admin/users/${enc(id)}/limits`, b),
   invites: () => get<InviteList>('/api/admin/invites'),
-  createInvite: (email?: string) => post<InviteCreated>('/api/admin/invites', email ? { email } : {}),
+  createInvite: (email?: string, sendMail?: boolean) => post<InviteCreated>('/api/admin/invites', email ? { email, ...(sendMail ? { sendMail: true } : {}) } : {}),
   revokeInvite: (id: string) => del(`/api/admin/invites/${enc(id)}`),
   settings: () => get<AdminSettings>('/api/admin/settings'),
   putSettings: (b: Partial<AdminSettings>) => put<AdminSettingsResult>('/api/admin/settings', b),

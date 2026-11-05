@@ -1,8 +1,8 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { z } from 'zod'
 import type {
-  AdminSettings, AdminUserList, AllowlistList, AuditList, AuthSession, ConnectionList, ConsentInfo, DcrPolicy, InviteInfo, InviteList,
-  LinkInfo, OAuthClientAdminList, PatList, PublicConfig, StatsSummary, StdioDraft, UpstreamTestResult, UpstreamToolList, UpstreamDetail, UpstreamList,
+  AdminSettings, AdminUserList, AllowlistList, AuditList, AuthSession, ConnectionList, ConsentInfo, DcrPolicy, InviteCreated, InviteInfo, InviteList,
+  LinkInfo, MeSettings, OAuthClientAdminList, PatList, PublicConfig, StatsSummary, StdioDraft, UpstreamTestResult, UpstreamToolList, UpstreamDetail, UpstreamList,
 } from '#shared/api-types'
 import { makeServer } from '../../../mocks/node'
 import { getState, resetState } from '../../../mocks/state'
@@ -75,6 +75,8 @@ const schemas = {
     z.strictObject({ state: z.enum(['expired', 'used', 'forbidden']) }),
   ]) satisfies z.ZodType<LinkInfo>,
   publicConfig: z.strictObject({ mail: bool() }) satisfies z.ZodType<PublicConfig>,
+  meSettings: z.strictObject({ notifyStatusMail: bool() }) satisfies z.ZodType<MeSettings>,
+  inviteCreated: z.strictObject({ id: str(), email: nstr, createdAt: str(), expiresAt: str(), link: str(), mailQueued: bool().optional() }) satisfies z.ZodType<InviteCreated>,
   audit: z.strictObject({
     items: z.array(z.strictObject({
       id: num(), ts: str(), actorKind: z.enum(['user', 'admin', 'system']), actorIsSelf: bool(), clientId: nstr, clientName: nstr, action: str(), category: z.enum(['management', 'auth', 'status', 'denied']),
@@ -116,6 +118,7 @@ describe('alle GET-Routen: strikte Vertrags-Schemas', () => {
     ['Link abgelaufen', '/api/links/abgelaufen', 'link'],
     ['Audit', '/api/audit', 'audit'],
     ['Public-Config', '/api/public-config', 'publicConfig'],
+    ['Persoenliche Einstellungen', '/api/me/settings', 'meSettings'],
   ]
   for (const [name, path, key] of cases) {
     it(name, async () => {
@@ -128,6 +131,33 @@ describe('alle GET-Routen: strikte Vertrags-Schemas', () => {
   it('Test-Antwort (ok und Fehler)', async () => {
     const ok = await post('/api/upstreams/up_1/test')
     expect(schemas.testResult.safeParse(await ok.json()).success).toBe(true)
+  })
+})
+
+describe('Mail-Benachrichtigungen: Einstellung und Einladungsversand', () => {
+  const patch = (path: string, body: unknown) => fetch(`${BASE}${path}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
+  it('Standard an; PATCH schaltet um und bleibt; Antwort entspricht dem Vertrag', async () => {
+    expect(await (await get('/api/me/settings')).json()).toEqual({ notifyStatusMail: true })
+    const r = await patch('/api/me/settings', { notifyStatusMail: false })
+    expect(r.status).toBe(200)
+    expect(schemas.meSettings.parse(await r.json())).toEqual({ notifyStatusMail: false })
+    expect(await (await get('/api/me/settings')).json()).toEqual({ notifyStatusMail: false })
+  })
+  it('PATCH validiert wie das Backend: Nicht-Boolean und unbekannte Felder sind 422', async () => {
+    const bad = await patch('/api/me/settings', { notifyStatusMail: 'nein' })
+    expect(bad.status).toBe(422)
+    expect(((await bad.json()) as { data: { field?: string } }).data.field).toBe('notifyStatusMail')
+    expect((await patch('/api/me/settings', { role: 'admin' })).status).toBe(422)
+  })
+  it('Einladung mit sendMail: mailQueued; ohne Adresse oder ohne Mailer 422', async () => {
+    const ok = await post('/api/admin/invites', { email: 'neu@example.test', sendMail: true })
+    expect(ok.status).toBe(201)
+    expect(schemas.inviteCreated.parse(await ok.json()).mailQueued).toBe(true)
+    const noAddr = await post('/api/admin/invites', { sendMail: true })
+    expect(noAddr.status).toBe(422)
+    expect(((await noAddr.json()) as { data: { field?: string } }).data.field).toBe('sendMail')
+    localStorage.setItem('mockMail', 'off')
+    try { expect((await post('/api/admin/invites', { email: 'neu@example.test', sendMail: true })).status).toBe(422) } finally { localStorage.removeItem('mockMail') }
   })
 })
 

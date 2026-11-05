@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { authApi } from '~/api'
+import { authApi, meApi, publicApi } from '~/api'
 import { toast } from 'vue-sonner'
 import FormRow from '~/components/common/FormRow.vue'
 import RelativeTime from '~/components/common/RelativeTime.vue'
@@ -27,6 +27,14 @@ const savePw = pw.submit(async (v) => {
 
 const { data: sessions, refresh } = useApi('sessions', authApi.listSessions)
 async function revoke(token: string) { try { await authApi.revokeSession(token); await refresh() } catch { toast.error('Abmelden fehlgeschlagen.') } }
+// Statusmails (nur sichtbar, wenn der Server Mail versenden kann)
+const { data: pub } = useAsyncData('public-config', () => publicApi.config().catch(() => ({ mail: false })), { server: false })
+const { data: meSettings, refresh: refreshMe } = useApi('me-settings', meApi.settings)
+const notifyBusy = ref(false)
+async function setNotify(v: boolean | 'indeterminate') {
+  notifyBusy.value = true
+  try { await meApi.patchSettings({ notifyStatusMail: v === true }); toast.success(v === true ? 'Benachrichtigungen eingeschaltet.' : 'Benachrichtigungen ausgeschaltet.') } catch { toast.error('Speichern fehlgeschlagen.') } finally { notifyBusy.value = false; await refreshMe() }
+}
 // Wirkt, solange der Nutzer die Leiste nicht selbst umgeschaltet hat (Cookie sidebar_state hat Vorrang, siehe layouts/default.vue).
 const collapsedCookie = useCookie('sidebar_default_collapsed', { maxAge: 60 * 60 * 24 * 365 })
 const collapsedDefault = computed({
@@ -70,6 +78,14 @@ const collapsedDefault = computed({
           <Button v-if="!s.current" variant="outline" :aria-label="`Sitzung ${s.userAgent ?? ''} abmelden`" @click="revoke(s.token)">Abmelden</Button>
         </li>
       </ul>
+    </section>
+    <section v-if="pub?.mail" class="rounded-lg border bg-card p-5" aria-labelledby="h-ben">
+      <h2 id="h-ben" class="mb-3 text-base font-semibold">Benachrichtigungen</h2>
+      <div class="flex items-center gap-3">
+        <Switch id="notify-status" :model-value="meSettings?.notifyStatusMail ?? true" :disabled="notifyBusy || !meSettings" @update:model-value="setNotify" />
+        <label for="notify-status">E-Mail bei Statuswechsel meiner Upstreams</label>
+      </div>
+      <p class="mt-2 text-[13px] text-muted-foreground">Wir schreiben dir, wenn ein Upstream nicht mehr erreichbar ist oder die Anmeldung ablehnt, und einmal, wenn er wieder läuft. Höchstens eine Mail je Upstream und Zustand pro Zeitfenster (Standard: eine Stunde).</p>
     </section>
     <section class="rounded-lg border bg-card p-5" aria-labelledby="h-dar">
       <h2 id="h-dar" class="mb-3 text-base font-semibold">Darstellung</h2>
