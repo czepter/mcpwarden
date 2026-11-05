@@ -1,8 +1,9 @@
 <script setup lang="ts">
-// Mock-Banner nur im Mock-Build: __API_MOCK__ ist Kompilier-Konstante, im Produktions-Build faellt Zweig samt Chunk weg.
-const MockBanner = __API_MOCK__ ? defineAsyncComponent(() => import('~/components/shell/MockBanner.vue')) : undefined
 import { SidebarInset, SidebarProvider } from '~/components/ui/sidebar'
 import AppSidebar from '~/components/shell/AppSidebar.vue'
+
+// Mock-Banner nur im Mock-Build: __API_MOCK__ ist Kompilier-Konstante, im Produktions-Build faellt Zweig samt Chunk weg.
+const MockBanner = __API_MOCK__ ? defineAsyncComponent(() => import('~/components/shell/MockBanner.vue')) : undefined
 
 // Cookie `sidebar_state` schreibt der SidebarProvider; hier nur das Lesen fuer den ersten Render (useCookie liefert 'false' als Boolean).
 // Bewusst unkontrolliert (default-open): mit v-model:open schriebe der Provider den alten Wert ins Cookie.
