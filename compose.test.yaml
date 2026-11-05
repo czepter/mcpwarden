@@ -1,0 +1,15 @@
+# Nur Postgres fuer Tests (kein App-Compose). Port ueberschreibbar: TEST_PG_PORT=...
+services:
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_PASSWORD: test
+    ports:
+      - "${TEST_PG_PORT:-54329}:5432"
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 1s
+      timeout: 3s
+      retries: 30
