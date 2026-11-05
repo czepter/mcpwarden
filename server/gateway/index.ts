@@ -18,7 +18,7 @@ export type GatewayOptions = {
   statsWrite: (rows: CallStatRow[]) => Promise<void>
   getAllow?: () => AllowList | Promise<AllowList>
   safeFetch?: FetchLike
-  stdioTransport?: (up: UpstreamRow) => Promise<Transport>
+  stdioTransport?: (up: UpstreamRow, creds: Credentials) => Promise<Transport>
   notifyChanged?: (userId: string) => void
   log?: (msg: string, err?: unknown) => void
   now?: () => number
@@ -35,11 +35,12 @@ export function createGateway(o: GatewayOptions) {
     onRetryAfter: () => {}, // Host->Upstream-Zuordnung folgt mit der DB-Anbindung (blockUpstream)
   })
   const credentials = async (up: UpstreamRow): Promise<Credentials> => {
-    const out: Credentials = { headers: {} }
+    const out: Credentials = { headers: {}, env: {} }
     for (const s of await o.store.getSecrets(up.userId, up.id)) {
       const v = decryptSecret(o.masterKey, up.userId, { upstreamId: s.upstreamId, kind: s.kind, name: s.name }, s.ciphertext)
       if (s.kind === 'bearer') out.bearer = v
       else if (s.kind === 'header') out.headers![s.name] = v
+      else if (s.kind === 'env') out.env![s.name] = v
     }
     return out
   }

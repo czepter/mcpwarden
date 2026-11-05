@@ -6,7 +6,7 @@ import { classifyError } from './errors'
 import { withRetry } from './retry'
 import type { UpstreamRow } from './types'
 
-export type Credentials = { bearer?: string, headers?: Record<string, string> }
+export type Credentials = { bearer?: string, headers?: Record<string, string>, env?: Record<string, string> }
 
 export type ConnectDeps = {
   safeFetch: FetchLike
@@ -14,7 +14,7 @@ export type ConnectDeps = {
   credentials: (up: UpstreamRow) => Promise<Credentials>
   clientInfo?: { name: string, version: string }
   /** Für stdio: liefert den Transport über den Worker (Aufgabe 1.3). */
-  stdioTransport?: (up: UpstreamRow) => Promise<Transport>
+  stdioTransport?: (up: UpstreamRow, creds: Credentials) => Promise<Transport>
 }
 
 /** Standard ist `legacy`; nur `auto` spricht Revision 2026-07-28 (Abbruch = Stream schließen) und fällt sonst auf `initialize` zurück. */
@@ -69,7 +69,7 @@ export async function connectUpstream(up: UpstreamRow, deps: ConnectDeps, signal
     const ms = Math.max(t.connectMs, 60_000)
     const client = new Client(deps.clientInfo ?? { name: 'mcpwarden', version: '0.1.0' }, clientOptions(ms))
     const sig = AbortSignal.any([AbortSignal.timeout(ms), ...(signal ? [signal] : [])])
-    await raceAbort(client.connect(await deps.stdioTransport(up), { signal: sig }), sig)
+    await raceAbort(client.connect(await deps.stdioTransport(up, await deps.credentials(up)), { signal: sig }), sig)
     return { client, transport: 'stdio', retries: 0 }
   }
   const headers = authHeaders(up, await deps.credentials(up))
