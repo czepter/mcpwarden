@@ -6,6 +6,9 @@ services:
     build:
       context: .
       target: full # `slim`: ohne stdio, ohne Capabilities (cap_add entfernen)
+      # Nur für Umgebungen mit eigener CA/Proxy (Basis-Image mit CA); der Standard ändert nichts.
+      args:
+        NODE_IMAGE: ${NODE_IMAGE:-node:24-bookworm-slim}
     image: mcpwarden:full
     init: true
     restart: unless-stopped
