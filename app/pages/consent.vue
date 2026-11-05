@@ -8,6 +8,7 @@ import { Alert } from '~/components/ui/alert'
 import { Button } from '~/components/ui/button'
 import { Checkbox } from '~/components/ui/checkbox'
 import { Switch } from '~/components/ui/switch'
+import { FEATURES } from '~/lib/features'
 import { scopeLabel } from '~/lib/labels'
 
 definePageMeta({ layout: 'auth' })
@@ -25,8 +26,8 @@ const adminOn = ref(true)
 const busy = ref(false)
 const failure = ref('')
 const done = computed(() => route.query.done as string | undefined)
-// mcpwarden:admin erscheint erst ab Phase 2, wenn der Server den Scope anbietet.
-const adminScope = computed(() => info.value?.scopes.find(s => s.name === 'mcpwarden:admin'))
+// mcpwarden:admin erscheint erst ab Phase 2 (FEATURES.consentAdminScope) und nur, wenn der Server den Scope anbietet.
+const adminScope = computed(() => FEATURES.consentAdminScope ? info.value?.scopes.find(s => s.name === 'mcpwarden:admin') : undefined)
 const required = computed(() => info.value?.scopes.filter(s => s.required && s.name !== 'mcpwarden:admin') ?? [])
 const unknown = computed(() => info.value && !info.value.client.allowlisted)
 const canAllow = computed(() => !unknown.value || confirmed.value)

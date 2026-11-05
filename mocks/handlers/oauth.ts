@@ -14,7 +14,8 @@ export const oauthHandlers = [
         redirects: [loopback ? { uri: 'http://localhost:8123/cb', host: 'localhost', loopback: true } : known ? { uri: 'http://localhost:33418/callback', host: 'localhost', loopback: true } : { uri: 'https://agent.example.org/oauth/cb', host: 'agent.example.org', loopback: false }],
         allowlisted: known, registeredAt: new Date(Date.now() - 120_000).toISOString(), viaDcr: true,
       },
-      scopes: [{ name: 'mcp:tools', required: true }, { name: 'openid', required: true }, { name: 'offline_access', required: true }],
+      // Client 'agent-admin': Server der Phase 2, der den Admin-Scope bereits anbietet (die UI blendet ihn bis dahin aus).
+      scopes: [{ name: 'mcp:tools', required: true }, { name: 'openid', required: true }, { name: 'offline_access', required: true }, ...(id === 'agent-admin' ? [{ name: 'mcpwarden:admin', required: false }] : [])],
       resource: 'https://mcp.example.test/mcp', loopback: known || loopback,
     }
     return json(info)
