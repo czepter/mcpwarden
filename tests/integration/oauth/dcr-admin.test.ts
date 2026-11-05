@@ -133,6 +133,10 @@ describe('DCR policy modes against /api/auth/oauth2/register', () => {
     expect(mixed.status).toBe(400)
     await setMode('open')
   })
+  it('no client_credentials clients through anonymous registration', async () => {
+    const r = await registerClient(srv.url, { grant_types: ['client_credentials'], token_endpoint_auth_method: 'client_secret_basic' })
+    expect(r.status).toBe(400)
+  })
   it('PATCH disables, DELETE revokes a client', async () => {
     const reg = await registerClient(srv.url, { client_name: 'Claude Code (manage)' })
     const id = reg.json.client_id as string

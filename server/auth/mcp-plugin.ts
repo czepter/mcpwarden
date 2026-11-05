@@ -76,6 +76,8 @@ export function mcpPlugins(baseUrl: string) {
       scopes: [...SCOPES_SUPPORTED],
       accessTokenExpiresIn: ACCESS_TOKEN_TTL_SECONDS,
       refreshTokenExpiresIn: REFRESH_TOKEN_TTL_SECONDS,
+      // Nur Nutzer-Grants: client_credentials liefe ohne Nutzer und waere ueber anonyme DCR erreichbar.
+      grantTypes: ['authorization_code', 'refresh_token'],
       allowDynamicClientRegistration: true,
       allowUnauthenticatedClientRegistration: true,
       clientRegistrationDefaultApplicationType: 'infer',
