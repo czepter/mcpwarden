@@ -6,6 +6,7 @@ import { AllowList } from './net/ssrf'
 import { createGateway, type Gateway } from './index'
 import { SHUTDOWN_DRAIN_MS, STATS } from './config'
 import { IpcTransport } from './stdio/ipc-transport'
+import { SessionCache } from './stdio/session-cache'
 import { SupervisorClient, type WorkerSession } from './stdio/supervisor-client'
 import { stdioPolicy, type StdioReason } from './stdio/policy'
 import { GatewayRepo } from './upstream/repo'
@@ -53,7 +54,7 @@ async function create(): Promise<Runtime> {
   const imageTarget = process.env.IMAGE_TARGET === 'full' ? 'full' : 'slim'
   const stdioMode = process.env.STDIO_MODE === 'off' ? 'off' : 'auto'
   const supervisor = imageTarget === 'full' && stdioMode !== 'off' ? new SupervisorClient(process.env.SUP_SOCKET ?? '/run/mcpwarden/sup.sock') : null
-  const sessions = new Map<string, WorkerSession>()
+  const sessions = new SessionCache<WorkerSession>()
 
   const cfg = getConfig()
   // Statusmails (nur mit aktivem Mailer): Fire-and-forget, gedrosselt je (Upstream, Zustand), Opt-out je Nutzer
@@ -94,13 +95,13 @@ async function create(): Promise<Runtime> {
         const owner = await repo.getUserLite(up.userId)
         const pol = await rtRef.stdioPolicyFor(owner?.role === 'admin' ? 'admin' : 'user', limits.stdioAllowed)
         if (!pol.allowed) throw Object.assign(new Error(`stdio not allowed (${pol.reason})`), { code: 'stdio_not_allowed' })
-        let s = sessions.get(up.userId)
-        if (!s || s.closed) { s = await supervisor.attach(up.userId, { maxProcs: limits.stdioMaxProcs, idleMin: limits.stdioIdleMin }); sessions.set(up.userId, s) }
+        // Gleichzeitige Erstverbindungen teilen sich einen attach (der Supervisor liefert dem zweiten sonst `busy`)
+        const s = await sessions.get(up.userId, () => supervisor.attach(up.userId, { maxProcs: limits.stdioMaxProcs, idleMin: limits.stdioIdleMin }))
         return new IpcTransport(s, { command: up.command!, args: up.args, env: { ...up.env, ...creds.env }, cwdRel: up.cwd ?? undefined })
       }
       : undefined,
   })
-  registerGatewayLifecycle(gw, { stopWorker: async (u, o) => { sessions.get(u)?.close(); sessions.delete(u); await supervisor?.stopWorker(u, o.purge).catch(e => log('stopWorker', e)) } })
+  registerGatewayLifecycle(gw, { stopWorker: async (u, o) => { sessions.close(u); await supervisor?.stopWorker(u, o.purge).catch(e => log('stopWorker', e)) } })
 
   registerLifecycleHandler({
     name: 'credentials',
@@ -124,7 +125,7 @@ async function create(): Promise<Runtime> {
   g.__mcpwRuntimeStop = async () => {
     rt.draining = true
     clearInterval(purge)
-    for (const s of sessions.values()) s.close()
+    sessions.closeAll()
     await gw.shutdown(SHUTDOWN_DRAIN_MS)
   }
   return rt

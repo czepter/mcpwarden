@@ -5,6 +5,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { startSupervisor } from '../../supervisor/main'
 import { SupervisorClient, type WorkerSession } from '../../server/gateway/stdio/supervisor-client'
 import { IpcTransport } from '../../server/gateway/stdio/ipc-transport'
+import { SessionCache } from '../../server/gateway/stdio/session-cache'
 import { ToolNotFoundError } from '../../server/gateway/ports'
 import { ctxFor, makeGateway, sig } from '../helpers/gateway'
 import { encryptSecret } from '../../server/gateway/crypto/secrets'
@@ -206,6 +207,21 @@ describe('stdio upstream through supervisor + worker', () => {
       sup2.onExit(() => {})
       await sup2.shutdown(0)
     }
+  })
+
+  it('two stdio upstreams of one user connecting at the same time share one worker attach (review M-D)', async () => {
+    const sessions = new SessionCache<WorkerSession>()
+    const h = makeGateway({
+      stdioTransport: async (up, creds) => {
+        const s = await sessions.get(up.userId, () => client.attach(up.userId, { maxProcs: 3, idleMin: 10 }))
+        return new IpcTransport(s, { command: up.command!, args: up.args, env: { ...up.env, ...creds.env }, cwdRel: up.cwd ?? undefined })
+      },
+    })
+    for (const slug of ['pa', 'pb', 'pc']) h.store.addUpstream('u-par', { slug, type: 'stdio', url: null, command: process.execPath, args: [fake], env: { FAKE_MARK: mark } })
+    const names = (await h.gw.toolSource.listTools(ctxFor('u-par'))).map(t => t.name)
+    for (const slug of ['pa', 'pb', 'pc']) expect(names).toContain(`${slug}__echo`)
+    await h.gw.shutdown(300)
+    sessions.closeAll()
   })
 
 })
