@@ -4,9 +4,9 @@ import type { Clock } from './limiter'
 export type BreakerState = 'closed' | 'open' | 'half-open'
 
 /**
- * Zählt aufeinanderfolgende Fehler (Verbindung, Timeout, 5xx). `isError`, ungültige Argumente,
- * Rate-Limit und denied gehören nicht hierher (Aufrufer entscheidet).
- * 5 in Folge -> open 30 s, Verdopplung bis 5 min; half-open lässt genau einen Probeaufruf durch.
+ * Counts consecutive failures (connection, timeout, 5xx). `isError`, invalid arguments,
+ * rate limit and denied do not belong here (the caller decides).
+ * 5 in a row -> open 30 s, doubling up to 5 min; half-open lets exactly one probe call through.
  */
 export class Breaker {
   state: BreakerState = 'closed'
@@ -18,7 +18,7 @@ export class Breaker {
 
   get nextRetryAt(): number | null { return this.state === 'open' ? this.openUntil : null }
 
-  /** true = Aufruf darf durch. Ein half-open-Zugang gehört dem Aufrufer, der danach success/failure meldet. */
+  /** true = the call may pass. A half-open admission belongs to the caller, who then reports success/failure. */
   allow(): boolean {
     if (this.state === 'closed') return true
     if (this.state === 'open') {
@@ -49,6 +49,6 @@ export class Breaker {
     }
   }
 
-  /** Probe wurde nicht ausgeführt (z. B. Rate-Limit nach allow()): Zugang freigeben. */
+  /** The probe was not executed (e.g. rate limit after allow()): release the admission. */
   cancelProbe() { this.probing = false }
 }

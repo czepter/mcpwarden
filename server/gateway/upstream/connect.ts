@@ -10,17 +10,17 @@ export type Credentials = { bearer?: string, headers?: Record<string, string>, e
 
 export type ConnectDeps = {
   safeFetch: FetchLike
-  /** Entschlüsselt frisch (nur hier, nie gecacht). */
+  /** Decrypts fresh (only here, never cached). */
   credentials: (up: UpstreamRow, owner: string) => Promise<Credentials>
   clientInfo?: { name: string, version: string }
-  /** Für stdio: liefert den Transport über den Worker (Aufgabe 1.3). */
+  /** For stdio: supplies the transport via the worker (task 1.3). */
   stdioTransport?: (up: UpstreamRow, creds: Credentials) => Promise<Transport>
 }
 
-/** Standard ist `legacy`; nur `auto` spricht Revision 2026-07-28 (Abbruch = Stream schließen) und fällt sonst auf `initialize` zurück. */
+/** The default is `legacy`; only `auto` speaks revision 2026-07-28 (abort = close stream) and otherwise falls back to `initialize`. */
 export const clientOptions = (connectMs: number) => ({ versionNegotiation: { mode: 'auto' as const, probe: { timeoutMs: connectMs, maxRetries: 0 } } })
 
-/** Bricht ab, sobald das Signal feuert (die SDK-Probe beachtet `signal` nicht überall). */
+/** Aborts as soon as the signal fires (the SDK probe does not honor `signal` everywhere). */
 function raceAbort<T>(p: Promise<T>, signal: AbortSignal): Promise<T> {
   return new Promise<T>((res, rej) => {
     const onAbort = () => rej(signal.reason ?? new DOMException('aborted', 'AbortError'))
@@ -38,8 +38,8 @@ export function authHeaders(up: UpstreamRow, c: Credentials): Record<string, str
 }
 
 /**
- * Der EINZIGE Ort, an dem HTTP-Transporte gebaut werden (Lint-Regel/Test `no-direct-transport`);
- * alle mit `fetch: safeFetch`.
+ * The ONLY place where HTTP transports are built (lint rule/test `no-direct-transport`);
+ * all with `fetch: safeFetch`.
  */
 function httpTransport(kind: 'streamable' | 'sse', url: URL, headers: Record<string, string>, safeFetch: FetchLike): Transport {
   const requestInit = { headers }
@@ -61,7 +61,7 @@ async function connectOnce(up: UpstreamRow, connectMs: number, kind: 'streamable
   }
 }
 
-/** Verbindungsaufbau mit Timeout und (bei `auto`) SSE-Fallback mit frischem Client. Retry nur hier (Connect/Init). */
+/** Connection setup with timeout and (for `auto`) SSE fallback with a fresh client. Retry only here (connect/init). */
 export async function connectUpstream(up: UpstreamRow, deps: ConnectDeps, signal?: AbortSignal, owner: string = up.userId): Promise<Connected & { retries: number }> {
   const t = mergeTimeouts(up.timeouts)
   if (up.type === 'stdio') {
@@ -73,7 +73,7 @@ export async function connectUpstream(up: UpstreamRow, deps: ConnectDeps, signal
     try {
       await raceAbort(client.connect(transport, { signal: sig }), sig)
     } catch (e) {
-      // Timeout/Abbruch: sonst bleibt der Kindprozess im Worker übrig und erschöpft MAX_CHILDREN
+      // Timeout/abort: otherwise the child process stays behind in the worker and exhausts MAX_CHILDREN
       await client.close().catch(() => {})
       await transport.close().catch(() => {})
       throw e
@@ -81,7 +81,7 @@ export async function connectUpstream(up: UpstreamRow, deps: ConnectDeps, signal
     return { client, transport: 'stdio', retries: 0 }
   }
   const creds = await deps.credentials(up, owner)
-  // Eine Auth-Art ohne passendes Secret nie still ohne Header verbinden
+  // Never connect silently without a header for an auth kind without a matching secret
   if ((up.authType === 'bearer' && !creds.bearer) || (up.authType === 'header' && !(up.authHeaderName && creds.headers?.[up.authHeaderName]))) throw new CredentialsMissingError()
   const headers = authHeaders(up, creds)
   const attempt = async () => {
@@ -92,7 +92,7 @@ export async function connectUpstream(up: UpstreamRow, deps: ConnectDeps, signal
       try { return { client: await connectOnce(up, t.connectMs, kind, deps, headers, sig), transport: kind } } catch (e) {
         lastErr = e
         const c = classifyError(e, { hasAuth: up.authType !== 'none' })
-        // Fallback nur wenn der Server Streamable nicht spricht; nie bei SSRF/Redirect/Auth/Timeout.
+        // Fallback only if the server does not speak Streamable; never on SSRF/redirect/auth/timeout.
         if (kind === 'sse' || up.transport !== 'auto' || ['ssrf_blocked', 'redirect', 'unauthorized', 'timeout'].includes(c.code)) throw e
       }
     }

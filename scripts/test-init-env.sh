@@ -1,5 +1,5 @@
 #!/bin/sh
-# Prüft: .env hat Modus 600, vorhandene .env bleibt unverändert.
+# Checks: .env has mode 600, an existing .env stays unchanged.
 set -eu
 d=$(mktemp -d)
 trap 'rm -rf "$d"' EXIT

@@ -1,7 +1,7 @@
 /**
- * Policy-Gate vor `POST /api/auth/oauth2/register` (Plan 0b, Aufgabe 3). Als Better-Auth-`hooks.before`/`after`
- * eingehaengt, damit auch Direktaufrufe der Plugin-Route gefiltert werden (`clientPrivileges` greift bei anonymer
- * DCR nicht, siehe mcp-plugin.ts). Fehler im Format von RFC 7591.
+ * Policy gate before `POST /api/auth/oauth2/register` (plan 0b, task 3). Attached as Better Auth `hooks.before`/`after`
+ * so that direct calls of the plugin route are filtered too (`clientPrivileges` does not apply to anonymous
+ * DCR, see mcp-plugin.ts). Errors in the format of RFC 7591.
  */
 import { APIError } from 'better-auth/api'
 import type { DcrMode } from '../../shared/api-types'
@@ -35,7 +35,7 @@ export async function dcrAfter(path: string, body: unknown, returned: unknown, d
   if (typeof clientId !== 'string') return
   const { allowlist } = await deps.getPolicy()
   const m = metadata(body)
-  // Ein Fehler beim Protokollieren darf die erfolgreiche Registrierung nicht kippen (Meta fehlt dann, API rechnet live).
+  // A failure while logging must not undo the successful registration (the meta is then missing, the API computes live).
   await deps.recordRegistration(clientId, isAllowlisted(allowlist, sanitizeClientName(m.clientName), m.redirectUris))
-    .catch(() => console.error('[mcpwarden] oauth_client_meta konnte nicht geschrieben werden'))
+    .catch(() => console.error('[mcpwarden] oauth_client_meta could not be written'))
 }

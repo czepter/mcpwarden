@@ -7,7 +7,7 @@ export class SupervisorError extends Error {
 
 type Reply = { ok: boolean, error?: string, retryMs?: number, [k: string]: unknown }
 
-/** Steuerverbindung (kurzlebig je Befehl) und Datenverbindungen je Nutzer-Worker. Sendet nur userId, nie UID/Pfade. */
+/** Control connection (short-lived per command) and data connections per user worker. Sends only userId, never UID/paths. */
 export class SupervisorClient {
   constructor(private socketPath: string) {}
 
@@ -40,7 +40,7 @@ export class SupervisorClient {
     if (!r.ok) throw new SupervisorError(r.error ?? 'stop_failed')
   }
 
-  /** attach: danach spricht nur noch der Worker über diese Verbindung (fd 3 im Worker). */
+  /** attach: afterwards only the worker speaks over this connection (fd 3 in the worker). */
   async attach(userId: string, limits: { maxProcs?: number, idleMin?: number } = {}): Promise<WorkerSession> {
     const s = await this.connect()
     const reader = new FrameReader(MAX_DATA_FRAME)
@@ -79,7 +79,7 @@ export class SupervisorClient {
 
 type ChildHandler = (m: FromWorker) => void
 
-/** Eine Datenverbindung zu einem Worker; multiplext Kindprozesse per childId. */
+/** One data connection to a worker; multiplexes child processes by childId. */
 export class WorkerSession {
   closed = false
   onReady: () => void = () => {}

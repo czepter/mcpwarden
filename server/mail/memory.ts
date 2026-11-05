@@ -3,11 +3,11 @@ import { assertMail } from './validate'
 
 export interface MemoryMailer extends Mailer {
   readonly outbox: Mail[]
-  /** Naechste Sendungen schlagen fehl (Fehlerpfad-Tests). */
+  /** The next sends fail (error-path tests). */
   failWith: MailError | undefined
 }
 
-/** Testadapter: sammelt Mails im Speicher; prueft dieselben Regeln wie der SMTP-Adapter. */
+/** Test adapter: collects mails in memory; applies the same rules as the SMTP adapter. */
 export function createMemoryMailer(from = 'mcpwarden <noreply@example.com>'): MemoryMailer {
   const outbox: Mail[] = []
   const m: MemoryMailer = {

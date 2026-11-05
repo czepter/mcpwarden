@@ -1,6 +1,6 @@
 /**
- * Verdrahtung der Gateway-Funktionen mit Datenbank, Einstellungen und Supervisor (Plan Aufgabe 1.2/1.4).
- * Ein Runtime-Objekt je Prozess (globalThis, überlebt Dev-HMR); `closeRuntime` ist der Shutdown-Pfad.
+ * Wiring of the gateway functions with database, settings and supervisor (plan task 1.2/1.4).
+ * One runtime object per process (globalThis, survives dev HMR); `closeRuntime` is the shutdown path.
  */
 import { AllowList } from './net/ssrf'
 import { createGateway, type Gateway } from './index'
@@ -41,13 +41,13 @@ async function create(): Promise<Runtime> {
   const repo = new GatewayRepo(db)
   const log = (m: string, err?: unknown) => console.error(`[mcpwarden] ${m}`, err instanceof Error ? err.message : '')
 
-  // Einstellungen: kurzer Cache (<= 10 s), damit `ssrf.allow` zeitnah, aber nicht pro Request gelesen wird
+  // Settings: short cache (<= 10 s) so that `ssrf.allow` is read promptly but not per request
   let cache: { at: number, allow: AllowList, stdio: boolean } | null = null
   const settings = async () => {
     if (cache && Date.now() - cache.at < SETTINGS_TTL_MS) return cache
     const entries = await repo.getSetting<string[]>('ssrf.allow', [])
     const { list, invalid } = AllowList.lenient(entries)
-    if (invalid.length) log(`ssrf.allow: ${invalid.length} ungültige Einträge werden ignoriert`)
+    if (invalid.length) log(`ssrf.allow: ${invalid.length} invalid entries are ignored`)
     return (cache = { at: Date.now(), allow: list, stdio: await repo.getSetting<boolean>('stdio.enabled', false) })
   }
 
@@ -57,7 +57,7 @@ async function create(): Promise<Runtime> {
   const sessions = new SessionCache<WorkerSession>()
 
   const cfg = getConfig()
-  // Statusmails (nur mit aktivem Mailer): Fire-and-forget, gedrosselt je (Upstream, Zustand), Opt-out je Nutzer
+  // Status mails (only with an active mailer): fire and forget, throttled per (upstream, state), opt-out per user
   const statusMail = createStatusNotifier({
     mailer: getMailer(),
     baseUrl: cfg.baseUrl,
@@ -91,11 +91,11 @@ async function create(): Promise<Runtime> {
     stdioTransport: supervisor
       ? async (up: UpstreamRow, creds) => {
         const limits = await repo.getLimits(up.userId)
-        // Bei jedem Verbindungsaufbau erneut: Entzug der Freigabe wirkt sofort (Rolle und Limits frisch aus der DB)
+        // On every connection setup again: revoking the approval takes effect immediately (role and limits fresh from the DB)
         const owner = await repo.getUserLite(up.userId)
         const pol = await rtRef.stdioPolicyFor(owner?.role === 'admin' ? 'admin' : 'user', limits.stdioAllowed)
         if (!pol.allowed) throw Object.assign(new Error(`stdio not allowed (${pol.reason})`), { code: 'stdio_not_allowed' })
-        // Gleichzeitige Erstverbindungen teilen sich einen attach (der Supervisor liefert dem zweiten sonst `busy`)
+        // Concurrent first connections share one attach (otherwise the supervisor answers the second with `busy`)
         const s = await sessions.get(up.userId, () => supervisor.attach(up.userId, { maxProcs: limits.stdioMaxProcs, idleMin: limits.stdioIdleMin }))
         return new IpcTransport(s, { command: up.command!, args: up.args, env: { ...up.env, ...creds.env }, cwdRel: up.cwd ?? undefined })
       }
@@ -137,26 +137,26 @@ export function getRuntime(): Promise<Runtime> {
   return (g.__mcpwRuntime ??= create())
 }
 
-/** Zähler `stats_dropped`: verworfene Messdatensätze seit Start (P0-15); 0 ohne Runtime. */
+/** Counter `stats_dropped`: measurement records dropped since start (P0-15); 0 without a runtime. */
 export function statsDropped(): number {
   return g.__mcpwStatsDropped?.() ?? 0
 }
 
-/** Ping des Supervisors, wenn stdio aktiv ist (Ziel `full`, STDIO_MODE != off); sonst `undefined` (dann zaehlt er fuer /readyz nicht). */
+/** Ping of the supervisor when stdio is active (target `full`, STDIO_MODE != off); otherwise `undefined` (then it does not count for /readyz). */
 export function supervisorPing(): (() => Promise<boolean>) | undefined {
   return g.__mcpwSupervisorPing
 }
 
-/** Drain läuft (für /readyz); ohne Runtime: false. */
+/** Drain in progress (for /readyz); without a runtime: false. */
 export function isDraining(): boolean {
   return runtimeDraining
 }
 let runtimeDraining = false
 
-/** SIGTERM-Beginn: /readyz meldet sofort 503, neue Verbindungen kommen nicht mehr an. */
+/** SIGTERM start: /readyz reports 503 immediately, new connections no longer arrive. */
 export function markDraining(): void { runtimeDraining = true }
 
-/** Graceful Shutdown: Aufrufe auslaufen lassen, Pool/Worker schließen, Stats flushen. Idempotent. */
+/** Graceful shutdown: let calls drain, close pool/workers, flush stats. Idempotent. */
 export async function closeRuntime(): Promise<void> {
   runtimeDraining = true
   const p = g.__mcpwRuntime

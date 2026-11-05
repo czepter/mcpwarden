@@ -1,4 +1,4 @@
-/** Rate-Limit: Token-Bucket je Nutzer/Token/Upstream plus Semaphore je Upstream (P0-5). Zeitquelle injizierbar. */
+/** Rate limit: token bucket per user/token/upstream plus semaphore per upstream (P0-5). Time source injectable. */
 export type Clock = () => number
 
 export class TokenBucket {
@@ -8,7 +8,7 @@ export class TokenBucket {
     this.tokens = capacity
     this.last = now()
   }
-  /** Zeitpunkt der letzten Pruefung (Aufraeumen ungenutzter Buckets). */
+  /** Time of the last check (cleanup of unused buckets). */
   get lastUsed() { return this.last }
   configure(capacity: number, perMin: number) { this.capacity = capacity; this.perMin = perMin; this.tokens = Math.min(this.tokens, capacity) }
   private refill() {
@@ -16,7 +16,7 @@ export class TokenBucket {
     this.tokens = Math.min(this.capacity, this.tokens + ((t - this.last) * this.perMin) / 60_000)
     this.last = t
   }
-  /** Sekunden bis ein Token frei ist; 0 = jetzt frei. */
+  /** Seconds until a token is free; 0 = free now. */
   waitSec(): number {
     this.refill()
     if (this.tokens >= 1) return 0
@@ -39,7 +39,7 @@ export type AcquireResult = { ok: true, release: () => void } | { ok: false, sco
 export class Limiter {
   private buckets = new Map<string, TokenBucket>()
   private inflight = new Map<string, number>()
-  private tokenOwner = new Map<string, string>() // Token-Bucket -> Nutzer, damit forgetUser sie entfernen kann
+  private tokenOwner = new Map<string, string>() // token bucket -> user, so that forgetUser can remove them
   private blockedUntil = new Map<string, number>()
   private hits = new Map<string, number[]>()
   constructor(private now: Clock = Date.now) {}
@@ -51,7 +51,7 @@ export class Limiter {
     return b
   }
 
-  /** Upstream sendete Retry-After: bis dahin keine Aufrufe. */
+  /** The upstream sent Retry-After: no calls until then. */
   blockUpstream(upstreamId: string, seconds: number) { this.blockedUntil.set(upstreamId, this.now() + seconds * 1000) }
   upstreamBlockedUntil(upstreamId: string) { const t = this.blockedUntil.get(upstreamId); return t && t > this.now() ? t : null }
 
@@ -64,7 +64,7 @@ export class Limiter {
     return { ok: false, scope, retryAfterSec }
   }
 
-  /** Reihenfolge Nutzer -> Token -> Upstream; erst prüfen, dann alle Tokens abziehen. */
+  /** Order user -> token -> upstream; first check, then deduct all tokens. */
   acquire(i: AcquireInput): AcquireResult {
     const blocked = this.upstreamBlockedUntil(i.upstreamId)
     if (blocked) return this.deny(i.upstreamId, 'upstream', Math.max(1, Math.ceil((blocked - this.now()) / 1000)))
@@ -98,7 +98,7 @@ export class Limiter {
 
   inflightCount(userId: string, upstreamId: string) { return this.inflight.get(`${userId}:${upstreamId}`) ?? 0 }
 
-  /** Treffer der letzten 5 min (für `rateLimitHits5m`). */
+  /** Hits of the last 5 min (for `rateLimitHits5m`). */
   hitsLast5m(upstreamId: string): number {
     const cut = this.now() - 300_000
     const arr = (this.hits.get(upstreamId) ?? []).filter(t => t >= cut)
@@ -106,10 +106,10 @@ export class Limiter {
     return arr.length
   }
 
-  /** Anzahl gehaltener Buckets (Tests, Ueberwachung). */
+  /** Number of buckets held (tests, monitoring). */
   size() { return this.buckets.size }
 
-  /** Entfernt seit `idleMs` ungenutzte Buckets, abgelaufene Sperren und alte Trefferlisten, damit der Speicher nicht mit der Zahl der Schluessel waechst. */
+  /** Removes buckets unused for `idleMs`, expired blocks and old hit lists so that memory does not grow with the number of keys. */
   prune(idleMs = 10 * 60_000) {
     const now = this.now()
     for (const [k, b] of this.buckets) if (now - b.lastUsed > idleMs) this.buckets.delete(k)
@@ -118,9 +118,9 @@ export class Limiter {
     for (const [id, arr] of this.hits) if (!arr.some(t => t >= now - 300_000)) this.hits.delete(id)
   }
 
-  /** Aufräumen beim Löschen/Sperren. */
+  /** Cleanup on delete/ban. */
   forgetUser(userId: string) {
-    // Nutzer-IDs enthalten kein ':'; exakte Übereinstimmung bzw. Präfix mit Trenner, damit 'ab' nicht 'abc' trifft
+    // User IDs contain no ':'; exact match or prefix with a separator, so that 'ab' does not match 'abc'
     for (const k of [...this.buckets.keys()]) if (k === `u:${userId}` || k.startsWith(`p:${userId}:`)) this.buckets.delete(k)
     for (const [tok, owner] of [...this.tokenOwner]) if (owner === userId) { this.buckets.delete(`t:${tok}`); this.tokenOwner.delete(tok) }
     for (const k of [...this.inflight.keys()]) if (k.startsWith(`${userId}:`)) this.inflight.delete(k)

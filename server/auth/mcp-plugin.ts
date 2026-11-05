@@ -1,60 +1,60 @@
 /**
- * Better-Auth als OAuth-Provider fuer /mcp: `jwt()` + `mcp()` und die Request-Haken, die daraus eine
- * sichere Konfiguration machen. Befunde des Spikes (Plan 0b, Aufgabe 1; @better-auth/mcp 1.7.17,
- * @better-auth/oauth-provider 1.7.17, per Test belegt in tests/integration/oauth/):
+ * Better Auth as the OAuth provider for /mcp: `jwt()` + `mcp()` and the request hooks that turn it into a
+ * secure configuration. Spike findings (plan 0b, task 1; @better-auth/mcp 1.7.17,
+ * @better-auth/oauth-provider 1.7.17, verified by tests in tests/integration/oauth/):
  *
- * Pfade und Issuer
- *  - Issuer = `<BASE_URL>/api/auth` (basePath bleibt, 0a). Endpunkte: `/api/auth/oauth2/{authorize,token,register,
+ * Paths and issuer
+ *  - Issuer = `<BASE_URL>/api/auth` (basePath stays, 0a). Endpoints: `/api/auth/oauth2/{authorize,token,register,
  *    consent,revoke,introspect,public-client}`, JWKS `/api/auth/jwks`.
- *  - `onRequest` des Plugins beantwortet Well-known-Pfade unabhaengig vom basePath: `/.well-known/oauth-protected-resource`
- *    (+ `/mcp`) und `/.well-known/oauth-authorization-server/api/auth` (RFC 8414 Pfad-Einfuegung). Ohne Pfad liefert
- *    das Plugin 404; die Nitro-Route (routes/.well-known/[...path].ts) schreibt die Rootvarianten darauf um.
+ *  - The plugin's `onRequest` answers well-known paths independently of the basePath: `/.well-known/oauth-protected-resource`
+ *    (+ `/mcp`) and `/.well-known/oauth-authorization-server/api/auth` (RFC 8414 path insertion). Without a path
+ *    the plugin returns 404; the Nitro route (routes/.well-known/[...path].ts) rewrites the root variants to it.
  *
  * Token
- *  - Mit `resource`: JWT (`typ at+jwt`, EdDSA), Claims `sub`, `aud` = [resource, <issuer>/oauth2/userinfo],
- *    `client_id`, `azp`, `scope`, `sid`, `iss`, `iat`, `exp`, `jti`. Ohne `resource`: opakes Token (nicht per JWKS pruefbar).
- *    Entscheidung: `oauthRequestRewrite` setzt bei /oauth2/authorize und /oauth2/token die Default-Resource ein,
- *    jedes Token ist also ein JWT mit `aud` = `<BASE_URL>/mcp`. Opake Tokens lehnt der Guard als 401 ab.
- *  - Refresh-Token: Tabelle `oauth_refresh_token` (Spalten `revoked`, `expires_at`, `user_id`, `client_id`);
- *    Widerruf per RFC 7009 setzt `revoked`. Basis des Guards (Aufgabe 6).
+ *  - With `resource`: JWT (`typ at+jwt`, EdDSA), claims `sub`, `aud` = [resource, <issuer>/oauth2/userinfo],
+ *    `client_id`, `azp`, `scope`, `sid`, `iss`, `iat`, `exp`, `jti`. Without `resource`: opaque token (not verifiable via JWKS).
+ *    Decision: `oauthRequestRewrite` inserts the default resource on /oauth2/authorize and /oauth2/token,
+ *    so every token is a JWT with `aud` = `<BASE_URL>/mcp`. The guard rejects opaque tokens with 401.
+ *  - Refresh token: table `oauth_refresh_token` (columns `revoked`, `expires_at`, `user_id`, `client_id`);
+ *    revocation per RFC 7009 sets `revoked`. Basis of the guard (task 6).
  *
  * offline_access (R15)
- *  - Das Plugin ergaenzt `offline_access` nicht von selbst (Clients, die nur `mcp:tools` anfordern, bekommen sonst
- *    keinen Refresh-Token). Ein `hooks.before` auf /oauth2/authorize ergaenzt `openid offline_access mcp:tools` in der
- *    Query vor der Signatur: es muss kein Client abgelehnt werden, und die Zustimmung bietet immer alle drei Scopes an.
+ *  - The plugin does not add `offline_access` on its own (clients that request only `mcp:tools` would otherwise get
+ *    no refresh token). A `hooks.before` on /oauth2/authorize adds `openid offline_access mcp:tools` to the
+ *    query before the signature: no client has to be rejected, and the consent always offers all three scopes.
  *
- * Consent-Teilmenge
- *  - Das Plugin akzeptiert beim Consent (`scope` im Body) jede Teilmenge der urspruenglich angeforderten Scopes,
- *    auch ohne `mcp:tools`. `consentGuard` lehnt Teilmengen ohne Pflicht-Scopes ab (Grundlage fuer Phase 2:
- *    `mcpwarden:admin` abwaehlbar, solange es als `required:false` angeboten wird).
+ * Consent subset
+ *  - On consent (`scope` in the body) the plugin accepts any subset of the originally requested scopes,
+ *    even without `mcp:tools`. `consentGuard` rejects subsets without the required scopes (basis for phase 2:
+ *    `mcpwarden:admin` can be deselected as long as it is offered as `required:false`).
  *
  * DCR
- *  - `clientPrivileges` wird nur fuer sitzungsgestuetzte Registrierungen ausgewertet, NICHT fuer anonyme DCR
- *    (authorize-*.mjs, registerEndpoint: `if (session) assertClientPrivileges`). Das Policy-Gate ist daher ein
- *    `hooks.before` auf /oauth2/register (dcr-hook.ts); es sieht auch Direktaufrufe der Plugin-Route.
- *  - Unbekannte Scopes lehnt das Plugin selbst ab (`invalid_scope`), http-Redirects ausserhalb Loopback ebenfalls.
- *  - Eigene Rate-Limits des Plugins (register 5/min je IP, token 20/min, authorize 30/min) greifen nur bei aktivem
- *    Better-Auth-Rate-Limit.
+ *  - `clientPrivileges` is evaluated only for session-backed registrations, NOT for anonymous DCR
+ *    (authorize-*.mjs, registerEndpoint: `if (session) assertClientPrivileges`). The policy gate is therefore a
+ *    `hooks.before` on /oauth2/register (dcr-hook.ts); it also sees direct calls of the plugin route.
+ *  - The plugin itself rejects unknown scopes (`invalid_scope`), and also http redirects outside loopback.
+ *  - The plugin's own rate limits (register 5/min per IP, token 20/min, authorize 30/min) apply only when the
+ *    Better Auth rate limit is active.
  *
- * mcp() beim Start
- *  - Schreibt die Resource (`oauth_resource`, Zeile `<BASE_URL>/mcp`) beim ersten Zugriff in die DB (seedResources);
- *    mit dem memoisierten getAuth() aus 0a unproblematisch (laeuft nach der Migration).
+ * mcp() at startup
+ *  - Writes the resource (`oauth_resource`, row `<BASE_URL>/mcp`) to the DB on first access (seedResources);
+ *    unproblematic with the memoized getAuth() from 0a (runs after the migration).
  *
- * Uebergabe Frontend (Login/Consent; das Frontend baut `app/**`, 0b liefert nur die API)
- *  - `GET /api/auth/oauth2/authorize?...` leitet ohne Session auf `loginPage` (`/login?<query>`), mit Session auf
- *    `consentPage` (`/consent?<query>`). Die Query enthaelt die Authorize-Parameter plus `exp`, `sig`, `ba_iat`,
- *    `ba_param`; sie ist signiert und muss UNVERAENDERT an die Seiten und durch den Login-Redirect (Auth-Middleware
- *    auf `/login`) erhalten bleiben (kein Umsortieren, kein Entfernen von Parametern). Fetch-Clients ohne
- *    `Accept: text/html` bekommen statt 302 den Body `{ redirect: true, url }`.
- *  - Nach dem Login ruft die Login-Seite `GET /api/auth/oauth2/authorize` mit derselben Query erneut auf bzw. folgt
- *    dem Redirect weiter (Clientplugin `oauthProviderClient()`: der Sign-in-Aufruf haengt `oauth_query` an und
- *    leitet selbst weiter, wenn die Login-Query vorhanden ist).
- *  - Consent-Seite: `GET /api/oauth/consent-info?<unveraenderte Query>` liefert `ConsentInfo`; Zustimmung per
+ * Frontend handover (login/consent; the frontend builds `app/**`, 0b delivers only the API)
+ *  - `GET /api/auth/oauth2/authorize?...` redirects to `loginPage` (`/login?<query>`) without a session, and to
+ *    `consentPage` (`/consent?<query>`) with a session. The query contains the authorize parameters plus `exp`, `sig`, `ba_iat`,
+ *    `ba_param`; it is signed and must be preserved UNCHANGED through the pages and the login redirect (auth middleware
+ *    on `/login`) (no reordering, no removing of parameters). Fetch clients without
+ *    `Accept: text/html` get the body `{ redirect: true, url }` instead of 302.
+ *  - After login the login page calls `GET /api/auth/oauth2/authorize` again with the same query, or follows
+ *    the redirect (client plugin `oauthProviderClient()`: the sign-in call appends `oauth_query` and
+ *    redirects on its own if the login query is present).
+ *  - Consent page: `GET /api/oauth/consent-info?<unchanged query>` returns `ConsentInfo`; consent via
  *    `POST /api/auth/oauth2/consent { accept: boolean, scope?: 'openid offline_access mcp:tools', oauth_query: <Query> }`
- *    (Clientplugin: `authClient.oauth2.consent`). Antwort `{ redirect: true, url }`: der Browser folgt `url`
- *    (Redirect-URI des Clients mit `code`, `state`, `iss`; bei Ablehnung `error=access_denied`).
- *    `scope` weglassen = alle angeforderten (immer die drei Pflicht-Scopes); eine Teilmenge ohne Pflicht-Scope
- *    liefert 400.
+ *    (client plugin: `authClient.oauth2.consent`). Response `{ redirect: true, url }`: the browser follows `url`
+ *    (the client's redirect URI with `code`, `state`, `iss`; on denial `error=access_denied`).
+ *    Omitting `scope` = all requested (always the three required scopes); a subset without a required scope
+ *    returns 400.
  */
 import { mcp } from '@better-auth/mcp'
 import { APIError } from 'better-auth/api'
@@ -76,7 +76,7 @@ export function mcpPlugins(baseUrl: string) {
       scopes: [...SCOPES_SUPPORTED],
       accessTokenExpiresIn: ACCESS_TOKEN_TTL_SECONDS,
       refreshTokenExpiresIn: REFRESH_TOKEN_TTL_SECONDS,
-      // Nur Nutzer-Grants: client_credentials liefe ohne Nutzer und waere ueber anonyme DCR erreichbar.
+      // User grants only: client_credentials would run without a user and be reachable via anonymous DCR.
       grantTypes: ['authorization_code', 'refresh_token'],
       allowDynamicClientRegistration: true,
       allowUnauthenticatedClientRegistration: true,
@@ -88,8 +88,8 @@ export function mcpPlugins(baseUrl: string) {
 type Rewrite = { query?: Record<string, unknown>, body?: Record<string, unknown> }
 
 /**
- * Erzwingt Pflicht-Scopes und Default-Resource, bevor das Plugin den Request sieht. Reine Funktion.
- * authorize: Scopes + Resource in Query (GET) bzw. Body (POST); token: Resource im Body.
+ * Enforces required scopes and the default resource before the plugin sees the request. Pure function.
+ * authorize: scopes + resource in the query (GET) or body (POST); token: resource in the body.
  */
 export function oauthRequestRewrite(path: string, query: unknown, body: unknown, resource: string): Rewrite | undefined {
   const withDefaults = (src: unknown, scoped: boolean) => {
@@ -105,7 +105,7 @@ export function oauthRequestRewrite(path: string, query: unknown, body: unknown,
   return undefined
 }
 
-/** Lehnt eine Zustimmung mit Teilmenge ab, der Pflicht-Scopes fehlen. `scope` fehlt = alle angeforderten. */
+/** Rejects a consent with a subset that lacks the required scopes. Missing `scope` = all requested. */
 export function consentGuard(path: string, body: unknown): void {
   if (path !== '/oauth2/consent') return
   const b = (body ?? {}) as { accept?: unknown, scope?: unknown }

@@ -24,24 +24,24 @@ export type GatewayOptions = {
   notifyChanged?: (userId: string) => void
   log?: (msg: string, err?: unknown) => void
   now?: () => number
-  /** Leerlaufgrenze der Pool-Verbindungen (Default POOL_IDLE_MS) und Takt der Aufräumschleife (Default 60 s); für Tests. */
+  /** Idle limit of the pool connections (default POOL_IDLE_MS) and interval of the cleanup loop (default 60 s); for tests. */
   poolIdleMs?: number
   sweepMs?: number
 }
 
 /**
- * Setzt die Gateway-Teile mit injizierten Abhängigkeiten zusammen. Das Ergebnis `toolSource`
- * implementiert `ToolSource` (0b); DB-Anbindung und Auth kommen über `GatewayStore`/`ports.ts`.
+ * Assembles the gateway parts with injected dependencies. The result `toolSource`
+ * implements `ToolSource` (0b); DB binding and auth come via `GatewayStore`/`ports.ts`.
  */
 export function createGateway(o: GatewayOptions) {
   const limiter = new Limiter(o.now)
   const safeFetch = o.safeFetch ?? createSafeFetch({
     getAllow: o.getAllow,
-    // Retry-After des Upstreams (429/503) sperrt genau diesen Upstream im Limiter (P0-5); Zuordnung über den Aufrufkontext
+    // Retry-After of the upstream (429/503) blocks exactly this upstream in the limiter (P0-5); mapping via the call context
     onRetryAfter: (_host, seconds) => { const c = upstreamContext.getStore(); if (c) limiter.blockUpstream(c.upstreamId, Math.min(seconds, 3600)) },
   })
   const credentials = async (up: UpstreamRow, owner: string = up.userId): Promise<Credentials> => {
-    // Schlüssel und Abfrage immer vom Eigentümer aus dem Auth-Kontext, nie aus der geladenen Zeile
+    // Key and query always from the owner in the auth context, never from the loaded row
     if (owner !== up.userId) throw new Error('upstream owner mismatch')
     const out: Credentials = { headers: {}, env: {} }
     for (const s of await o.store.getSecrets(owner, up.id)) {
@@ -55,13 +55,13 @@ export function createGateway(o: GatewayOptions) {
   }
   const deps: ConnectDeps = { safeFetch, credentials, stdioTransport: o.stdioTransport }
   const pool = new Pool({ connect: (up, signal, owner) => connectUpstream(up, deps, signal, owner), maxFor: async u => (await o.store.getLimits(u)).maxConnections })
-  // Ohne Aufraeumschleife blieben Verbindungen (und damit stdio-Kindprozesse) ewig offen: der Leerlauf-Timer des Workers
-  // (Prozesse = 0) kaeme nie zum Zug.
+  // Without a cleanup loop connections (and thus stdio child processes) would stay open forever: the worker's idle timer
+  // (processes = 0) would never kick in.
   const sweeper = setInterval(() => { limiter.prune(); void pool.sweepIdle(o.poolIdleMs ?? POOL_IDLE_MS).catch(e => o.log?.('pool sweep', e)) }, o.sweepMs ?? 60_000)
   sweeper.unref()
   const catalog = new Catalog({ pool, store: o.store, now: o.now })
   const stats = new StatsBuffer({ write: o.statsWrite, log: o.log })
-  stats.start() // zeitgesteuertes Flush (flushMs), sonst blieben Zeilen bis zum Shutdown im Speicher
+  stats.start() // timed flush (flushMs), otherwise rows would stay in memory until shutdown
   const health = new Map<string, UpstreamHealth>()
   const healthFor = (up: UpstreamRow) => {
     let h = health.get(up.id)
@@ -73,7 +73,7 @@ export function createGateway(o: GatewayOptions) {
   return {
     toolSource: core as import('./ports').ToolSource,
     core, pool, catalog, limiter, stats, healthFor, safeFetch, credentials,
-    /** Lebenszyklus: Sperre/Löschen. */
+    /** Lifecycle: ban/delete. */
     async onUserDisabled(userId: string) {
       await pool.closeUser(userId)
       limiter.forgetUser(userId)

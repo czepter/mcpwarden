@@ -5,7 +5,7 @@ import { apiError, noStore } from '../../utils/api'
 import { clientIp } from '../../utils/client-ip'
 import { allowRequest } from '../../utils/ip-limit'
 
-/** Öffentlich: gibt nur Gültigkeit, gebundene Adresse und Ablauf preis. Rate-Limit je IP gegen Token-Raten. */
+/** Public: reveals only validity, bound address and expiry. Rate limit per IP against token guessing. */
 export default defineEventHandler(async (event): Promise<InviteInfo> => {
   noStore(event)
   if (!allowRequest(clientIp(event) ?? 'unknown', 'invite-info', 30, 60_000)) throw apiError(429, 'rate_limited', 'Zu viele Anfragen')

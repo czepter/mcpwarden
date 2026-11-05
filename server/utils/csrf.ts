@@ -1,11 +1,11 @@
 /**
- * Schutz gegen Cross-Site-Anfragen auf Cookie-authentifizierte, verändernde `/api/**`-Routen (Review M-G).
- * Better Auth prüft Origin nur unter `/api/auth/**`; die eigenen Routen (Upstreams, Secrets, Admin, PATs, ...) lesen JSON, aber auch
- * `application/x-www-form-urlencoded` oder gar keinen Body, was ein fremdes Formular oder `fetch(no-cors)` ohne Preflight senden kann.
- *  - Nicht verändernde Methoden (GET/HEAD/OPTIONS) und `/api/auth/**` (Better Auth) sind ausgenommen.
- *  - Anfragen mit `Authorization`-Header (PAT/Bearer) sind ausgenommen: ein Browser hängt ihn nie von selbst an.
- *  - Mit `Origin`: er muss in BASE_URL/ALLOWED_ORIGINS stehen. Ohne `Origin`: `Sec-Fetch-Site` darf nur `same-origin`/`none` sein.
- *  - Weder Origin noch Sec-Fetch-Site (kein Browser, z. B. curl): durchgelassen; ohne Cookie scheitert die Anmeldung ohnehin.
+ * Protection against cross-site requests on cookie-authenticated, state-changing `/api/**` routes (review M-G).
+ * Better Auth checks Origin only under `/api/auth/**`; our own routes (upstreams, secrets, admin, PATs, ...) read JSON, but also
+ * accept `application/x-www-form-urlencoded` or no body at all, which a foreign form or `fetch(no-cors)` can send without a preflight.
+ *  - Non-mutating methods (GET/HEAD/OPTIONS) and `/api/auth/**` (Better Auth) are exempt.
+ *  - Requests with an `Authorization` header (PAT/Bearer) are exempt: a browser never attaches it on its own.
+ *  - With `Origin`: it must be listed in BASE_URL/ALLOWED_ORIGINS. Without `Origin`: `Sec-Fetch-Site` may only be `same-origin`/`none`.
+ *  - Neither Origin nor Sec-Fetch-Site (no browser, e.g. curl): let through; without a cookie, authentication fails anyway.
  */
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS'])
 

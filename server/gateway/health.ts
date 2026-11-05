@@ -1,4 +1,4 @@
-/** Logik für /healthz und /readyz (die Routen-Dateien aus 0a rufen diese Funktionen). Upstream-Ausfall beeinflusst beide nie. */
+/** Logic for /healthz and /readyz (the route files from 0a call these functions). An upstream outage never affects either. */
 export type Health = { status: 200 | 503, body: { status: 'ok' | 'unavailable' | 'draining' | 'not_ready' } }
 
 export async function liveness(selectOne: () => Promise<unknown>): Promise<Health> {
@@ -8,7 +8,7 @@ export async function liveness(selectOne: () => Promise<unknown>): Promise<Healt
 export type ReadyInput = {
   migrated: boolean
   draining: boolean
-  /** Nur im Ziel `full` mit STDIO_MODE != off prüfen; sonst `undefined`. */
+  /** Check only in the `full` target with STDIO_MODE != off; otherwise `undefined`. */
   supervisorPing?: () => Promise<boolean>
 }
 export async function readiness(i: ReadyInput): Promise<Health> {

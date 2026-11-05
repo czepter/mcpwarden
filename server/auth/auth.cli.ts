@@ -1,5 +1,5 @@
-// Nur fuer `auth generate` (scripts/gen-auth-schema.sh). Wird nie zur Laufzeit geladen.
-// Relative Imports, gueltige baseURL (sonst Abbruch "Invalid URL").
+// Only for `auth generate` (scripts/gen-auth-schema.sh). Never loaded at runtime.
+// Relative imports, valid baseURL (otherwise abort with "Invalid URL").
 import { betterAuth } from 'better-auth'
 import { drizzleAdapter } from '@better-auth/drizzle-adapter'
 import { buildAuthOptions } from './options'

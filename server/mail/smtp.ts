@@ -8,22 +8,22 @@ export interface SmtpOptions {
   connectionTimeoutMs?: number
   greetingTimeoutMs?: number
   socketTimeoutMs?: number
-  /** Obergrenze je Versuch, unabhaengig von nodemailer. */
+  /** Upper bound per attempt, independent of nodemailer. */
   sendTimeoutMs?: number
-  /** Zusaetzliche Versuche nach dem ersten (Default 2, also hoechstens 3 Versuche). */
+  /** Additional attempts after the first (default 2, i.e. at most 3 attempts). */
   retries?: number
   backoffMs?: number
-  /** Nur Tests (eigene CA). */
+  /** Tests only (own CA). */
   tls?: ConnectionOptions
   log?: (msg: string) => void
 }
 
 const LOOPBACK = new Set(['localhost', '127.0.0.1', '::1'])
 
-/** Fehler, die ein Wiederholen nicht heilt: Auth, Adresse, 5xx, Zertifikat. */
+/** Errors that retrying does not cure: auth, address, 5xx, certificate. */
 function isPermanent(e: unknown): boolean {
   const err = e as { code?: string, responseCode?: number, message?: string }
-  // Mit SMTP-Antwortcode entscheidet dieser (4xx = vorübergehend, 5xx = dauerhaft), unabhängig von der Phase.
+  // With an SMTP response code this decides (4xx = temporary, 5xx = permanent), independent of the phase.
   if (typeof err.responseCode === 'number') return err.responseCode >= 500
   if (err.code === 'EAUTH' || err.code === 'EENVELOPE') return true
   return /certificate|self[- ]signed|CERT_|altnames/i.test(err.message ?? '')
@@ -32,8 +32,8 @@ function isPermanent(e: unknown): boolean {
 const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms))
 
 /**
- * SMTP ueber nodemailer. smtps:// = implizites TLS; smtp:// = STARTTLS ist Pflicht (Klartext nur an Loopback).
- * Zugangsdaten und Adressen werden nie geloggt, nur ein Fehlercode.
+ * SMTP via nodemailer. smtps:// = implicit TLS; smtp:// = STARTTLS is mandatory (plaintext only on loopback).
+ * Credentials and addresses are never logged, only an error code.
  */
 export function createSmtpMailer(smtp: SmtpConfig, from: string, o: SmtpOptions = {}): Mailer {
   const retries = o.retries ?? 2
@@ -76,7 +76,7 @@ export function createSmtpMailer(smtp: SmtpConfig, from: string, o: SmtpOptions 
         } catch (e) {
           const code = (e as { code?: string }).code ?? 'unknown'
           if (i >= retries || isPermanent(e)) {
-            log(`[mcpwarden] mail: Versand fehlgeschlagen (${code}, Versuch ${i + 1})`)
+            log(`[mcpwarden] mail: send failed (${code}, attempt ${i + 1})`)
             throw new MailError('transport')
           }
           await sleep((o.backoffMs ?? 500) * (i + 1))

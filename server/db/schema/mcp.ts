@@ -1,11 +1,11 @@
 /**
- * Eigene Tabellen von Phase 0b (Migration 0002). Keine Tabellenpraefixe, Text-IDs fuer user.id.
- * Fremdschluessel auf `user` (0a) und `oauth_client` (Migration 0001).
+ * Own tables of phase 0b (migration 0002). No table prefixes, text IDs for user.id.
+ * Foreign keys to `user` (0a) and `oauth_client` (migration 0001).
  */
 import { boolean, index, jsonb, pgTable, primaryKey, text, timestamp, uuid } from 'drizzle-orm/pg-core'
 import { oauthClient, user } from './auth'
 
-/** Einzige Einstellungstabelle des Projekts (Phase 1 nutzt sie mit). Schluessel `oauth.dcr_mode`. */
+/** The project's only settings table (phase 1 uses it too). Key `oauth.dcr_mode`. */
 export const appSetting = pgTable('app_setting', {
   key: text('key').primaryKey(),
   value: jsonb('value').notNull(),
@@ -21,7 +21,7 @@ export const dcrAllowlist = pgTable('dcr_allowlist', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 })
 
-/** `allowlisted` haelt den Stand bei der Registrierung; die API berechnet live neu. */
+/** `allowlisted` holds the state at registration; the API recomputes it live. */
 export const oauthClientMeta = pgTable('oauth_client_meta', {
   clientId: text('client_id').primaryKey().references(() => oauthClient.clientId, { onDelete: 'cascade' }),
   allowlisted: boolean('allowlisted').notNull(),
@@ -29,7 +29,7 @@ export const oauthClientMeta = pgTable('oauth_client_meta', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 })
 
-/** Letzter /mcp-Aufruf je (Nutzer, Client), gedrosselt geschrieben vom Zugriffs-Check. */
+/** Last /mcp call per (user, client), written throttled by the access check. */
 export const oauthConnectionUse = pgTable('oauth_connection_use', {
   userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
   clientId: text('client_id').notNull().references(() => oauthClient.clientId, { onDelete: 'cascade' }),

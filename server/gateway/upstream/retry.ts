@@ -10,7 +10,7 @@ export type RetryOptions = {
   signal?: AbortSignal
 }
 
-/** Retry nur für Connect/Init/List (nie für tools/call). Exponentiell, Jitter, Deckel. */
+/** Retry only for connect/init/list (never for tools/call). Exponential, jitter, cap. */
 export async function withRetry<T>(fn: (attempt: number) => Promise<T>, o: RetryOptions = {}): Promise<{ value: T, retries: number }> {
   const attempts = o.attempts ?? RETRY.attempts
   const sleep = o.sleep ?? (ms => new Promise(r => setTimeout(r, ms)))

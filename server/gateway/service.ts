@@ -1,6 +1,6 @@
 /**
- * Anwendungslogik für Upstreams, Tools, Capabilities, Dashboard und Admin. Die Routen unter server/api/** sind
- * dünne Hüllen; hier liegt Validierung, Berechtigung, Audit und die Abstimmung mit Pool/Katalog/Status.
+ * Application logic for upstreams, tools, capabilities, dashboard and admin. The routes under server/api/** are
+ * thin wrappers; validation, authorization, audit and coordination with pool/catalog/status live here.
  */
 import { createError } from 'h3'
 import type {
@@ -32,7 +32,7 @@ const bad = (field: string, message: string) => apiError(422, 'validation', mess
 const HEADER_RE = /^[A-Za-z0-9-]{1,64}$/
 const ENV_RE = /^[A-Za-z_][A-Za-z0-9_]{0,63}$/
 
-// ---------- Validierung ----------
+// ---------- Validation ----------
 
 type Checked = Omit<NewUpstream, 'slug' | 'type' | 'name'> & { name?: string }
 
@@ -136,7 +136,7 @@ const evict = async (rt: Runtime, userId: string, id: string) => {
 const rec = (rt: Runtime, who: Who, action: AuditAction, targetType: 'upstream' | 'secret' | 'tool', id: string, label: string | null, meta?: Record<string, unknown>) =>
   audit(rt.repo, { userId: who.id, actor: `user:${who.id}`, action, targetType, targetId: id, targetLabel: label, meta })
 
-/** Frühe Rückmeldung (Komfort, nie Schutz): Literal-Adressen gegen die aktuelle Ausnahmeliste. */
+/** Early feedback (convenience, never protection): literal addresses against the current exception list. */
 async function precheckUrl(rt: Runtime, url: string | null | undefined) {
   if (!url) return
   try { assertUrlAllowed(url, await rt.allow()) } catch (e) {
@@ -207,8 +207,8 @@ export async function patchUpstream(rt: Runtime, who: Who, id: string, body: Rec
   const patch: Parameters<typeof rt.repo.updateUpstream>[2] = { ...c, ...(body.enabled !== undefined ? { enabled: body.enabled as boolean } : {}) }
   const headerRenamed = authType === 'header' && c.authHeaderName !== undefined && c.authHeaderName !== cur.authHeaderName
   if ((c.authType !== undefined && c.authType !== cur.authType) || headerRenamed) {
-    // Auth-Art oder Headername gewechselt: das alte Secret passt nicht mehr (es ist an Art und Namen gebunden und wuerde sonst still
-    // ohne Header gesendet); der Nutzer traegt es neu ein
+    // Auth kind or header name changed: the old secret no longer fits (it is bound to kind and name and would otherwise be sent
+    // without a header, silently); the user enters it again
     for (const s of await rt.repo.getSecrets(who.id, id)) await rt.repo.deleteSecret(who.id, id, s.kind, s.name)
     patch.setup = authType === 'none' ? 'ready' : 'awaiting_auth'
   }
@@ -266,7 +266,7 @@ export async function deleteSecret(rt: Runtime, who: Who, id: string, kind: stri
   await rec(rt, who, 'secret.delete', 'secret', id, cur.slug)
 }
 
-// ---------- Test und Tools ----------
+// ---------- Test and tools ----------
 
 export async function testUpstream(rt: Runtime, who: Who, id: string): Promise<UpstreamTestResult> {
   const cur = await load(rt, who, id)
@@ -357,7 +357,7 @@ export async function dashboard(rt: Runtime, who: Who, deps: { connections: Arra
   const att = await rt.repo.attention(who.id)
   const attention = att.map((r) => {
     const s = toSummary(rt, r)
-    // Wartende Upstreams haben noch keinen Health-Grund: der Wartegrund ist der Hinweis (P0-16: jeweils mit statusReason)
+    // Waiting upstreams have no health reason yet: the waiting reason is the hint (P0-16: each with a statusReason)
     const waiting = s.setup === 'awaiting_auth' ? 'Zugangsdaten fehlen noch' : s.setup === 'awaiting_approval' ? 'Wartet auf Freigabe' : null
     return { upstreamId: r.id, slug: r.slug, name: r.name, status: s.status, setup: s.setup, statusReason: s.statusReason ?? waiting, nextRetryAt: s.nextRetryAt }
   })
@@ -413,8 +413,8 @@ export async function adminSetLimits(rt: Runtime, admin: Who, targetId: string, 
   if (!(await rt.repo.getUserLite(targetId))) throw apiError(404, 'not_found', 'Nutzer nicht gefunden')
   const before = await rt.repo.getLimits(targetId)
   await rt.repo.setLimits(targetId, set)
-  rt.gw.limiter.forgetUser(targetId) // neue Kontingente gelten sofort
-  if (set.stdioAllowed === false && before.stdioAllowed) await runUserDisabled(targetId) // Entzug stoppt den Worker
+  rt.gw.limiter.forgetUser(targetId) // new quotas apply immediately
+  if (set.stdioAllowed === false && before.stdioAllowed) await runUserDisabled(targetId) // revoking stops the worker
   await audit(rt.repo, { userId: targetId, actor: `admin:${admin.id}`, action: 'user.limits', targetType: 'limits', targetId, meta: { ...set } })
   return adminUserOf((await rt.repo.listUsers()).find(x => x.u.id === targetId)!)
 }
@@ -426,10 +426,10 @@ export type AuthAdminApi = {
 }
 
 /**
- * Admin-Aktionen mit Rechteverlust laufen nacheinander: sonst sperren sich zwei Admins gleichzeitig gegenseitig aus (Prüfung und Aktion sind sonst getrennt).
- * Dazu gehört auch die Anmeldung des Aufrufers: Sperren widerruft dessen Sitzungen. Wer gleichzeitig angekommen ist, muss deshalb noch als der Admin gelten,
- * der er bei Ankunft war (und dann `last_admin` bekommen), statt vom Sieger per 401 aus der Sitzung geworfen zu werden. Die Handler melden ihre Anmeldung
- * mit `admitAdminAction` an, bevor sie etwas anderes awaiten; jede Aktion wartet, bevor sie etwas ändert, auf alle bis dahin angekommenen Anmeldungen.
+ * Admin actions that remove privileges run one after another: otherwise two admins lock each other out at the same time (check and action are separate).
+ * This includes the caller's own sign-in: banning revokes the target's sessions. Whoever arrived at the same time must therefore still count as the admin
+ * they were on arrival (and then get `last_admin`), instead of being thrown out of the session with a 401 by the winner. The handlers register their sign-in
+ * with `admitAdminAction` before awaiting anything else; before changing anything, each action waits for all sign-ins that have arrived by then.
  */
 let adminTail: Promise<unknown> = Promise.resolve()
 const admitting = new Set<Promise<unknown>>()
@@ -501,12 +501,12 @@ export async function adminCreateInvite(rt: Runtime, admin: Who, baseUrl: URL, e
   const { token, row } = await rt.repo.createInvite(admin.id, mail)
   await audit(rt.repo, { userId: null, actor: `admin:${admin.id}`, action: 'invite.create', targetType: 'invite', targetId: row.id })
   const link = new URL(`/invite/${token}`, baseUrl).toString()
-  // Fire-and-forget: Versandfehler (auch Empfaengerlimit) brechen das Anlegen nie ab; der Admin sieht den Link weiterhin.
-  if (wantMail && mail) void trySendMail(opts.mailer!, inviteMail(mail, link), 'Einladung')
+  // Fire-and-forget: send failures (including the recipient limit) never abort creation; the admin still sees the link.
+  if (wantMail && mail) void trySendMail(opts.mailer!, inviteMail(mail, link), 'invite')
   return { id: row.id, email: row.email, createdAt: row.createdAt.toISOString(), expiresAt: row.expiresAt.toISOString(), link, mailQueued: wantMail }
 }
 export async function adminRevokeInvite(rt: Runtime, admin: Who, id: string) {
-  if (!UUID_RE.test(id)) throw apiError(404, 'not_found', 'Einladung nicht gefunden') // sonst wirft Postgres "invalid input syntax for uuid" (500)
+  if (!UUID_RE.test(id)) throw apiError(404, 'not_found', 'Einladung nicht gefunden') // otherwise Postgres throws "invalid input syntax for uuid" (500)
   if (!(await rt.repo.revokeInvite(id))) throw apiError(409, 'invite_not_open', 'Die Einladung ist nicht mehr offen')
   await audit(rt.repo, { userId: null, actor: `admin:${admin.id}`, action: 'invite.revoke', targetType: 'invite', targetId: id })
 }
@@ -517,7 +517,7 @@ export async function inviteInfo(rt: Runtime, token: string) {
   return st === 'open' ? { valid: true as const, email: inv.email, expiresAt: inv.expiresAt.toISOString() } : { valid: false as const, reason: st }
 }
 
-// ---------- Einstellungen ----------
+// ---------- Settings ----------
 
 const METADATA_IPS = ['169.254.169.254', '100.100.100.200', 'fd00:ec2::254', '192.0.0.192']
 function warningsFor(entries: string[]): AdminSettingsResult['warnings'] {

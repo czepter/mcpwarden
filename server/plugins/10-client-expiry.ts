@@ -1,8 +1,8 @@
 import { deleteExpiredClients } from '../auth/dcr-store'
 import { getDb } from '../db'
 
-// Verfall nie genutzter DCR-Registrierungen (Plan 0b, Aufgabe 3). Single-Instance genuegt:
-// ponytail: setInterval statt Nitro scheduledTasks (experimentell); bei mehreren Instanzen ist das Loeschen idempotent.
+// Expiry of never-used DCR registrations (plan 0b, task 3). A single instance suffices:
+// ponytail: setInterval instead of Nitro scheduledTasks (experimental); with several instances the deletion is idempotent.
 const DAY_MS = 24 * 3600_000
 
 export default defineNitroPlugin((nitroApp) => {

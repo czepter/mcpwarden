@@ -2,7 +2,7 @@ import type { H3Event } from 'h3'
 import { getAuth } from '../auth'
 import type { AuthAdminApi } from './service'
 
-/** Better-Auth-Admin-API mit den Headern der aufrufenden Admin-Sitzung (Rechteprüfung macht Better Auth selbst). */
+/** Better Auth admin API with the headers of the calling admin session (Better Auth does the permission check itself). */
 export async function authAdminApi(event: H3Event): Promise<AuthAdminApi> {
   const auth = await getAuth()
   const headers = event.headers

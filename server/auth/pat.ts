@@ -1,6 +1,6 @@
 /**
- * Personal Access Tokens (Plan 0b, Aufgabe 5): Erzeugung und Hash. Reine Funktionen.
- * Nur der SHA-256-Hash wird gespeichert; 256 Bit Zufall brauchen kein Salt. Persistenz folgt mit 0a.
+ * Personal access tokens (plan 0b, task 5): generation and hash. Pure functions.
+ * Only the SHA-256 hash is stored; 256 bits of randomness need no salt. Persistence follows with 0a.
  */
 import { createHash, randomBytes } from 'node:crypto'
 

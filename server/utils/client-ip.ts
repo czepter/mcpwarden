@@ -1,14 +1,14 @@
 /**
- * Client-IP fuer Rate-Limits (Spec P0-10, TRUST_PROXY). Ohne vertrauenswuerdigen Proxy zaehlt nur die Socket-Adresse;
- * `X-Forwarded-For` ist dann frei erfindbar und wird nie gelesen. Mit `TRUST_PROXY=N` gilt der N-te Eintrag von rechts:
- * jeder vertraute Proxy haengt die Adresse seines Gegenuebers rechts an, alles links davon stammt vom Client.
- * Faellt die Kette kuerzer aus als erwartet oder ist der Eintrag keine IP, gilt die Socket-Adresse (nie ein Client-Wert).
+ * Client IP for rate limits (spec P0-10, TRUST_PROXY). Without a trusted proxy only the socket address counts;
+ * `X-Forwarded-For` is then freely forgeable and is never read. With `TRUST_PROXY=N` the N-th entry from the right applies:
+ * each trusted proxy appends the address of its peer on the right, everything to the left of it comes from the client.
+ * If the chain is shorter than expected or the entry is not an IP, the socket address applies (never a client value).
  */
 import { isIP } from 'node:net'
 import type { H3Event } from 'h3'
 import { getConfig } from './config'
 
-/** Interner Header: wird fuer jede Anfrage neu gesetzt (ein vom Client mitgeschickter Wert wird ueberschrieben/entfernt). */
+/** Internal header: set anew for every request (a value sent by the client is overwritten/removed). */
 export const CLIENT_IP_HEADER = 'x-mcpw-client-ip'
 
 export function resolveClientIp(o: { forwardedFor?: string | null, socketIp?: string | null, trustProxy: number }): string | undefined {
@@ -30,7 +30,7 @@ export function clientIp(event: H3Event): string | undefined {
   })
 }
 
-/** Web-Request fuer Better Auth mit der aufgeloesten Client-IP im internen Header (siehe `advanced.ipAddress`). */
+/** Web request for Better Auth with the resolved client IP in the internal header (see `advanced.ipAddress`). */
 export function toAuthRequest(event: H3Event): Request {
   const req = toWebRequest(event)
   req.headers.delete(CLIENT_IP_HEADER)

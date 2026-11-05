@@ -1,6 +1,6 @@
 /**
- * DB-Zugriff fuer DCR-Policy, Allowlist und Client-Verwaltung (Plan 0b, Aufgabe 3).
- * Nimmt `Db` entgegen (kein Nitro), damit Unit-Tests mit In-Memory-PGlite laufen.
+ * DB access for DCR policy, allowlist and client management (plan 0b, task 3).
+ * Takes `Db` (no Nitro) so that unit tests run with in-memory PGlite.
  */
 import { and, count, eq, inArray, isNull, lt, max } from 'drizzle-orm'
 import type { AllowlistEntry, AllowlistInput, DcrMode, OAuthClientAdmin } from '../../shared/api-types'
@@ -42,14 +42,14 @@ export async function getRegistrationPolicy(db: Db): Promise<{ mode: DcrMode, al
   return { mode: await getDcrMode(db), allowlist: await listAllowlist(db) }
 }
 
-/** Idempotent und nur einmal je Datenbank (Marker in `app_setting`); geloeschte Eintraege kehren nicht zurueck. */
+/** Idempotent and only once per database (marker in `app_setting`); deleted entries do not come back. */
 export async function seedAllowlist(db: Db): Promise<void> {
   const inserted = await db.insert(appSetting).values({ key: KEY_SEEDED, value: true }).onConflictDoNothing().returning({ key: appSetting.key })
   if (inserted.length === 0) return
   await db.insert(dcrAllowlist).values(BUILTIN_ALLOWLIST.map(e => ({ ...e, redirectPatterns: [...e.redirectPatterns], builtin: true })))
 }
 
-/** Stellt fehlende Vorbelegungen wieder her (ueberschreibt geaenderte Builtins nicht; es gibt keine Bearbeitung). */
+/** Restores missing presets (does not overwrite changed builtins; there is no editing). */
 export async function resetBuiltins(db: Db): Promise<void> {
   const existing = new Set((await db.select({ label: dcrAllowlist.label }).from(dcrAllowlist).where(eq(dcrAllowlist.builtin, true))).map(r => r.label))
   const missing = BUILTIN_ALLOWLIST.filter(e => !existing.has(e.label))
@@ -134,18 +134,18 @@ export async function setClientDisabled(db: Db, clientId: string, disabled: bool
   return (await db.update(oauthClient).set({ disabled, updatedAt: new Date() }).where(eq(oauthClient.clientId, clientId)).returning({ id: oauthClient.id })).length > 0
 }
 
-/** Nutzer mit Consent fuer diesen Client (fuer `closeUserStreams` nach Deaktivieren/Loeschen). */
+/** Users with consent for this client (for `closeUserStreams` after deactivating/deleting). */
 export async function consentUserIds(db: Db, clientId: string): Promise<string[]> {
   const rows = await db.select({ u: oauthConsent.userId }).from(oauthConsent).where(eq(oauthConsent.clientId, clientId))
   return [...new Set(rows.map(r => r.u).filter((u): u is string => !!u))]
 }
 
-/** Loescht den Client; Consents, Tokens, Meta und Nutzungszeilen folgen per Fremdschluessel-Cascade. */
+/** Deletes the client; consents, tokens, meta and usage rows follow via foreign-key cascade. */
 export async function deleteClient(db: Db, clientId: string): Promise<boolean> {
   return (await db.delete(oauthClient).where(eq(oauthClient.clientId, clientId)).returning({ id: oauthClient.id })).length > 0
 }
 
-/** Verfall: per DCR registriert, nie genutzt, aelter als 30 Tage. Liefert die Zahl der geloeschten Clients. */
+/** Expiry: registered via DCR, never used, older than 30 days. Returns the number of deleted clients. */
 export async function deleteExpiredClients(db: Db, now: Date): Promise<number> {
   const cutoff = new Date(now.getTime() - CLIENT_EXPIRY_MS)
   const stale = await db.select({ clientId: oauthClientMeta.clientId }).from(oauthClientMeta)

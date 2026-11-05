@@ -13,20 +13,20 @@ export interface StatusChange {
 export interface StatusNotifierDeps {
   mailer: Mailer
   baseUrl: string | URL
-  /** Mindestabstand je (Upstream, Zustand). */
+  /** Minimum spacing per (upstream, state). */
   windowMs: number
-  /** Besitzer und Upstream-Name aus der DB (nie aus dem Ereignis). null = unbekannt, kein Versand. Wird erst im Hintergrund gelesen. */
+  /** Owner and upstream name from the DB (never from the event). null = unknown, no send. Read only in the background. */
   lookup: (userId: string, upstreamId: string) => Promise<{ email: string, notify: boolean, name: string } | null>
   now?: () => number
   log?: (m: string) => void
-  /** Obergrenze fuer wartende/laufende Benachrichtigungen; darueber wird verworfen (kein Rueckstau). */
+  /** Upper bound for pending/running notifications; beyond it they are dropped (no backpressure). */
   maxPending?: number
 }
 
 const ATTENTION = new Set(['open', 'auth_expired'])
 const MAX_TRACKED = 5000
 
-/** Welche Zustandsuebergaenge eine Mail ausloesen (gleicher Ausloeser wie der Audit-Eintrag, P0-14). */
+/** Which state transitions trigger a mail (same trigger as the audit entry, P0-14). */
 export function notifyStateFor(status: string, previous: string): NotifyState | null {
   if (ATTENTION.has(status)) return status as NotifyState
   if (status === 'healthy' && ATTENTION.has(previous)) return 'healthy'
@@ -34,15 +34,15 @@ export function notifyStateFor(status: string, previous: string): NotifyState | 
 }
 
 export interface StatusNotifier {
-  /** Wirft nie, wartet nicht auf den Versand. Gibt zurueck, ob die Benachrichtigung angenommen wurde. */
+  /** Never throws, does not wait for the send. Returns whether the notification was accepted. */
   notify: (c: StatusChange) => boolean
-  /** Wartet auf laufende Versandaufgaben (Tests, Shutdown). */
+  /** Waits for running send tasks (tests, shutdown). */
   idle: () => Promise<void>
 }
 
 /**
- * Statusmails an den Besitzer des Upstreams: nur wenn der Mailer aktiv ist, der Nutzer nicht widersprochen hat und
- * fuer (Upstream, Zustand) im Fenster noch keine Mail rausging. Der Aufrufpfad wird nie blockiert oder zum Scheitern gebracht.
+ * Status mails to the upstream's owner: only if the mailer is active, the user has not opted out and
+ * no mail has gone out for (upstream, state) within the window. The call path is never blocked or made to fail.
  */
 export function createStatusNotifier(d: StatusNotifierDeps): StatusNotifier {
   const now = d.now ?? Date.now
@@ -67,11 +67,11 @@ export function createStatusNotifier(d: StatusNotifierDeps): StatusNotifier {
     try {
       const o = await d.lookup(c.userId, c.upstreamId)
       if (!o || !o.notify) return
-      // Reservierung erst nach dem Opt-out-Check: Wer widerspricht, verbraucht kein Fenster.
+      // Reserve only after the opt-out check: whoever opts out consumes no window.
       if (!reserve(`${c.upstreamId}:${state}`)) return
-      await trySendMail(d.mailer, upstreamStatusMail(o.email, d.baseUrl, { id: c.upstreamId, name: o.name, state, reason: c.reason }), 'Statusbenachrichtigung', log)
+      await trySendMail(d.mailer, upstreamStatusMail(o.email, d.baseUrl, { id: c.upstreamId, name: o.name, state, reason: c.reason }), 'status notification', log)
     } catch {
-      log('[mcpwarden] mail: Statusbenachrichtigung nicht gesendet (internal)')
+      log('[mcpwarden] mail: status notification not sent (internal)')
     }
   }
 
@@ -80,11 +80,11 @@ export function createStatusNotifier(d: StatusNotifierDeps): StatusNotifier {
       if (!d.mailer.enabled) return false
       const state = notifyStateFor(c.status, c.previous)
       if (!state) return false
-      // Vorab-Drossel ohne DB-Zugriff: im Fenster schon versendet -> gar nicht erst anfassen (Flapping kostet nichts)
+      // Pre-throttle without DB access: already sent within the window -> do not touch at all (flapping costs nothing)
       const last = sent.get(`${c.upstreamId}:${state}`)
       if (last !== undefined && now() - last < d.windowMs) return false
       if (inflight.size >= maxPending) {
-        log('[mcpwarden] mail: Statusbenachrichtigung verworfen (Warteschlange voll)')
+        log('[mcpwarden] mail: status notification dropped (queue full)')
         return false
       }
       const p = run(c, state).finally(() => inflight.delete(p))

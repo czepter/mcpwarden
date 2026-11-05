@@ -1,8 +1,8 @@
 /**
- * DCR-Policy und Allowlist-Matcher (Plan 0b, Aufgabe 3). Reine Funktionen, keine DB, kein Nitro.
+ * DCR policy and allowlist matcher (plan 0b, task 3). Pure functions, no DB, no Nitro.
  *
- * Allowlist ist Komfort/Warnlogik, kein Sicherheitsmerkmal: Name und Redirect-Muster muessen
- * gemeinsam passen, der Name allein ist faelschbar (Risiko R4).
+ * The allowlist is a convenience/warning logic, not a security feature: name and redirect pattern must
+ * match together, the name alone is forgeable (risk R4).
  */
 import type { DcrMode } from '../../shared/api-types'
 
@@ -16,13 +16,13 @@ export type RegistrationDecision =
 export const MAX_CLIENT_NAME_LENGTH = 80
 
 const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]'])
-// Schemes, die als Redirect nie in Frage kommen (Skriptausfuehrung, lokale Dateien).
+// Schemes that never qualify as a redirect (script execution, local files).
 const FORBIDDEN_SCHEMES = new Set(['javascript:', 'data:', 'vbscript:', 'file:', 'blob:', 'about:', 'ftp:', 'ws:', 'wss:'])
 
 /**
- * Builtin-Vorbelegung. Muster fuer die lokalen Clients folgen den Redirect-Formen aus dem Plan
- * (Loopback mit beliebigem Port, App-Schemes). Claude-Web-Callback ist UNVERIFIZIERT
- * (beim Spike gegen die Client-Doku pruefen); Namensmuster sind Annahmen und bewusst grosszuegig.
+ * Builtin preset. Patterns for the local clients follow the redirect forms from the plan
+ * (loopback with any port, app schemes). The Claude web callback is UNVERIFIED
+ * (check against the client docs during the spike); name patterns are assumptions and deliberately generous.
  */
 export const BUILTIN_ALLOWLIST: readonly AllowlistPattern[] = [
   { label: 'Claude Code', namePattern: 'Claude Code*', redirectPatterns: ['http://localhost:*', 'http://127.0.0.1:*', 'http://[::1]:*'] },
@@ -46,10 +46,10 @@ function parse(uri: string): URL | null {
   }
 }
 
-/** App-Schemes, die ohne Admin-Eintrag erlaubt sind (Zielclients der Builtin-Allowlist). */
+/** App schemes allowed without an admin entry (target clients of the builtin allowlist). */
 export const DEFAULT_APP_SCHEMES: readonly string[] = ['cursor', 'vscode', 'vscode-insiders', 'windsurf', 'zed']
 
-/** Vom Admin registrierte App-Schemes: Schemes aller Nicht-http(s)-Redirect-Muster der Allowlist. */
+/** App schemes registered by the admin: schemes of all non-http(s) redirect patterns of the allowlist. */
 export function registeredAppSchemes(allowlist: readonly AllowlistPattern[]): string[] {
   const out = new Set<string>()
   for (const e of allowlist) {
@@ -62,20 +62,20 @@ export function registeredAppSchemes(allowlist: readonly AllowlistPattern[]): st
 }
 
 /**
- * Ist die URI als Redirect-Ziel zulaessig (unabhaengig vom Namens-Match)? Deny-by-default:
- * https; http nur fuer kanonische Loopback-Hosts; sonst nur Schemes aus `appSchemes`.
+ * Is the URI permissible as a redirect target (independent of the name match)? Deny by default:
+ * https; http only for canonical loopback hosts; otherwise only schemes from `appSchemes`.
  */
 export function checkRedirectUri(uri: string, appSchemes: readonly string[] = DEFAULT_APP_SCHEMES): { ok: true } | { ok: false, reason: string } {
   if (typeof uri !== 'string' || uri.length === 0 || uri.length > 2048) return { ok: false, reason: 'redirect_uri has invalid length' }
   if (uri.includes('*')) return { ok: false, reason: 'wildcards are not allowed in redirect_uri' }
   const url = parse(uri)
   if (!url) return { ok: false, reason: 'redirect_uri is not a valid URI' }
-  // Defence in depth; die Allowlist unten schliesst diese Schemes ohnehin aus.
+  // Defence in depth; the allowlist below excludes these schemes anyway.
   if (FORBIDDEN_SCHEMES.has(url.protocol)) return { ok: false, reason: `scheme ${url.protocol} is not allowed` }
   if (url.username || url.password || /^[a-z][a-z0-9+.-]*:\/\/[^/?#]*@/i.test(uri)) return { ok: false, reason: 'userinfo is not allowed in redirect_uri' }
   if (url.hash || uri.includes('#')) return { ok: false, reason: 'fragments are not allowed in redirect_uri' }
   if (url.protocol === 'https:' || url.protocol === 'http:') {
-    // Nicht-kanonische Hosts (127.1, 2130706433, Grossschreibung mit Punkt ...) abweisen.
+    // Reject non-canonical hosts (127.1, 2130706433, uppercase with a dot ...).
     if (!uri.toLowerCase().startsWith(url.origin.toLowerCase())) return { ok: false, reason: 'host is not in canonical form' }
     if (url.protocol === 'http:' && !isLoopbackHost(url.hostname)) return { ok: false, reason: 'http is only allowed for loopback hosts' }
     return { ok: true }
@@ -94,7 +94,7 @@ export function redirectKind(uri: string): RedirectKind {
   return 'app'
 }
 
-/** Anzeige: https und Loopback als Host, alles andere mit Scheme (`evil-app://claude.ai`). */
+/** Display: https and loopback as host, everything else with the scheme (`evil-app://claude.ai`). */
 export function redirectHost(uri: string): string {
   const url = parse(uri)
   if (!url) return ''
@@ -111,9 +111,9 @@ export function matchesNamePattern(pattern: string, name: string): boolean {
 }
 
 /**
- * Muster `scheme://host[:port|:*][/pfad]`. Host exakt (nie Suffix), `:*` = beliebiger Port,
- * kein Port im Muster = Standardport, Pfad leer = beliebig, `.../*` = Praefix, sonst exakt.
- * Muster ohne Host (`cursor://`) passt auf jede URI dieses Schemes.
+ * Pattern `scheme://host[:port|:*][/path]`. Host exact (never suffix), `:*` = any port,
+ * no port in the pattern = default port, empty path = any, `.../*` = prefix, otherwise exact.
+ * A pattern without a host (`cursor://`) matches any URI of this scheme.
  */
 export function matchesRedirectPattern(pattern: string, uri: string): boolean {
   const m = /^([a-z][a-z0-9+.-]*):\/\/([^/:]*|\[[^\]]*\])(?::(\*|\d+))?(\/.*)?$/i.exec(pattern)
@@ -132,7 +132,7 @@ export function matchesRedirectPattern(pattern: string, uri: string): boolean {
   return url.pathname === path
 }
 
-/** Name UND alle Redirect-URIs muessen passen. */
+/** Name AND all redirect URIs must match. */
 export function matchesAllowlist(entry: AllowlistPattern, name: string, redirectUris: string[]): boolean {
   if (redirectUris.length === 0) return false
   if (!matchesNamePattern(entry.namePattern, name)) return false
@@ -143,7 +143,7 @@ export function isAllowlisted(allowlist: readonly AllowlistPattern[], name: stri
   return allowlist.some(e => matchesAllowlist(e, name, redirectUris))
 }
 
-/** `client_name` ist untrusted: Steuerzeichen raus, auf 80 Zeichen kuerzen. */
+/** `client_name` is untrusted: strip control characters, truncate to 80 characters. */
 export function sanitizeClientName(name: unknown): string {
   // eslint-disable-next-line no-control-regex
   const clean = (typeof name === 'string' ? name : '').replace(/[\u0000-\u001f\u007f]/g, ' ').trim()

@@ -7,7 +7,7 @@ export class StdioChildError extends Error {
   constructor(public code: string, message: string, public stderrTail = '') { super(message) }
 }
 
-/** `Transport` über Frames der Worker-Datenverbindung: ein Kindprozess = ein Transport. */
+/** `Transport` over frames of the worker data connection: one child process = one transport. */
 export class IpcTransport implements Transport {
   onclose?: () => void
   onerror?: (e: Error) => void
@@ -22,7 +22,7 @@ export class IpcTransport implements Transport {
     await new Promise<void>((res, rej) => {
       this.session.register(this.childId, (m: FromWorker) => {
         if (m.t === 'started') { this.started = true; return res() }
-        // Vor dem Start scheitert start(); danach gehört der Fehler an onerror (sonst würde er verschluckt)
+        // Before the start, start() fails; afterwards the error belongs to onerror (otherwise it would be swallowed)
         if (m.t === 'error') { const e = new StdioChildError(m.code, m.message); if (this.started) this.onerror?.(e); else rej(e); return }
         if (m.t === 'msg') {
           try { this.onmessage?.(JSON.parse(m.line) as JSONRPCMessage) } catch (e) { this.onerror?.(e as Error) }
@@ -52,7 +52,7 @@ export class IpcTransport implements Transport {
 
   async close() {
     if (this.closedFlag) return
-    try { this.session.send({ t: 'stop', childId: this.childId }) } catch { /* Verbindung schon weg */ }
+    try { this.session.send({ t: 'stop', childId: this.childId }) } catch { /* connection already gone */ }
     this.finish()
   }
 }

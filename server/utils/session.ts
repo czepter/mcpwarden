@@ -10,15 +10,15 @@ async function load(event: H3Event) {
   return s
 }
 
-/** Angemeldeter Nutzer oder 401. */
+/** Signed-in user or 401. */
 export async function requireUser(event: H3Event) {
   const s = await load(event)
-  // Eine abgelaufene Sperre (banExpires) zaehlt nicht mehr, wie beim /mcp-Zugriffs-Check
+  // An expired ban (banExpires) no longer counts, as in the /mcp access check
   if (isBanned({ id: s.user.id, role: s.user.role === 'admin' ? 'admin' : 'user', banned: s.user.banned === true, banExpires: s.user.banExpires ? new Date(s.user.banExpires) : null }, new Date())) throw apiError(403, 'forbidden', 'account is banned')
   return s
 }
 
-/** Admin ohne Sperre oder 401/403. */
+/** Admin without a ban or 401/403. */
 export async function requireAdmin(event: H3Event) {
   const s = await requireUser(event)
   if (s.user.role !== 'admin') throw apiError(403, 'forbidden', 'admin only')

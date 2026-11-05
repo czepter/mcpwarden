@@ -35,14 +35,14 @@ export type UserLimits = {
   stdioIdleMin: number
 }
 
-/** Persistenz als Interface; die Drizzle-Implementierung hängt an `getDb()` aus 0a. Alle Funktionen nehmen `userId` zuerst. */
+/** Persistence as an interface; the Drizzle implementation hangs off `getDb()` from 0a. All functions take `userId` first. */
 export interface GatewayStore {
   listEnabledUpstreams(userId: string): Promise<UpstreamRow[]>
   getUpstreamBySlug(userId: string, slug: string): Promise<UpstreamRow | null>
   getUpstream(userId: string, id: string): Promise<UpstreamRow | null>
   getSecrets(userId: string, upstreamId: string): Promise<SecretRow[]>
   getLimits(userId: string): Promise<UserLimits>
-  /** Upsert der gesehenen Tools (`first_seen_at`, `last_seen_at`, `gone`), liefert `enabled` je Name. */
+  /** Upsert of the tools seen (`first_seen_at`, `last_seen_at`, `gone`), returns `enabled` per name. */
   syncTools(userId: string, upstreamId: string, names: string[]): Promise<Map<string, boolean>>
   toolFlags(userId: string, upstreamId: string): Promise<Map<string, boolean>>
 }

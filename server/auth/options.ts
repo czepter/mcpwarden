@@ -15,49 +15,49 @@ export interface AuthDeps {
   secret: string
   allowedOrigins: string[]
   rateLimitEnabled: boolean
-  /** Anzahl vertrauenswuerdiger Proxy-Hops (TRUST_PROXY), 0 = X-Forwarded-* wird ignoriert. */
+  /** Number of trusted proxy hops (TRUST_PROXY), 0 = X-Forwarded-* is ignored. */
   trustProxy: number
   countUsers: () => Promise<number>
-  /** DCR-Policy und Registrierungsprotokoll (DB). Fehlt beim Schema-CLI. */
+  /** DCR policy and registration log (DB). Missing in the schema CLI. */
   dcr?: DcrDeps
-  /** Einladungen (Phase 1): Prüfung vor dem Anlegen, atomarer Verbrauch beim Anlegen, Bindung danach. Fehlt beim Schema-CLI. */
+  /** Invitations (phase 1): check before creating, atomic consumption on creation, binding afterwards. Missing in the schema CLI. */
   invites?: {
     check: InviteCheck
     claim: (token: string, email: string) => Promise<string | null>
     bind: (inviteId: string, userId: string) => Promise<void>
-    /** Gibt eine beanspruchte Einladung frei, wenn das Anlegen des Nutzers danach scheitert. */
+    /** Releases a claimed invitation if creating the user fails afterwards. */
     release: (inviteId: string) => Promise<void>
   }
   /**
-   * Sicherheitsnetz: Sperren/Loeschen ueber irgendeinen Better-Auth-Pfad (auch Direktaufrufe) stoesst dieselbe Aufraeumkette an (Widerruf der Zugangsdaten, dann Laufzeit-Ressourcen)
-   * wie die mcpwarden-Admin-Routen (Pool, Worker, PATs, OAuth-Grants). Muss idempotent sein.
+   * Safety net: banning/deleting via any Better Auth path (including direct calls) triggers the same cleanup chain (revoking credentials, then runtime resources)
+   * as the mcpwarden admin routes (pool, worker, PATs, OAuth grants). Must be idempotent.
    */
   lifecycle?: { onUserBanned: (userId: string) => Promise<void> }
-  /** Optional. Nur ein aktivierter Mailer schaltet Passwort-Reset per Mail ein. */
+  /** Optional. Only an enabled mailer switches on password reset by mail. */
   mailer?: Mailer
 }
 
 /**
- * Passwort-Reset per Mail (nur mit aktivem Mailer). Antwort ist fuer bekannte und unbekannte Adressen gleich
- * (Better Auth); der Versand wird nicht abgewartet, damit SMTP-Latenz nicht verraet, ob die Adresse existiert.
- * Der Link kommt aus BASE_URL, nicht aus `url`/`redirectTo` der Anfrage. Das Token wird nie geloggt.
+ * Password reset by mail (only with an active mailer). The response is the same for known and unknown addresses
+ * (Better Auth); the send is not awaited so that SMTP latency does not reveal whether the address exists.
+ * The link comes from BASE_URL, not from the request's `url`/`redirectTo`. The token is never logged.
  */
 function passwordReset(baseUrl: string, mailer: Mailer) {
   return {
     resetPasswordTokenExpiresIn: RESET_TTL_MINUTES * 60,
     revokeSessionsOnPasswordReset: true,
     sendResetPassword: async ({ user, token }: { user: { email: string }, token: string }) => {
-      void trySendMail(mailer, resetPasswordMail(user.email, baseUrl, token), 'Passwort-Reset')
+      void trySendMail(mailer, resetPasswordMail(user.email, baseUrl, token), 'password reset')
     },
   }
 }
 
-/** Token je E-Mail zwischen Before-Hook und Anlegen; Sign-ups laufen seriell (Mutex in api/auth/[...all].ts). */
+/** Token per email between the before hook and creation; sign-ups run serially (mutex in api/auth/[...all].ts). */
 const pendingInvites = new Map<string, { token: string, at: number }>()
 const PENDING_TTL_MS = 60_000
 
-/** Optionen ohne DB. 0b ergaenzt `jwt()` und `mcp()` (Spike-Ergebnisse: server/auth/mcp-plugin.ts). */
-const claimed = new Map<string, string>() // E-Mail -> beanspruchte Einladung bis zum Anlegen
+/** Options without DB. 0b adds `jwt()` and `mcp()` (spike results: server/auth/mcp-plugin.ts). */
+const claimed = new Map<string, string>() // email -> claimed invitation until creation
 
 export function buildAuthOptions(d: AuthDeps) {
   const resource = mcpResource(d.baseUrl)
@@ -71,10 +71,10 @@ export function buildAuthOptions(d: AuthDeps) {
       ...(d.mailer?.enabled ? passwordReset(d.baseUrl, d.mailer) : {}),
     },
     advanced: {
-      // Die Client-IP loest server/utils/client-ip.ts auf (Socket-Adresse oder vertrauter Proxy-Hop) und reicht sie im internen Header durch;
-      // Better Auth liest nie X-Forwarded-For selbst (sonst waere jedes Rate-Limit per erfundenem Header umgehbar).
+      // The client IP is resolved by server/utils/client-ip.ts (socket address or trusted proxy hop) and passed through in the internal header;
+      // Better Auth never reads X-Forwarded-For itself (otherwise every rate limit could be bypassed with a forged header).
       ipAddress: { ipAddressHeaders: [CLIENT_IP_HEADER] },
-      // X-Forwarded-Host/-Proto nur hinter einem vertrauten Proxy (die Basis-URL bleibt BASE_URL)
+      // X-Forwarded-Host/-Proto only behind a trusted proxy (the base URL stays BASE_URL)
       trustedProxyHeaders: d.trustProxy > 0,
     },
     plugins: [admin(), ...mcpPlugins(d.baseUrl)],
@@ -87,7 +87,7 @@ export function buildAuthOptions(d: AuthDeps) {
     },
     hooks: {
       before: createAuthMiddleware(async (ctx) => {
-        // Nur HTTP-Anfragen tragen einen Request; serverseitige auth.api.*-Aufrufe (Admin-Routen von mcpwarden) nicht
+        // Only HTTP requests carry a request; server-side auth.api.* calls (mcpwarden admin routes) do not
         if (ctx.request && isBlockedOverHttp(ctx.path)) throw new APIError('NOT_FOUND', { message: 'Not found' })
         consentGuard(ctx.path, ctx.body)
         if (d.dcr) await dcrBefore(ctx.path, ctx.body, d.dcr)
@@ -104,25 +104,25 @@ export function buildAuthOptions(d: AuthDeps) {
       }),
       after: createAuthMiddleware(async (ctx) => {
         if (d.dcr) await dcrAfter(ctx.path, ctx.body, ctx.context.returned, d.dcr)
-        // Ein Eintrag in `claimed` ueberlebt nur, wenn das Anlegen nach dem Beanspruchen scheiterte (`user.create.after` raeumt ihn sonst ab):
-        // die Einladung wieder freigeben, sonst ist sie fuer den Eingeladenen verbrannt.
+        // An entry in `claimed` survives only if creation failed after claiming (`user.create.after` otherwise cleans it up):
+        // release the invitation again, otherwise it is burned for the invitee.
         if (ctx.path === '/sign-up/email') {
           const key = (typeof ctx.body?.email === 'string' ? ctx.body.email : '').toLowerCase()
           const id = claimed.get(key)
           claimed.delete(key)
-          if (id) await d.invites?.release(id).catch(() => console.error('[mcpwarden] Einladung konnte nicht freigegeben werden'))
+          if (id) await d.invites?.release(id).catch(() => console.error('[mcpwarden] invitation could not be released'))
         }
       }),
     },
     databaseHooks: {
       user: {
         create: {
-          // Laeuft im Sign-up-Mutex (server/api/auth/[...all].ts): "zaehlen, anlegen" ist atomar.
+          // Runs in the sign-up mutex (server/api/auth/[...all].ts): "count, create" is atomic.
           before: async (user, context) => {
             if ((await d.countUsers()) === 0) return { data: { ...user, role: 'admin' } }
-            // Nur die öffentliche Registrierung braucht eine Einladung; Admin-Anlage (create-user) ist durch die Admin-Prüfung geschützt
+            // Only public sign-up needs an invitation; admin creation (create-user) is protected by the admin check
             if (context?.path !== '/sign-up/email') return
-            // Eingeladene bekommen immer die Rolle user; der Verbrauch ist atomar (bedingtes UPDATE), der Verlierer eines Rennens scheitert
+            // Invitees always get the role user; consumption is atomic (conditional UPDATE), the loser of a race fails
             const key = user.email.toLowerCase()
             const pending = pendingInvites.get(key)
             pendingInvites.delete(key)

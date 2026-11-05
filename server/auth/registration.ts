@@ -2,13 +2,13 @@ import { INVITE_INVALID, INVITE_REQUIRED, REGISTRATION_CLOSED } from '../../shar
 
 export type RegistrationDecision = { ok: true } | { ok: false, code: string }
 
-/** Prüft eine Einladung, ohne sie zu verbrauchen (der Verbrauch ist atomar beim Anlegen des Nutzers). */
+/** Checks an invitation without consuming it (consumption is atomic when the user is created). */
 export type InviteCheck = (token: string, email: string) => Promise<boolean>
 
 /**
- * Die eine Stelle der Registrierungssperre. Der erste Nutzer registriert sich ohne Token (Rolle admin);
- * danach ist ein gültiger Einladungs-Token (Header `X-Invite-Token`) Pflicht. Ohne Einladungsprüfung
- * (Schema-CLI, Tests ohne DB) bleibt die Registrierung nach dem ersten Nutzer geschlossen.
+ * The single place of the registration lock. The first user registers without a token (role admin);
+ * after that a valid invitation token (header `X-Invite-Token`) is required. Without an invitation check
+ * (schema CLI, tests without DB) registration stays closed after the first user.
  */
 export async function canRegister(
   ctx: { email: string, inviteToken?: string },

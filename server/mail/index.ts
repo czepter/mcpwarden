@@ -14,21 +14,21 @@ export function createMailer(cfg: Pick<AppConfig, 'smtp' | 'mailFrom'>): Mailer 
 
 const g = globalThis as typeof globalThis & { __mcpwMailer?: Mailer }
 
-/** Memoisiert aus der Konfiguration. */
+/** Memoized from the configuration. */
 export function getMailer(): Mailer {
   return (g.__mcpwMailer ??= createMailer(getConfig()))
 }
 
 /**
- * Fuer Request-Pfade: wirft nie. Loggt nur den Fehlercode (nie Adresse, Token oder Zugangsdaten).
- * @returns true, wenn die Mail uebergeben wurde.
+ * For request paths: never throws. Logs only the error code (never address, token or credentials).
+ * @returns true if the mail was handed over.
  */
 export async function trySendMail(mailer: Mailer, mail: Mail, what: string, log: (m: string) => void = m => console.error(m)): Promise<boolean> {
   try {
     await mailer.sendMail(mail)
     return true
   } catch (e) {
-    log(`[mcpwarden] mail: ${what} nicht gesendet (${e instanceof MailError ? e.code : 'unknown'})`)
+    log(`[mcpwarden] mail: ${what} not sent (${e instanceof MailError ? e.code : 'unknown'})`)
     return false
   }
 }

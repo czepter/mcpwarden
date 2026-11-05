@@ -1,6 +1,6 @@
 import { createCipheriv, createDecipheriv, hkdfSync, randomBytes } from 'node:crypto'
 
-/** Zeilenbindung: Teil der AAD, damit ein vertauschter Datensatz nicht entschlüsselt. */
+/** Row binding: part of the AAD so that a swapped record does not decrypt. */
 export type SecretContext = { upstreamId: string, kind: string, name: string }
 
 const SALT = 'mcpwarden/secrets/v1'
@@ -19,14 +19,14 @@ function deriveUserKey(masterKey: Buffer, userId: string): Buffer {
   return key
 }
 
-/** Längenpräfix je Feld: kein Trennzeichen kann Feldgrenzen verschieben ("a|b","c" != "a","b|c"). */
+/** Length prefix per field: no separator can shift field boundaries ("a|b","c" != "a","b|c"). */
 const aad = (userId: string, c: SecretContext) => {
   const parts = [userId, c.upstreamId, c.kind, c.name].map(x => Buffer.from(x, 'utf8'))
   return Buffer.concat(parts.flatMap((p) => { const h = Buffer.alloc(4); h.writeUInt32BE(p.length); return [h, p] }))
 }
 const b64 = (b: Buffer) => b.toString('base64url')
 
-/** `userId` kommt immer aus dem Auth-Kontext, nie aus der Zeile. */
+/** `userId` always comes from the auth context, never from the row. */
 export function encryptSecret(masterKey: Buffer, userId: string, ctx: SecretContext, plaintext: string, iv: Buffer = randomBytes(12)): string {
   const cipher = createCipheriv('aes-256-gcm', deriveUserKey(masterKey, userId), iv, { authTagLength: 16 })
   cipher.setAAD(aad(userId, ctx))
@@ -34,7 +34,7 @@ export function encryptSecret(masterKey: Buffer, userId: string, ctx: SecretCont
   return [FORMAT, b64(iv), b64(ct), b64(cipher.getAuthTag())].join('.')
 }
 
-/** Strikt kanonisches base64url: Re-Encoding muss die Eingabe exakt ergeben. */
+/** Strictly canonical base64url: re-encoding must reproduce the input exactly. */
 function strictB64(s: string): Buffer {
   const buf = Buffer.from(s, 'base64url')
   if (buf.toString('base64url') !== s) throw new Error('invalid secret format')

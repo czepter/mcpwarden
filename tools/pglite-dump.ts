@@ -1,8 +1,8 @@
 /**
- * Schreibt einen SQL-Dump der eingebetteten PGlite-Datenbank nach stdout (Umstieg auf Postgres, P0-11).
- * Aufruf (App gestoppt): node dist/tools/pglite-dump.mjs [DATA_DIR]   (Standard: $DATA_DIR oder ./data)
- * Import: psql -v ON_ERROR_STOP=1 -f dump.sql in eine leere Datenbank, dann die App mit DATABASE_URL
- * und dem GLEICHEN MASTER_KEY starten.
+ * Writes an SQL dump of the embedded PGlite database to stdout (switching to Postgres, P0-11).
+ * Usage (app stopped): node dist/tools/pglite-dump.mjs [DATA_DIR]   (default: $DATA_DIR or ./data)
+ * Import: psql -v ON_ERROR_STOP=1 -f dump.sql into an empty database, then start the app with DATABASE_URL
+ * and the SAME MASTER_KEY.
  */
 import { join } from 'node:path'
 import { PGlite } from '@electric-sql/pglite'

@@ -1,6 +1,6 @@
 /**
- * Audit-Einträge: Aufrufer übergeben nur `action`; `scope`, `category` und `result` kommen aus der Aktionstabelle,
- * damit sie nicht auseinanderlaufen (Plan 4.2, E17). Kein Name, keine E-Mail, kein Secret in `meta`.
+ * Audit entries: callers pass only `action`; `scope`, `category` and `result` come from the action table
+ * so that they cannot drift apart (plan 4.2, E17). No name, no email, no secret in `meta`.
  */
 export type AuditEntry = {
   userId?: string | null
@@ -30,7 +30,7 @@ export type AuditAction = keyof typeof AUDIT_ACTIONS
 
 const FORBIDDEN_KEY = /mail|secret|token|password|key|value|authorization/i
 
-/** Schlüssel mit sensiblen Namen und lange Texte fallen heraus; nur flache, kurze Werte bleiben. */
+/** Keys with sensitive names and long texts are dropped; only flat, short values remain. */
 export function auditMeta(meta?: Record<string, unknown>): Record<string, unknown> | null {
   if (!meta) return null
   const out: Record<string, unknown> = {}
@@ -46,7 +46,7 @@ export const auditShape = (a: AuditAction): Meta => AUDIT_ACTIONS[a]
 
 export type AuditWriter = { audit: (e: AuditEntry & Meta) => Promise<void> }
 
-/** Schreibt best effort: ein Audit-Fehler darf die Aktion nie scheitern lassen. */
+/** Writes best effort: an audit failure must never make the action fail. */
 export async function audit(repo: AuditWriter, e: AuditEntry, log: (m: string, err?: unknown) => void = () => {}) {
   try { await repo.audit({ ...e, ...auditShape(e.action) }) } catch (err) { log('audit write failed', err) }
 }

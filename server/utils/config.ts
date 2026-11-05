@@ -1,16 +1,16 @@
-// Konfiguration aus process.env (Namen fix, Spec P0-10). Fail-fast: Fehler nennen nur Variablennamen, nie Werte.
+// Configuration from process.env (fixed names, spec P0-10). Fail fast: errors name only variable names, never values.
 export class ConfigError extends Error {
   constructor(public readonly problems: string[]) {
-    super(`Ungueltige Konfiguration: ${problems.join('; ')}`)
+    super(`Invalid configuration: ${problems.join('; ')}`)
     this.name = 'ConfigError'
   }
 }
 
-/** SMTP-Zugang aus SMTP_URL. `pass` ist nicht aufzaehlbar: taucht in JSON/Logs/console.log nie auf. */
+/** SMTP access from SMTP_URL. `pass` is not enumerable: it never shows up in JSON/logs/console.log. */
 export interface SmtpConfig {
   host: string
   port: number
-  /** true = implizites TLS (smtps), false = STARTTLS (smtp; Klartext nur an Loopback). */
+  /** true = implicit TLS (smtps), false = STARTTLS (smtp; plaintext only on loopback). */
   secure: boolean
   user: string | undefined
   readonly pass: string | undefined
@@ -25,14 +25,14 @@ export interface AppConfig {
   allowedOrigins: string[]
   rateLimitEnabled: boolean
   /**
-   * Anzahl vertrauenswuerdiger Reverse-Proxy-Hops vor der App (TRUST_PROXY). 0 = keiner: X-Forwarded-* wird ignoriert, Client-IP ist die
-   * Socket-Adresse. `true` = 1 (ein Proxy haengt die Client-IP an X-Forwarded-For an); eine Zahl N bei N verketteten Proxies.
+   * Number of trusted reverse-proxy hops in front of the app (TRUST_PROXY). 0 = none: X-Forwarded-* is ignored, the client IP is the
+   * socket address. `true` = 1 (one proxy appends the client IP to X-Forwarded-For); a number N for N chained proxies.
    */
   trustProxy: number
-  /** Optionaler Mailversand (P1 "Mailer"). Ohne SMTP_URL bleibt alles Link-basiert. */
+  /** Optional mail sending (P1 "Mailer"). Without SMTP_URL everything stays link-based. */
   smtp: SmtpConfig | undefined
   mailFrom: string | undefined
-  /** Mindestabstand je (Upstream, Zustand) fuer Statusmails in Minuten (MAIL_NOTIFY_WINDOW_MIN, Default 60). */
+  /** Minimum spacing per (upstream, state) for status mails in minutes (MAIL_NOTIFY_WINDOW_MIN, default 60). */
   statusMailWindowMin: number
 }
 
@@ -42,42 +42,42 @@ function parseMasterKey(raw: string): Buffer | undefined {
   if (/^[0-9a-fA-F]{64}$/.test(raw)) return Buffer.from(raw, 'hex')
   if (/^[A-Za-z0-9+/]{43}=$/.test(raw)) {
     const buf = Buffer.from(raw, 'base64')
-    // Kanonisch: erneutes Kodieren muss den Eingabestring exakt ergeben (keine gesetzten Restbits).
+    // Canonical: re-encoding must reproduce the input string exactly (no stray remaining bits set).
     if (buf.length === 32 && buf.toString('base64') === raw) return buf
   }
   return undefined
 }
 
-// Einfache Absenderadresse: `a@b.c` oder `Name <a@b.c>`. Kein CR/LF, keine Steuerzeichen, keine weiteren Klammern.
+// Simple sender address: `a@b.c` or `Name <a@b.c>`. No CR/LF, no control characters, no further brackets.
 const ADDR = '[^\\s@<>",;:()\\[\\]\\\\]+@[^\\s@<>",;:()\\[\\]\\\\]+\\.[^\\s@<>",;:()\\[\\]\\\\]+'
 const MAIL_FROM_RE = new RegExp(`^(?:${ADDR}|[^<>"\\r\\n\\p{Cc}]{1,64}<${ADDR}>)$`, 'u')
 export const isMailFrom = (v: string) => v.length <= 254 && MAIL_FROM_RE.test(v)
 
-/** Meldet nur Variablennamen, nie Teile der URL. */
+/** Reports only variable names, never parts of the URL. */
 function parseSmtp(raw: string, problems: string[]): SmtpConfig | undefined {
   let u: URL
   try {
     u = new URL(raw)
   } catch {
-    problems.push('SMTP_URL ist keine gueltige URL')
+    problems.push('SMTP_URL is not a valid URL')
     return undefined
   }
   if (u.protocol !== 'smtp:' && u.protocol !== 'smtps:') {
-    problems.push('SMTP_URL muss mit smtp:// oder smtps:// beginnen')
+    problems.push('SMTP_URL must start with smtp:// or smtps://')
     return undefined
   }
   if (!u.hostname) {
-    problems.push('SMTP_URL enthaelt keinen Host')
+    problems.push('SMTP_URL contains no host')
     return undefined
   }
   const secure = u.protocol === 'smtps:'
   const port = u.port ? Number(u.port) : secure ? 465 : 587
   if (!Number.isInteger(port) || port < 1 || port > 65535) {
-    problems.push('SMTP_URL enthaelt einen ungueltigen Port')
+    problems.push('SMTP_URL contains an invalid port')
     return undefined
   }
   if (u.pathname.replace(/\//g, '') || u.search || u.hash) {
-    problems.push('SMTP_URL darf keinen Pfad, keine Query und kein Fragment enthalten')
+    problems.push('SMTP_URL must not contain a path, query or fragment')
     return undefined
   }
   let user: string | undefined
@@ -86,15 +86,15 @@ function parseSmtp(raw: string, problems: string[]): SmtpConfig | undefined {
     user = u.username ? decodeURIComponent(u.username) : undefined
     pass = u.password ? decodeURIComponent(u.password) : undefined
   } catch {
-    problems.push('SMTP_URL enthaelt ungueltig kodierte Zugangsdaten')
+    problems.push('SMTP_URL contains invalidly encoded credentials')
     return undefined
   }
   if (pass && !user) {
-    problems.push('SMTP_URL enthaelt ein Passwort ohne Benutzer')
+    problems.push('SMTP_URL contains a password without a user')
     return undefined
   }
   if ([user, pass].some(v => v && /[\r\n]/.test(v))) {
-    problems.push('SMTP_URL enthaelt Zeilenumbrueche in den Zugangsdaten')
+    problems.push('SMTP_URL contains line breaks in the credentials')
     return undefined
   }
   const cfg = { host: u.hostname.replace(/^\[|\]$/g, ''), port, secure, user } as SmtpConfig
@@ -108,46 +108,46 @@ export function parseConfig(env: Record<string, string | undefined>): AppConfig 
 
   let baseUrl: URL | undefined
   const rawBase = get('BASE_URL')
-  if (!rawBase) problems.push('BASE_URL fehlt')
+  if (!rawBase) problems.push('BASE_URL is missing')
   else {
     try {
       baseUrl = new URL(rawBase)
       if (!['http:', 'https:'].includes(baseUrl.protocol)) throw new Error()
       if (baseUrl.protocol === 'http:' && !LOCAL_HOSTS.has(baseUrl.hostname)) {
-        problems.push('BASE_URL muss https verwenden (http nur fuer localhost)')
+        problems.push('BASE_URL must use https (http only for localhost)')
       }
     } catch {
       baseUrl = undefined
-      problems.push('BASE_URL ist keine gueltige URL')
+      problems.push('BASE_URL is not a valid URL')
     }
   }
 
   const betterAuthSecret = get('BETTER_AUTH_SECRET')
-  if (!betterAuthSecret) problems.push('BETTER_AUTH_SECRET fehlt')
-  else if (betterAuthSecret.length < 32) problems.push('BETTER_AUTH_SECRET muss mindestens 32 Zeichen haben')
+  if (!betterAuthSecret) problems.push('BETTER_AUTH_SECRET is missing')
+  else if (betterAuthSecret.length < 32) problems.push('BETTER_AUTH_SECRET must have at least 32 characters')
 
   let masterKey: Buffer | undefined
   const rawKey = get('MASTER_KEY')
-  if (!rawKey) problems.push('MASTER_KEY fehlt')
+  if (!rawKey) problems.push('MASTER_KEY is missing')
   else {
     masterKey = parseMasterKey(rawKey)
-    if (!masterKey) problems.push('MASTER_KEY muss 32 Byte als Base64 oder 64 Hex-Zeichen sein')
+    if (!masterKey) problems.push('MASTER_KEY must be 32 bytes as Base64 or 64 hex characters')
   }
 
   const databaseUrl = get('DATABASE_URL')
   if (databaseUrl && !/^postgres(ql)?:\/\//.test(databaseUrl)) {
-    problems.push('DATABASE_URL muss mit postgres:// oder postgresql:// beginnen')
+    problems.push('DATABASE_URL must start with postgres:// or postgresql://')
   }
 
   const rateLimit = get('RATE_LIMIT')
-  if (rateLimit && rateLimit !== 'off') problems.push('RATE_LIMIT darf nur "off" oder leer sein')
+  if (rateLimit && rateLimit !== 'off') problems.push('RATE_LIMIT may only be "off" or empty')
 
   let trustProxy = 0
   const rawTrust = get('TRUST_PROXY')?.toLowerCase()
   if (rawTrust && rawTrust !== 'false' && rawTrust !== '0') {
     if (rawTrust === 'true') trustProxy = 1
     else if (/^[1-9]\d?$/.test(rawTrust)) trustProxy = Number(rawTrust)
-    else problems.push('TRUST_PROXY muss true, false oder die Anzahl der Proxy-Hops (1 bis 99) sein')
+    else problems.push('TRUST_PROXY must be true, false or the number of proxy hops (1 to 99)')
   }
 
   let allowedOrigins: string[] = []
@@ -157,7 +157,7 @@ export function parseConfig(env: Record<string, string | undefined>): AppConfig 
       try {
         allowedOrigins.push(new URL(o).origin)
       } catch {
-        problems.push('ALLOWED_ORIGINS enthaelt einen ungueltigen Eintrag')
+        problems.push('ALLOWED_ORIGINS contains an invalid entry')
       }
     }
   } else if (baseUrl) allowedOrigins = [baseUrl.origin]
@@ -168,15 +168,15 @@ export function parseConfig(env: Record<string, string | undefined>): AppConfig 
   if (rawSmtp) {
     smtp = parseSmtp(rawSmtp, problems)
     mailFrom = get('MAIL_FROM')
-    if (!mailFrom) problems.push('MAIL_FROM fehlt (Pflicht, wenn SMTP_URL gesetzt ist)')
-    else if (!isMailFrom(mailFrom)) problems.push('MAIL_FROM ist keine gueltige Absenderadresse')
+    if (!mailFrom) problems.push('MAIL_FROM is missing (required when SMTP_URL is set)')
+    else if (!isMailFrom(mailFrom)) problems.push('MAIL_FROM is not a valid sender address')
   }
 
   let statusMailWindowMin = 60
   const rawWindow = get('MAIL_NOTIFY_WINDOW_MIN')
   if (rawWindow) {
     const n = Number(rawWindow)
-    if (!/^\d+$/.test(rawWindow) || n < 1 || n > 10_080) problems.push('MAIL_NOTIFY_WINDOW_MIN muss eine ganze Zahl von 1 bis 10080 sein')
+    if (!/^\d+$/.test(rawWindow) || n < 1 || n > 10_080) problems.push('MAIL_NOTIFY_WINDOW_MIN must be an integer from 1 to 10080')
     else statusMailWindowMin = n
   }
 

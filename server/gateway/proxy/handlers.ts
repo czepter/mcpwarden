@@ -21,13 +21,13 @@ export type CoreDeps = {
   stats: StatsBuffer
   healthFor: (up: UpstreamRow) => UpstreamHealth
   now?: () => number
-  /** Aufruf bei Katalogänderung eines Nutzers (notifyToolsChanged, 1.2.8). */
+  /** Called when a user's catalog changes (notifyToolsChanged, 1.2.8). */
   notifyChanged?: (userId: string) => void
 }
 
 /**
- * Schluessel des Token-Limits: ein OAuth-Client eines Nutzers (nicht das einzelne JWT, dessen `jti` bei jeder Erneuerung wechselt und
- * den Speicher fuellen wuerde), ein PAT ueber seine stabile ID.
+ * Key of the token limit: an OAuth client of a user (not the individual JWT, whose `jti` changes on every renewal and
+ * would fill the memory), a PAT via its stable ID.
  */
 export const limiterTokenKey = (ctx: AuthContext) => (ctx.clientId ? `${ctx.clientId}:${ctx.userId}` : ctx.tokenId)
 
@@ -49,7 +49,7 @@ export class GatewayCore implements ToolSource {
     const t0 = performance.now()
     const ups = await this.d.store.listEnabledUpstreams(ctx.userId)
     const parts = await Promise.all(ups.map(async (up) => {
-      if (up.userId !== ctx.userId) return [] // Verteidigung: Store darf nie fremde Zeilen liefern
+      if (up.userId !== ctx.userId) return [] // Defense: the store must never return foreign rows
       if (up.setup !== 'ready') return []
       const h = this.d.healthFor(up)
       const u0 = performance.now()
@@ -57,7 +57,7 @@ export class GatewayCore implements ToolSource {
       let hit = false
       let status: CallStatRow['status'] = 'ok'
       try {
-        // Cache-Treffer berühren den Breaker nicht: kein Erfolg ohne Upstream-Kontakt, kein verbrauchter Half-open-Zugang
+        // Cache hits do not touch the breaker: no success without upstream contact, no consumed half-open admission
         if (this.d.catalog.isFresh(up)) {
           const r = await this.d.catalog.list(up, undefined, undefined, ctx.userId)
           tools = r.tools; hit = r.cacheHit
@@ -93,7 +93,7 @@ export class GatewayCore implements ToolSource {
     if (!parsed) throw new ToolNotFoundError(name)
     const up = await this.d.store.getUpstreamBySlug(ctx.userId, parsed.slug)
     if (!up || !up.enabled || up.userId !== ctx.userId) throw new ToolNotFoundError(name)
-    // Filter wird bei JEDEM Aufruf serverseitig geprüft; unbekannte Namen erst gegen den Katalog synchronisieren.
+    // The filter is checked server-side on EVERY call; unknown names are first synchronized against the catalog.
     let flags = await this.d.store.toolFlags(up.userId, up.id)
     if (!flags.has(parsed.tool) && up.setup === 'ready') {
       try { await this.d.catalog.list(up, opts.signal, undefined, ctx.userId); flags = await this.d.store.toolFlags(up.userId, up.id) } catch { /* unbekannt bleibt unbekannt */ }
@@ -131,7 +131,7 @@ export class GatewayCore implements ToolSource {
       entry.inflight++
       try {
         const sig = AbortSignal.any([ctl.signal, AbortSignal.timeout(t.callMs)])
-        // KEIN Retry bei tools/call (nicht-idempotent).
+        // NO retry on tools/call (non-idempotent).
         const res = await entry.client.callTool({ name: parsed.tool, arguments: args }, { signal: sig, timeout: t.callMs, maxTotalTimeout: t.callMs }) as CallToolResult
         h.success()
         return done(res, res.isError ? 'tool_error' : 'ok', performance.now() - u0, entry.retries)
@@ -152,7 +152,7 @@ export class GatewayCore implements ToolSource {
     }
   }
 
-  /** Shutdown: warten bis laufende Aufrufe fertig sind (max `ms`), dann abbrechen. */
+  /** Shutdown: wait until running calls are done (max `ms`), then abort. */
   async drain(ms: number) {
     this.draining = true
     const end = Date.now() + ms

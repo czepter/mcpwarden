@@ -1,4 +1,4 @@
-/** Dummy-Upstream `dummy` (Plan 0b, Aufgabe 7). Echo-Tools fuer den Durchstich, wird in Phase 1 ersetzt. */
+/** Dummy upstream `dummy` (plan 0b, task 7). Echo tools for the end-to-end slice, replaced in phase 1. */
 import type { CallToolResult } from '@modelcontextprotocol/server'
 import { z } from 'zod'
 import type { AuthContext } from '../auth/auth-context'
@@ -7,22 +7,22 @@ import type { ToolDef, ToolSource } from './upstream-port'
 const text = (t: string, isError = false): CallToolResult => ({ content: [{ type: 'text', text: t }], ...(isError ? { isError } : {}) })
 
 const tools: Record<string, { def: Omit<ToolDef, 'name'>, hidable: boolean }> = {
-  dummy__echo: { hidable: true, def: { description: 'Gibt den Text zurueck.', inputSchema: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'] } } },
-  dummy__add: { hidable: true, def: { description: 'Addiert zwei Zahlen.', inputSchema: { type: 'object', properties: { a: { type: 'number' }, b: { type: 'number' } }, required: ['a', 'b'] } } },
-  dummy__whoami: { hidable: false, def: { description: 'Zeigt Nutzer, Rolle, Token-Typ und Scopes.', inputSchema: { type: 'object', properties: {} } } },
-  dummy__slow_echo: { hidable: false, def: { description: 'Antwortet nach ms Millisekunden, abbrechbar.', inputSchema: { type: 'object', properties: { text: { type: 'string' }, ms: { type: 'number' } }, required: ['text'] } } },
-  dummy__abort_count: { hidable: false, def: { description: 'Zaehlt abgebrochene slow_echo-Aufrufe dieses Nutzers (Testhilfe fuer A10).', inputSchema: { type: 'object', properties: {} } } },
-  dummy__toggle_tool: { hidable: false, def: { description: 'Blendet dummy__echo aus/ein und meldet list_changed.', inputSchema: { type: 'object', properties: {} } } },
+  dummy__echo: { hidable: true, def: { description: 'Returns the text.', inputSchema: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'] } } },
+  dummy__add: { hidable: true, def: { description: 'Adds two numbers.', inputSchema: { type: 'object', properties: { a: { type: 'number' }, b: { type: 'number' } }, required: ['a', 'b'] } } },
+  dummy__whoami: { hidable: false, def: { description: 'Shows user, role, token type and scopes.', inputSchema: { type: 'object', properties: {} } } },
+  dummy__slow_echo: { hidable: false, def: { description: 'Answers after ms milliseconds, abortable.', inputSchema: { type: 'object', properties: { text: { type: 'string' }, ms: { type: 'number' } }, required: ['text'] } } },
+  dummy__abort_count: { hidable: false, def: { description: 'Counts aborted slow_echo calls of this user (test helper for A10).', inputSchema: { type: 'object', properties: {} } } },
+  dummy__toggle_tool: { hidable: false, def: { description: 'Hides/shows dummy__echo and reports list_changed.', inputSchema: { type: 'object', properties: {} } } },
 }
 
 const echoArgs = z.object({ text: z.string() })
 const addArgs = z.object({ a: z.number(), b: z.number() })
 const slowArgs = z.object({ text: z.string(), ms: z.number().min(0).max(60_000).default(5000) })
 
-/** `notify` meldet list_changed nur fuer den uebergebenen Nutzer. `onAbort` ist ein Testhaken. */
+/** `notify` reports list_changed only for the given user. `onAbort` is a test hook. */
 export function createDummyUpstream(opts: { notify: (userId: string) => void, onAbort?: (name: string) => void }): ToolSource {
-  const hiddenFor = new Set<string>() // userId -> dummy__echo ausgeblendet
-  const aborts = new Map<string, number>() // userId -> abgebrochene slow_echo-Aufrufe
+  const hiddenFor = new Set<string>() // userId -> dummy__echo hidden
+  const aborts = new Map<string, number>() // userId -> aborted slow_echo calls
 
   return {
     async listTools(ctx) {
@@ -56,7 +56,7 @@ export function createDummyUpstream(opts: { notify: (userId: string) => void, on
         case 'dummy__abort_count':
           return text(String(aborts.get(ctx.userId) ?? 0))
         default: { // dummy__toggle_tool
-          if (hiddenFor.delete(ctx.userId)) { /* wieder sichtbar */ } else hiddenFor.add(ctx.userId)
+          if (hiddenFor.delete(ctx.userId)) { /* visible again */ } else hiddenFor.add(ctx.userId)
           opts.notify(ctx.userId)
           return text(hiddenFor.has(ctx.userId) ? 'dummy__echo hidden' : 'dummy__echo visible')
         }

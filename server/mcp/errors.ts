@@ -1,4 +1,4 @@
-/** 401/403-Antworten fuer /mcp mit WWW-Authenticate nach RFC 6750 / RFC 9728 (Plan 0b, Aufgabe 2). */
+/** 401/403 responses for /mcp with WWW-Authenticate per RFC 6750 / RFC 9728 (plan 0b, task 2). */
 import { SCOPE_MCP_TOOLS } from '../auth/scopes'
 
 export type BearerError = 'invalid_token' | 'insufficient_scope'
@@ -14,7 +14,7 @@ function json(status: number, headers: Record<string, string>, body: unknown): R
   })
 }
 
-/** 401. Ohne `error` (kein Token geschickt) enthaelt die Challenge keinen Fehlercode (RFC 6750 3.1). */
+/** 401. Without `error` (no token sent) the challenge contains no error code (RFC 6750 3.1). */
 export function unauthorized(resourceMetadataUrl: string, opts: { error?: 'invalid_token', description?: string } = {}): Response {
   const parts = [`Bearer resource_metadata="${quote(resourceMetadataUrl)}"`, `scope="${SCOPE_MCP_TOOLS}"`]
   if (opts.error) parts.push(`error="${opts.error}"`)
@@ -22,7 +22,7 @@ export function unauthorized(resourceMetadataUrl: string, opts: { error?: 'inval
   return json(401, { 'www-authenticate': parts.join(', ') }, { error: opts.error ?? 'unauthorized', error_description: opts.description })
 }
 
-/** 403 bei fehlendem Scope. */
+/** 403 on a missing scope. */
 export function forbidden(resourceMetadataUrl: string, scope: string = SCOPE_MCP_TOOLS): Response {
   const challenge = `Bearer error="insufficient_scope", scope="${quote(scope)}", resource_metadata="${quote(resourceMetadataUrl)}"`
   return json(403, { 'www-authenticate': challenge }, { error: 'insufficient_scope', error_description: `scope ${scope} required` })

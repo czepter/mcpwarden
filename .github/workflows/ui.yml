@@ -14,6 +14,6 @@ jobs:
       - run: pnpm ui:test
       - run: pnpm build && pnpm ui:check-build
       - run: pnpm exec playwright install --with-deps chromium
-      # Mock-Projekt (MSW, .output-mock) und Echt-Projekt (Produktions-Build, PGlite, kein MSW)
+      # Mock project (MSW, .output-mock) and real project (production build, PGlite, no MSW)
       - run: pnpm ui:e2e:mock
       - run: pnpm ui:e2e:real

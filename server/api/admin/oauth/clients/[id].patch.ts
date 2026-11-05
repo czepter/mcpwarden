@@ -12,7 +12,7 @@ export default defineEventHandler(async (event): Promise<OAuthClientAdmin> => {
   if (typeof disabled !== 'boolean') throw apiError(400, 'invalid_body', 'disabled must be a boolean', 'disabled')
   const db = await getDb()
   if (!(await setClientDisabled(db, id, disabled))) throw apiError(404, 'not_found', 'client not found')
-  // Offene Listen-Streams der Nutzer dieses Clients enden sofort; der Guard lehnt den naechsten Request ohnehin ab.
+  // Open list streams of this client's users end immediately; the guard rejects the next request anyway.
   if (disabled) await Promise.all((await consentUserIds(db, id)).map(closeUserStreams))
   return (await getAdminClient(db, id))! satisfies OAuthClientAdmin
 })

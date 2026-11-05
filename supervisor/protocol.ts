@@ -1,10 +1,10 @@
 /**
- * Wire-Format für Steuer- und Datenverbindung: 4 Byte Länge (big endian) + UTF-8-JSON.
- * Dieses Modul hat keine Abhängigkeiten (kein SDK, kein JSON-RPC) und wird von Supervisor, Worker und Web-App genutzt.
+ * Wire format for control and data connection: 4-byte length (big endian) + UTF-8 JSON.
+ * This module has no dependencies (no SDK, no JSON-RPC) and is used by supervisor, worker and web app.
  */
 export const USER_ID_RE = /^[A-Za-z0-9_-]{1,64}$/
-export const MAX_CONTROL_FRAME = 1024 // Steuerbefehle sind winzig; hart begrenzt (nie Frames des Datenpfads)
-export const MAX_DATA_FRAME = 8 * 1024 * 1024 // Worker <-> Web-App (MCP-Zeilen)
+export const MAX_CONTROL_FRAME = 1024 // control commands are tiny; hard-limited (never data-path frames)
+export const MAX_DATA_FRAME = 8 * 1024 * 1024 // Worker <-> web app (MCP lines)
 export const PROTOCOL_VERSION = 1
 
 export class FrameError extends Error {}
@@ -17,7 +17,7 @@ export function encodeFrame(obj: unknown, max = MAX_DATA_FRAME): Buffer {
   return Buffer.concat([head, body])
 }
 
-/** Inkrementeller Decoder; wirft FrameError bei Überlänge, bevor Speicher belegt wird. */
+/** Incremental decoder; throws FrameError on excess length before memory is allocated. */
 export class FrameReader {
   private buf: Buffer = Buffer.alloc(0)
   constructor(private max: number) {}
@@ -34,7 +34,7 @@ export class FrameReader {
     }
     return out
   }
-  /** Bytes, die nach dem letzten vollständigen Frame schon gelesen wurden. */
+  /** Bytes that were already read after the last complete frame. */
   get pending() { return this.buf.length }
 }
 
@@ -54,8 +54,8 @@ const ALLOWED_KEYS: Record<Command['cmd'], string[]> = {
 }
 
 /**
- * Strikte Validierung: unbekannte Felder (`uid`, `gid`, `cwd`, `path` ...) lassen den Befehl scheitern.
- * Die Web-App sendet nur die userId; UID/Pfade bestimmt ausschließlich der Supervisor.
+ * Strict validation: unknown fields (`uid`, `gid`, `cwd`, `path` ...) make the command fail.
+ * The web app sends only the userId; UID/paths are determined exclusively by the supervisor.
  */
 export function parseCommand(raw: unknown): Command {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new FrameError('invalid command')
@@ -77,7 +77,7 @@ export function parseCommand(raw: unknown): Command {
   return o as Command
 }
 
-/** Worker <-> Web-App (Datenverbindung). Der Worker kennt kein MCP: `line` ist eine opake JSON-RPC-Zeile. */
+/** Worker <-> web app (data connection). The worker knows no MCP: `line` is an opaque JSON-RPC line. */
 export type ToWorker =
   | { t: 'start', childId: string, command: string, args: string[], env: Record<string, string>, cwdRel?: string }
   | { t: 'msg', childId: string, line: string }

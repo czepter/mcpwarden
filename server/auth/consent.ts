@@ -1,4 +1,4 @@
-/** Reine Consent-Logik (Plan 0b, Aufgabe 4): Scope-Auswahl, Redirect-Aufbereitung, `ConsentInfo`. */
+/** Pure consent logic (plan 0b, task 4): scope selection, redirect preparation, `ConsentInfo`. */
 import type { ConsentInfo, ConsentRedirect, ConsentScope } from '../../shared/api-types'
 import { isAllowlisted, redirectHost, redirectKind, sanitizeClientName, type AllowlistPattern } from './dcr-policy'
 import { SCOPE_ADMIN, SCOPE_MCP_TOOLS, SCOPES_SUPPORTED } from './scopes'
@@ -9,21 +9,21 @@ export function consentRedirect(uri: string): ConsentRedirect {
 }
 
 /**
- * Angebotene Scopes: die angeforderten, gefiltert auf bekannte. Pflicht sind alle bis auf den
- * Admin-Scope, der nur erscheint, wenn er aktiviert ist (0b: nie) und dann abwaehlbar ist.
+ * Offered scopes: the requested ones, filtered to known ones. All are required except the
+ * admin scope, which appears only when enabled (0b: never) and can then be deselected.
  */
 export function buildConsentScopes(requested: readonly string[], adminEnabled = false): ConsentScope[] {
-  // offline_access und mcp:tools sind Pflicht (R15): jede Zustimmung erzeugt einen Refresh-Token, damit
-  // dessen Widerruf sofort wirkt. Gewaehrt werden immer alle drei, auch wenn der Client weniger anfordert.
+  // offline_access and mcp:tools are required (R15): every consent produces a refresh token so that
+  // its revocation takes effect immediately. All three are always granted, even if the client requests fewer.
   const out: ConsentScope[] = SCOPES_SUPPORTED.map(name => ({ name, required: true }))
   if (adminEnabled && requested.includes(SCOPE_ADMIN)) out.push({ name: SCOPE_ADMIN, required: false })
   return out
 }
 
 /**
- * Zustimmung mit Teilmenge: nur angebotene Scopes, `mcp:tools` und alle Pflicht-Scopes sind
- * unverzichtbar. `granted` ist die deduplizierte Schnittmenge; nur sie darf vergeben werden.
- * Die Fehlermeldung wiederholt nie angreiferkontrollierten Text.
+ * Consent with a subset: only offered scopes; `mcp:tools` and all required scopes are
+ * indispensable. `granted` is the deduplicated intersection; only it may be granted.
+ * The error message never repeats attacker-controlled text.
  */
 export function validateAcceptedScopes(accepted: readonly unknown[], offered: readonly ConsentScope[]):
   { ok: true, granted: string[] } | { ok: false, reason: string } {

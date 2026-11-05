@@ -1,4 +1,4 @@
-/** DB-Zugriff fuer PATs und die Clients (Consents) eines Nutzers (Plan 0b, Aufgabe 5). Jede Query filtert nach `userId`. */
+/** DB access for PATs and a user's clients (consents) (plan 0b, task 5). Every query filters by `userId`. */
 import { and, count, eq, isNull } from 'drizzle-orm'
 import type { ConnectionSummary, PatList, PatSummary } from '../../shared/api-types'
 import type { Db } from '../db'
@@ -23,7 +23,7 @@ export async function listPats(db: Db, userId: string): Promise<PatList> {
   return { items: rows.map(toSummary), limit: { max: PAT_LIMIT, active: rows.filter(r => !r.revokedAt).length } }
 }
 
-/** `null` bei erreichtem Limit. Der Klartext verlaesst diese Funktion nur im Rueckgabewert. */
+/** `null` when the limit is reached. The plaintext leaves this function only in the return value. */
 export async function createPat(db: Db, userId: string, name: string): Promise<(PatSummary & { token: string }) | null> {
   const [{ n } = { n: 0 }] = await db.select({ n: count() }).from(personalAccessToken).where(and(eq(personalAccessToken.userId, userId), isNull(personalAccessToken.revokedAt)))
   if (n >= PAT_LIMIT) return null
@@ -32,7 +32,7 @@ export async function createPat(db: Db, userId: string, name: string): Promise<(
   return { ...toSummary(row!), token: g.token }
 }
 
-/** `false` = PAT gehoert nicht diesem Nutzer / existiert nicht. Idempotent fuer bereits widerrufene. */
+/** `false` = PAT does not belong to this user / does not exist. Idempotent for already revoked ones. */
 export async function revokePat(db: Db, userId: string, id: string): Promise<boolean> {
   if (!UUID_RE.test(id)) return false
   const owned = await db.select({ id: personalAccessToken.id }).from(personalAccessToken).where(and(eq(personalAccessToken.id, id), eq(personalAccessToken.userId, userId)))
@@ -41,12 +41,12 @@ export async function revokePat(db: Db, userId: string, id: string): Promise<boo
   return true
 }
 
-/** Sperre/Loeschen (P0-4): alle PATs des Nutzers widerrufen; Entsperren belebt sie nicht wieder. Idempotent. */
+/** Ban/delete (P0-4): revoke all of the user's PATs; unbanning does not revive them. Idempotent. */
 export async function revokePatsOfUser(db: Db, userId: string): Promise<void> {
   await db.update(personalAccessToken).set({ revokedAt: new Date() }).where(and(eq(personalAccessToken.userId, userId), isNull(personalAccessToken.revokedAt)))
 }
 
-/** Sperre/Loeschen (P0-4): alle Zustimmungen sowie Access- und Refresh-Tokens des Nutzers entfernen. Idempotent. */
+/** Ban/delete (P0-4): remove all consents as well as access and refresh tokens of the user. Idempotent. */
 export async function revokeOAuthGrantsOfUser(db: Db, userId: string): Promise<void> {
   await db.delete(oauthConsent).where(eq(oauthConsent.userId, userId))
   await db.delete(oauthAccessToken).where(eq(oauthAccessToken.userId, userId))
@@ -79,7 +79,7 @@ export async function listConnections(db: Db, userId: string, now: Date): Promis
     .sort((a, b) => b.grantedAt.localeCompare(a.grantedAt))
 }
 
-/** Consent plus Refresh-/Access-Tokens dieses Clients fuer diesen Nutzer. `false` = kein Consent dieses Nutzers. */
+/** Consent plus refresh/access tokens of this client for this user. `false` = no consent from this user. */
 export async function revokeConnection(db: Db, userId: string, clientId: string): Promise<boolean> {
   const deleted = await db.delete(oauthConsent).where(and(eq(oauthConsent.userId, userId), eq(oauthConsent.clientId, clientId))).returning({ id: oauthConsent.id })
   if (deleted.length === 0) return false

@@ -1,12 +1,12 @@
 /**
- * Austauschpunkt fuer die Tool-Quelle (Plan 0b, Aufgabe 7): 0b liefert den Dummy-Upstream, Phase 1
- * implementiert dieses Interface mit der echten Registry. Der Handler kennt nur diese Schnittstelle.
+ * Swap point for the tool source (plan 0b, task 7): 0b supplies the dummy upstream, phase 1
+ * implements this interface with the real registry. The handler knows only this interface.
  */
 import type { CallToolResult, JSONObject } from '@modelcontextprotocol/server'
 import type { AuthContext } from '../auth/auth-context'
 
 export type ToolDef = {
-  name: string // nach aussen `<upstream>__<tool>`
+  name: string // externally `<upstream>__<tool>`
   description?: string
   inputSchema: { type: 'object', properties?: JSONObject, required?: string[] }
 }

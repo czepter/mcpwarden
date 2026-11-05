@@ -1,6 +1,6 @@
 /**
- * Alle DB-Zugriffe der Gateway-Funktionen. Jede nutzerbezogene Funktion nimmt `userId` als ersten Parameter und
- * filtert darauf; Zugriff per ID allein gibt es nicht (fremde Datensätze sind "nicht gefunden").
+ * All DB access of the gateway functions. Every user-related function takes `userId` as its first parameter and
+ * filters on it; there is no access by ID alone (foreign records are "not found").
  */
 import { createHash, randomBytes } from 'node:crypto'
 import { and, asc, count, desc, eq, gt, inArray, isNull, lt, max, notInArray, or, sql } from 'drizzle-orm'
@@ -39,7 +39,7 @@ export class LimitReached extends Error {}
 export class GatewayRepo implements GatewayStore {
   constructor(readonly db: Db) {}
 
-  // --- GatewayStore (Laufzeitpfad) ---
+  // --- GatewayStore (runtime path) ---
   async listEnabledUpstreams(userId: string) {
     return (await this.db.select().from(upstream).where(and(eq(upstream.userId, userId), eq(upstream.enabled, true)))).map(toRow)
   }
@@ -63,7 +63,7 @@ export class GatewayRepo implements GatewayStore {
       stdioMaxProcs: r?.stdioMaxProcs ?? DEFAULT_LIMITS.stdioMaxProcs, stdioIdleMin: r?.stdioIdleMin ?? DEFAULT_LIMITS.stdioIdleMin,
     }
   }
-  /** Default true (Zeile fehlt). */
+  /** Default true (row missing). */
   async getNotifyStatusMail(userId: string): Promise<boolean> {
     const [r] = await this.db.select({ v: userPreference.notifyStatusMail }).from(userPreference).where(eq(userPreference.userId, userId))
     return r?.v ?? true
@@ -87,7 +87,7 @@ export class GatewayRepo implements GatewayStore {
     return new Map(rows.map(r => [r.name, r.enabled]))
   }
 
-  // --- Upstream-Verwaltung ---
+  // --- Upstream management ---
   async countUpstreams(userId: string) {
     const [r] = await this.db.select({ n: count() }).from(upstream).where(eq(upstream.userId, userId))
     return r?.n ?? 0
@@ -107,7 +107,7 @@ export class GatewayRepo implements GatewayStore {
     return (await this.listUpstreams(userId)).find(u => u.id === id) ?? null
   }
 
-  /** Legt an; `limit` wird in derselben Transaktion gegen die Anzahl geprüft (kein Überschreiten durch Rennen). */
+  /** Creates; `limit` is checked against the count in the same transaction (no exceeding through races). */
   async createUpstream(userId: string, p: NewUpstream, setup: 'ready' | 'awaiting_auth', maxUpstreams: number): Promise<UpstreamDb> {
     return await this.db.transaction(async (tx) => {
       await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${'upstream-create:' + userId}))`)
@@ -158,7 +158,7 @@ export class GatewayRepo implements GatewayStore {
     return r ?? null
   }
 
-  /** Statuswechsel (nur bei Wechsel aufgerufen). */
+  /** Status change (called only on a change). */
   async persistStatus(userId: string, upstreamId: string, s: StatusSnapshot, err?: string | null) {
     await this.db.update(upstream).set({
       status: s.status, statusReason: s.reason, statusChangedAt: new Date(),
@@ -173,7 +173,7 @@ export class GatewayRepo implements GatewayStore {
     await this.db.insert(userGatewayLimits).values({ userId, ...set }).onConflictDoUpdate({ target: userGatewayLimits.userId, set })
   }
 
-  // --- Einstellungen (app_setting) ---
+  // --- Settings (app_setting) ---
   async getSetting<T>(key: string, fallback: T): Promise<T> {
     const [r] = await this.db.select().from(appSetting).where(eq(appSetting.key, key))
     return r ? r.value as T : fallback
@@ -182,7 +182,7 @@ export class GatewayRepo implements GatewayStore {
     await this.db.insert(appSetting).values({ key, value }).onConflictDoUpdate({ target: appSetting.key, set: { value, updatedAt: new Date() } })
   }
 
-  // --- Einladungen ---
+  // --- Invitations ---
   async createInvite(createdBy: string, email: string | null, now = new Date()) {
     const token = randomBytes(32).toString('base64url')
     const expiresAt = new Date(now.getTime() + INVITE_TTL_DAYS * 86_400_000)
@@ -206,7 +206,7 @@ export class GatewayRepo implements GatewayStore {
     const [r] = await this.db.select().from(userInvite).where(eq(userInvite.tokenHash, sha256(token)))
     return r ?? null
   }
-  /** Atomar: genau ein Aufrufer gewinnt (bedingtes UPDATE, Rennen entscheidet die Datenbank). */
+  /** Atomic: exactly one caller wins (conditional UPDATE, the database decides the race). */
   async claimInvite(token: string, email: string, now = new Date()) {
     const e = email.toLowerCase()
     const r = await this.db.update(userInvite).set({ usedAt: now }).where(and(
@@ -218,12 +218,12 @@ export class GatewayRepo implements GatewayStore {
   async setInviteUsedBy(inviteId: string, userId: string) {
     await this.db.update(userInvite).set({ usedBy: userId }).where(eq(userInvite.id, inviteId))
   }
-  /** Gibt eine beanspruchte Einladung frei, wenn das Anlegen des Nutzers danach scheiterte. */
+  /** Releases a claimed invitation if creating the user failed afterwards. */
   async releaseInvite(inviteId: string) {
     await this.db.update(userInvite).set({ usedAt: null }).where(and(eq(userInvite.id, inviteId), isNull(userInvite.usedBy)))
   }
 
-  // --- Nutzer (Admin) ---
+  // --- Users (admin) ---
   async listUsers() {
     const users = await this.db.select().from(user).orderBy(asc(user.createdAt))
     const ups = await this.db.select({ userId: upstream.userId, n: count() }).from(upstream).groupBy(upstream.userId)
@@ -262,10 +262,10 @@ export class GatewayRepo implements GatewayStore {
     return await this.db.select().from(auditLog).where(and(...conds)).orderBy(desc(auditLog.id)).limit(q.limit + 1)
   }
 
-  // --- Messdaten ---
+  // --- Measurement data ---
   async writeStats(rows: CallStatRow[]) {
     if (!rows.length) return
-    // Upstreams, die inzwischen gelöscht wurden: Messwert behalten (Slug steht in der Zeile), Verweis auf null setzen
+    // Upstreams that have been deleted in the meantime: keep the measurement (the slug is in the row), set the reference to null
     const ids = [...new Set(rows.map(r => r.upstreamId).filter((x): x is string => !!x))]
     const alive = new Set(ids.length ? (await this.db.select({ id: upstream.id }).from(upstream).where(inArray(upstream.id, ids))).map(r => r.id) : [])
     rows = rows.map(r => (r.upstreamId && !alive.has(r.upstreamId) ? { ...r, upstreamId: null } : r))

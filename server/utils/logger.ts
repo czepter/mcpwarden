@@ -1,8 +1,8 @@
-/** Strukturierter Logger mit Redaction (Plan 1.1.3). Secrets, Tokens und Einladungslinks erscheinen nie im Log. */
+/** Structured logger with redaction (plan 1.1.3). Secrets, tokens and invite links never appear in the log. */
 const SENSITIVE_KEY = /(authorization|secret|token|password|cookie|api[-_]?key|x-invite-token|ciphertext|master)/i
 const REDACTED = '[redacted]'
 
-/** `/invite/<token>` und `/api/invites/<token>` werden in Zugriffslogs maskiert. */
+/** `/invite/<token>` and `/api/invites/<token>` are masked in access logs. */
 export const maskPath = (p: string) => p.replace(/(\/(?:api\/)?invites?\/)[^/?#\s]+/g, '$1[token]')
 
 export function redact(value: unknown, depth = 0): unknown {

@@ -34,7 +34,7 @@ export const upstream = pgTable('upstream', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 }, t => [
   unique('upstream_user_slug_uq').on(t.userId, t.slug),
-  // Ziel der zusammengesetzten Fremdschluessel von upstream_secret/upstream_tool: eine Zeile kann nie zu einem Upstream eines anderen Nutzers gehoeren
+  // Target of the composite foreign keys of upstream_secret/upstream_tool: a row can never belong to another user's upstream
   unique('upstream_user_id_id_uq').on(t.userId, t.id),
   check('upstream_type_ck', sql`${t.type} in ('http','stdio')`),
   check('upstream_transport_ck', sql`${t.transport} in ('auto','streamable','sse')`),
@@ -86,7 +86,7 @@ export const userGatewayLimits = pgTable('user_gateway_limits', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 })
 
-/** Persoenliche Einstellungen je Nutzer. Fehlt die Zeile, gelten die Defaults (Benachrichtigung an). */
+/** Personal settings per user. If the row is missing, the defaults apply (notification on). */
 export const userPreference = pgTable('user_preference', {
   userId: text('user_id').primaryKey().references(() => user.id, { onDelete: 'cascade' }),
   notifyStatusMail: boolean('notify_status_mail').notNull().default(true),
@@ -108,7 +108,7 @@ export const userInvite = pgTable('user_invite', {
 export const auditLog = pgTable('audit_log', {
   id: bigserial('id', { mode: 'number' }).primaryKey(),
   ts: timestamp('ts', { withTimezone: true }).notNull().defaultNow(),
-  // bewusst ohne FK: Einträge überleben das Löschen des Nutzers
+  // deliberately without FK: entries survive deleting the user
   userId: text('user_id'),
   actor: text('actor').notNull(),
   clientId: text('client_id'),

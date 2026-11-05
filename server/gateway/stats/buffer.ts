@@ -20,16 +20,16 @@ export type CallStatRow = {
 }
 
 export type StatsBufferOptions = {
-  /** Schreibt einen Batch; Fehler werden geloggt, nie an Aufrufer gegeben. */
+  /** Writes a batch; errors are logged, never passed on to callers. */
   write: (rows: CallStatRow[]) => Promise<void>
   flushMs?: number
   batch?: number
   max?: number
-  /** Timeout je Schreibvorgang (Standard 5 s). */
+  /** Timeout per write (default 5 s). */
   writeTimeoutMs?: number
-  /** Versuche je Zeile bei transienten Fehlern, danach verworfen und gezählt (Standard 3). */
+  /** Attempts per row on transient errors, after that dropped and counted (default 3). */
   maxAttempts?: number
-  /** Gesamtfrist für stop() (Standard 10 s). */
+  /** Overall deadline for stop() (default 10 s). */
   stopDeadlineMs?: number
   log?: (msg: string, err?: unknown) => void
   now?: () => number
@@ -38,7 +38,7 @@ export type StatsBufferOptions = {
 type Item = { row: CallStatRow, attempts: number }
 
 const MAX_TEXT = 256
-/** NUL-Bytes sind in Postgres-Text unzulässig; freie Textfelder werden gekürzt. */
+/** NUL bytes are not allowed in Postgres text; free text fields are truncated. */
 function sanitize(row: CallStatRow): CallStatRow {
   const out = { ...row } as Record<string, unknown>
   for (const [k, v] of Object.entries(out)) {
@@ -47,7 +47,7 @@ function sanitize(row: CallStatRow): CallStatRow {
   return out as CallStatRow
 }
 
-/** SQLSTATE-Klasse 22 (Datenfehler) und 23 (Constraint, u. a. 23503 gelöschter Nutzer/Upstream). */
+/** SQLSTATE class 22 (data error) and 23 (constraint, among others 23503 deleted user/upstream). */
 export function isDataError(err: unknown): boolean {
   for (let e: unknown = err, i = 0; e && i < 4; i++, e = (e as { cause?: unknown }).cause) {
     const c = (e as { code?: unknown }).code
@@ -59,9 +59,9 @@ export function isDataError(err: unknown): boolean {
 class WriteTimeout extends Error { constructor() { super('stats write timeout') } }
 
 /**
- * Ringpuffer im Speicher; `push` blockiert nie, wirft nie und wartet nie auf die DB.
- * Gelöschte Eltern (Nutzer/Upstream): die DB-Schicht darf FK-Verletzungen (23503) melden; der
- * Puffer isoliert die betroffene Zeile per Batch-Teilung, verwirft nur sie und zählt sie in `dropped`.
+ * In-memory ring buffer; `push` never blocks, never throws and never waits for the DB.
+ * Deleted parents (user/upstream): the DB layer may report FK violations (23503); the
+ * buffer isolates the affected row by splitting the batch, drops only it and counts it in `dropped`.
  */
 export class StatsBuffer {
   private items: Item[] = []
@@ -104,7 +104,7 @@ export class StatsBuffer {
   private async writeWithTimeout(rows: CallStatRow[]) {
     let timer: NodeJS.Timeout | undefined
     try {
-      // Hängt der Writer, räumen wir `flushing` trotzdem; ein spätes Gelingen kann Zeilen doppelt schreiben (akzeptiert, Statistik).
+      // If the writer hangs, we clear `flushing` anyway; a late success may write rows twice (accepted, statistics).
       await Promise.race([
         Promise.resolve().then(() => this.o.write(rows)),
         new Promise<never>((_, rej) => { timer = setTimeout(() => rej(new WriteTimeout()), this.o.writeTimeoutMs ?? 5_000) }),
@@ -112,7 +112,7 @@ export class StatsBuffer {
     } finally { clearTimeout(timer) }
   }
 
-  /** Schreibt; bei Datenfehler Batch teilen, bis die fehlerhafte Zeile isoliert und verworfen ist. */
+  /** Writes; on a data error split the batch until the faulty row is isolated and dropped. */
   private async writeIsolating(items: Item[]): Promise<Item[]> {
     try { await this.writeWithTimeout(items.map(i => i.row)); return [] } catch (err) {
       if (!isDataError(err)) throw Object.assign(err instanceof Error ? err : new Error(String(err)), { unwritten: items })
@@ -148,7 +148,7 @@ export class StatsBuffer {
     return this.flushing
   }
 
-  /** Beim Shutdown: Rest schreiben (Gesamtfrist), Rest verwerfen und zählen. */
+  /** On shutdown: write the rest (overall deadline), drop and count the remainder. */
   async stop() {
     if (this.timer) clearInterval(this.timer)
     this.timer = null
@@ -157,7 +157,7 @@ export class StatsBuffer {
       const before = this.items.length + this.dropped
       await Promise.race([this.flush(true), new Promise(r => setTimeout(r, Math.max(0, deadline - this.now())))])
       if (this.items.length + this.dropped >= before && this.flushing === null && this.items.length) {
-        // kein Fortschritt (DB down): kurz warten statt Busy-Loop
+        // no progress (DB down): wait briefly instead of a busy loop
         await new Promise(r => setTimeout(r, 20))
       }
     }

@@ -1,6 +1,6 @@
-// Genau ein DB-Client pro Prozess. Umschaltung nur per DATABASE_URL (P0-11).
-// Regeln: kein PGlite-spezifisches SQL, keine Extensions, keine langen Transaktionen,
-// kein casing-Flag (generiertes Schema benennt Spalten explizit).
+// Exactly one DB client per process. Switching only via DATABASE_URL (P0-11).
+// Rules: no PGlite-specific SQL, no extensions, no long transactions,
+// no casing flag (the generated schema names columns explicitly).
 import { join } from 'node:path'
 import { PGlite } from '@electric-sql/pglite'
 import type { PgDatabase } from 'drizzle-orm/pg-core'
@@ -18,7 +18,7 @@ interface State {
   promise: Promise<Db>
   close: () => Promise<void>
 }
-// globalThis schuetzt vor Doppelinstanz bei Dev-HMR.
+// globalThis protects against a double instance during dev HMR.
 const g = globalThis as typeof globalThis & { __mcpwDb?: State }
 
 export const dbBackend: 'pglite' | 'postgres' = process.env.DATABASE_URL?.trim() ? 'postgres' : 'pglite'
@@ -45,10 +45,10 @@ async function init(): Promise<State> {
   return { promise: Promise.resolve(db), close }
 }
 
-/** Loest erst nach der Migration auf. Schlaegt sie fehl, bleibt das Promise rejected. */
+/** Resolves only after the migration. If it fails, the promise stays rejected. */
 export function getDb(): Promise<Db> {
   if (!g.__mcpwDb) {
-    // Platzhalter synchron setzen, damit parallele Aufrufer dasselbe Promise teilen.
+    // Set the placeholder synchronously so that parallel callers share the same promise.
     let resolveState!: (s: State) => void
     let rejectState!: (e: unknown) => void
     const stateP = new Promise<State>((res, rej) => {
@@ -63,7 +63,7 @@ export function getDb(): Promise<Db> {
   return g.__mcpwDb.promise
 }
 
-/** Idempotent; setzt den Zustand zurueck. */
+/** Idempotent; resets the state. */
 export async function closeDb(): Promise<void> {
   const s = g.__mcpwDb
   if (!s) return

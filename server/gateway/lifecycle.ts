@@ -2,7 +2,7 @@ import type { Gateway } from './index'
 import { SHUTDOWN_DRAIN_MS } from './config'
 import { registerLifecycleHandler } from '../utils/user-lifecycle'
 
-/** Sperren/Löschen schließt Pool, Limiter, Katalog (Worker-Stopp hängt in 1.3 an `extra`). */
+/** Banning/deleting closes pool, limiter, catalog (worker stop hangs off `extra` in 1.3). */
 export function registerGatewayLifecycle(gw: Gateway, extra: { stopWorker?: (userId: string, o: { purge: boolean }) => Promise<void> } = {}) {
   registerLifecycleHandler({
     name: 'gateway',
@@ -12,8 +12,8 @@ export function registerGatewayLifecycle(gw: Gateway, extra: { stopWorker?: (use
 }
 
 /**
- * SIGTERM-Handler (idempotent). Nitro ruft `close` bei SIGTERM nicht verlässlich (Spike 1.2.7 offen,
- * wartet auf das 0a-Artefakt); deshalb ein eigener Handler: drain -> Pool schließen -> Stats flushen -> `closeDb`.
+ * SIGTERM handler (idempotent). Nitro does not reliably call `close` on SIGTERM (spike 1.2.7 open,
+ * waiting for the 0a artifact); hence a handler of our own: drain -> close pool -> flush stats -> `closeDb`.
  */
 export function installShutdown(gw: Gateway, closeDb: () => Promise<void>, onDraining: () => void, exit: (code: number) => void = process.exit) {
   let started = false

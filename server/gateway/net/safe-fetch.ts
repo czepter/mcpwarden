@@ -9,11 +9,11 @@ export class UpstreamRedirectError extends Error {
 }
 
 export type SafeFetchOptions = {
-  /** Frisch lesen (kurzer Cache liegt beim Aufrufer, <= 10 s). */
+  /** Read fresh (the short cache lives with the caller, <= 10 s). */
   getAllow?: () => AllowList | Promise<AllowList>
   resolver?: Resolver
   connectTimeoutMs?: number
-  /** Wird bei 429/503 mit Retry-After aufgerufen (Sekunden). */
+  /** Called on 429/503 with Retry-After (seconds). */
   onRetryAfter?: (host: string, seconds: number) => void
 }
 
@@ -22,7 +22,7 @@ function findCause<T extends Error>(e: unknown, pred: (x: unknown) => x is T): T
 }
 
 /**
- * fetch für ALLE SDK-Client-Transporte: Literal-Prüfung vor jedem Request, DNS-Prüfung am
+ * fetch for ALL SDK client transports: literal check before every request, DNS check at the
  * Connect-Lookup (undici-Dispatcher), `redirect: 'error'`.
  */
 export function createSafeFetch(opts: SafeFetchOptions = {}): FetchLike & { close: () => Promise<void> } {

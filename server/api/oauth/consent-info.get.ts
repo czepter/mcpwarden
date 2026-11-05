@@ -11,7 +11,7 @@ import { apiError, noStore } from '../../utils/api'
 import { getConfig } from '../../utils/config'
 import { requireUser } from '../../utils/session'
 
-// Daten fuer die Consent-Seite (Frontend). Query = die vom Plugin angehaengte signierte Query, unveraendert.
+// Data for the consent page (frontend). Query = the signed query appended by the plugin, unchanged.
 export default defineEventHandler(async (event): Promise<ConsentInfo> => {
   await requireUser(event)
   noStore(event)

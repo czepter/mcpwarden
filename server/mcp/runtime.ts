@@ -1,9 +1,9 @@
 /**
- * Verdrahtung des /mcp-Gateways (Plan 0b, Aufgaben 6 bis 8): Token-Verifizierung gegen die JWKS des
- * eigenen Providers (in-process, ohne HTTP), Drizzle-AccessStore, Dummy-Upstream und Stream-Steuerung.
- * Spike-Entscheidung Aufgabe 6: `verifyJwsAccessToken` aus `better-auth/oauth2` (Signatur, Issuer, Audience,
- * Ablauf) mit eigener Antwort aus errors.ts, weil der Guard vor dem MCP-Handler zusaetzliche Pruefungen braucht
- * (`requireMcpAuth` bietet dafuer keinen Haken).
+ * Wiring of the /mcp gateway (plan 0b, tasks 6 to 8): token verification against the JWKS of the
+ * own provider (in-process, without HTTP), Drizzle AccessStore, dummy upstream and stream control.
+ * Spike decision task 6: `verifyJwsAccessToken` from `better-auth/oauth2` (signature, issuer, audience,
+ * expiry) with our own response from errors.ts, because the guard needs additional checks before the MCP handler
+ * (`requireMcpAuth` offers no hook for that).
  */
 import { verifyJwsAccessToken } from 'better-auth/oauth2'
 import { createDrizzleAccessStore } from '../auth/access-store'
@@ -23,8 +23,8 @@ type Gateway = ReturnType<typeof createGateway>
 const g = globalThis as typeof globalThis & { __mcpwGateway?: Promise<Gateway> }
 
 /**
- * Die echte Tool-Quelle ist das Gateway (Upstreams des Nutzers). Der Dummy-Upstream aus 0b bleibt nur für die
- * Integrationstests erreichbar (`MCPW_DUMMY_UPSTREAM=1`), nie im Produktionsbetrieb.
+ * The real tool source is the gateway (the user's upstreams). The dummy upstream from 0b stays reachable only for the
+ * integration tests (`MCPW_DUMMY_UPSTREAM=1`), never in production.
  */
 async function toolSource(): Promise<ToolSource> {
   const real = (await getRuntime()).gw.toolSource
@@ -50,7 +50,7 @@ async function create(): Promise<Gateway> {
         jwksCacheKey,
         verifyOptions: { issuer, audience: resource },
       })
-      // DPoP-gebundene Tokens (cnf) nicht als Bearer akzeptieren.
+      // Do not accept DPoP-bound tokens (cnf) as Bearer.
       if (p.cnf !== undefined || typeof p.sub !== 'string' || typeof p.exp !== 'number') return null
       const clientId = typeof p.client_id === 'string' ? p.client_id : typeof p.azp === 'string' ? p.azp : null
       if (!clientId) return null
@@ -59,7 +59,7 @@ async function create(): Promise<Gateway> {
         audience: Array.isArray(p.aud) ? p.aud : p.aud ? [p.aud] : [], expiresAt: p.exp, jti: typeof p.jti === 'string' ? p.jti : undefined,
       }
     } catch {
-      return null // Signatur, Issuer, Audience, Ablauf oder opakes Token: einheitlich ungueltig
+      return null // signature, issuer, audience, expiry or opaque token: uniformly invalid
     }
   }
 

@@ -1,11 +1,11 @@
-/** Freigabe-Policy für stdio (Plan 4.2 / 1.3.5): genau ein Grund, der erste Treffer gewinnt. */
+/** Approval policy for stdio (plan 4.2 / 1.3.5): exactly one reason, the first match wins. */
 export type StdioReason = 'instance_disabled' | 'not_granted' | 'no_capabilities' | 'supervisor_unreachable' | 'image_slim'
 export type StdioPolicyInput = {
   imageTarget: 'slim' | 'full'
   instanceEnabled: boolean
   role: 'admin' | 'user'
   stdioAllowed: boolean
-  /** `undefined` = Supervisor nicht erreichbar. */
+  /** `undefined` = supervisor unreachable. */
   supervisor?: { canSwitchUser: boolean }
 }
 export function stdioPolicy(i: StdioPolicyInput): { allowed: true } | { allowed: false, reason: StdioReason } {

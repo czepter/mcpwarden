@@ -6,7 +6,7 @@ import type { UpstreamRow } from './types'
 
 export type PoolEntry = { client: Client, version: number, transport: Connected['transport'], lastUsed: number, inflight: number, retries: number }
 
-export class PoolLimitError extends Error { constructor() { super('Verbindungslimit erreicht') } }
+export class PoolLimitError extends Error { constructor() { super('connection limit reached') } }
 
 export class Pool {
   private entries = new Map<string, PoolEntry>()
@@ -15,9 +15,9 @@ export class Pool {
   private now() { return (this.o.now ?? Date.now)() }
   private key = (userId: string, id: string) => `${userId}:${id}`
 
-  /** Schlüssel enthält die Nutzer-ID: Isolation durch Konstruktion. */
+  /** The key contains the user ID: isolation by construction. */
   async get(up: UpstreamRow, signal?: AbortSignal, owner: string = up.userId): Promise<PoolEntry> {
-    // `owner` kommt aus dem Auth-Kontext; eine fremde Zeile wird nie verbunden (und nie mit fremdem Schlüssel entschlüsselt)
+    // `owner` comes from the auth context; a foreign row is never connected (and never decrypted with a foreign key)
     if (owner !== up.userId) throw new Error('upstream owner mismatch')
     const k = this.key(up.userId, up.id)
     const hit = this.entries.get(k)

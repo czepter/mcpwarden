@@ -1,7 +1,7 @@
 /**
- * Token-Pruefung und Zugriffs-Check pro /mcp-Request (Plan 0b, Aufgabe 6).
- * Alle Abhaengigkeiten sind injiziert: der Token-Verifizierer (Better Auth, 0a) und der DB-Zugriff
- * (`AccessStore`). Kein Caching: Widerruf wirkt beim naechsten Request.
+ * Token verification and access check per /mcp request (plan 0b, task 6).
+ * All dependencies are injected: the token verifier (Better Auth, 0a) and the DB access
+ * (`AccessStore`). No caching: revocation takes effect on the next request.
  */
 import { timingSafeEqual } from 'node:crypto'
 import { forbidden, unauthorized } from '../mcp/errors'
@@ -11,19 +11,19 @@ import { hashPat, isPatToken } from './pat'
 import { SCOPE_MCP_TOOLS } from './scopes'
 import { sanitizeClientName } from './dcr-policy'
 
-/** Geprueftes JWT (Signatur, Issuer, Ablauf bereits durch den Verifizierer). `null` = ungueltig. */
+/** Verified JWT (signature, issuer, expiry already checked by the verifier). `null` = invalid. */
 export type VerifiedAccessToken = {
   userId: string
   clientId: string
   scopes: string[]
   audience: string[]
-  expiresAt: number // Unix-Sekunden
+  expiresAt: number // Unix seconds
   jti?: string
 }
 
 export type UserRow = { id: string, role: 'admin' | 'user', banned: boolean, banExpires: Date | null }
 
-/** Ergebnis der (zusammengefassten) indizierten Abfrage fuer OAuth-Tokens. */
+/** Result of the (combined) indexed query for OAuth tokens. */
 export type OAuthAccessRow = {
   user: UserRow | null
   client: { id: string, name: string | null, disabled: boolean } | null
@@ -61,7 +61,7 @@ export function isBanned(user: UserRow, now: Date): boolean {
   return user.banned && (user.banExpires === null || user.banExpires.getTime() > now.getTime())
 }
 
-/** Eine Drosselung je Prozess; `last_used_at` hoechstens einmal pro Minute und Schluessel. */
+/** One throttle per process; `last_used_at` at most once per minute and key. */
 export function createAccessGuard(deps: GuardDeps) {
   const now = deps.now ?? (() => new Date())
   const allowTouch = createUseThrottle(() => now().getTime())
@@ -87,13 +87,13 @@ export function createAccessGuard(deps: GuardDeps) {
     if (!claims) return denied('invalid or expired token')
     if (!claims.audience.includes(deps.resource)) return denied('token audience does not match this resource')
 
-    // Zusatzpruefung bei jedem Request, auch fuer noch gueltige JWT.
+    // Additional check on every request, also for still-valid JWTs.
     const t = now()
     const row = await deps.store.loadOAuthAccess(claims.userId, claims.clientId, t)
     if (!row.user || isBanned(row.user, t)) return denied('user is not active')
     if (!row.client || row.client.disabled) return denied('client is not active')
     if (!row.hasConsent) return denied('consent was revoked')
-    // Immer pruefen (offline_access ist Pflicht-Scope, R15): ohne lebenden Refresh-Token kein Zugriff.
+    // Always check (offline_access is a required scope, R15): without a live refresh token no access.
     if (!row.hasLiveRefreshToken) return denied('refresh token was revoked')
 
     if (!claims.scopes.includes(SCOPE_MCP_TOOLS)) return forbidden(deps.resourceMetadataUrl)
@@ -105,7 +105,7 @@ export function createAccessGuard(deps: GuardDeps) {
     }
   }
 
-  /** `AuthContext` bei Erfolg, sonst die fertige 401/403-Antwort. Fehler der Abhaengigkeiten fuehren zu 500 ohne Details. */
+  /** `AuthContext` on success, otherwise the finished 401/403 response. Errors of the dependencies lead to 500 without details. */
   return async function authenticateMcpRequest(request: Request): Promise<{ ctx: AuthContext, token: string } | Response> {
     const token = bearerToken(request)
     if (!token) return unauthorized(deps.resourceMetadataUrl)

@@ -8,7 +8,7 @@ export default defineEventHandler(async (event) => {
   await requireAdmin(event)
   const id = getRouterParam(event, 'id') ?? ''
   const db = await getDb()
-  const users = await consentUserIds(db, id) // vor dem Loeschen (Consents verschwinden per Cascade)
+  const users = await consentUserIds(db, id) // before deleting (consents disappear via cascade)
   if (!(await deleteClient(db, id))) throw apiError(404, 'not_found', 'client not found')
   await Promise.all(users.map(closeUserStreams))
   return noContent(event)

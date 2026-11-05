@@ -53,12 +53,12 @@ export type Auth = Awaited<ReturnType<typeof create>>
 
 const g = globalThis as typeof globalThis & { __mcpwAuth?: Promise<Auth> }
 
-/** Memoisiert; wartet auf getDb() (also auf die Migration). */
+/** Memoized; waits for getDb() (i.e. for the migration). */
 export function getAuth(): Promise<Auth> {
   return (g.__mcpwAuth ??= create())
 }
 
-/** Setzt die memoisierte Instanz zurueck (Shutdown). */
+/** Resets the memoized instance (shutdown). */
 export function resetAuth(): void {
   g.__mcpwAuth = undefined
 }

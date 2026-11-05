@@ -7,12 +7,12 @@ export type StatusSnapshot = { status: HealthStatus, reason: string | null, next
 
 export type FailureKind = 'connect' | 'timeout' | 'http5xx' | 'auth'
 
-/** Persistenz-/Audit-Schnittstelle (Implementierung hängt an der DB aus 0a). */
+/** Persistence/audit interface (the implementation hangs off the DB from 0a). */
 export interface StatusSink {
   onChange(upstreamId: string, userId: string, next: StatusSnapshot, prev: HealthStatus): void | Promise<void>
 }
 
-/** Reine Berechnung (Plan Abschnitt 6). */
+/** Pure computation (plan section 6). */
 export function computeStatus(i: {
   enabled: boolean, setup: SetupState, authExpired: boolean, everOk: boolean,
   breaker: Breaker, consecutiveFailures: number, lastFailure?: string,
@@ -31,7 +31,7 @@ export function computeStatus(i: {
 
 const LABEL: Record<FailureKind, string> = { connect: 'Verbindungsfehler', timeout: 'Timeout', http5xx: 'Serverfehler', auth: 'Anmeldung abgelehnt' }
 
-/** Gesundheit eines Upstreams: Breaker + Zähler; Persistenz nur bei Statuswechsel. */
+/** Health of an upstream: breaker + counters; persistence only on a status change. */
 export class UpstreamHealth {
   readonly breaker: Breaker
   private fails = 0
@@ -61,7 +61,7 @@ export class UpstreamHealth {
   }
   success() { this.fails = 0; this.everOk = true; this.authExpired = false; this.last = undefined; this.breaker.success(); this.publish() }
   failure(kind: FailureKind) {
-    if (kind === 'auth') { this.authExpired = true; this.breaker.cancelProbe() } // Auth zählt nicht als Ausfall, gibt aber den Half-open-Zugang frei
+    if (kind === 'auth') { this.authExpired = true; this.breaker.cancelProbe() } // Auth does not count as an outage, but releases the half-open admission
     else { this.fails++; this.last = kind; this.breaker.failure() }
     this.publish()
   }

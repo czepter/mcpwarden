@@ -1,9 +1,9 @@
 import { MailError, type Mailer } from './types'
 
-/** Ohne SMTP_URL: nichts wird versendet, `enabled` ist false, Mailfunktionen bleiben aus. */
+/** Without SMTP_URL: nothing is sent, `enabled` is false, mail features stay off. */
 export function createNoopMailer(): Mailer {
   return {
     enabled: false,
-    sendMail: () => Promise.reject(new MailError('disabled', 'Mailversand ist nicht konfiguriert')),
+    sendMail: () => Promise.reject(new MailError('disabled', 'Mail sending is not configured')),
   }
 }

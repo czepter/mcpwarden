@@ -16,7 +16,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm lint
       - run: pnpm typecheck
-      - name: Schema und Migrationen passen zum Stand
+      - name: Schema and migrations match the state
         run: |
           pnpm db:schema
           pnpm db:generate
@@ -58,13 +58,13 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
       - run: node scripts/build-supervisor.mjs
-      # test:int enthaelt Vertrags-Test (echte Antworten gegen die zod-Schemas) und Full-Stack-Smoke als Vitest-Suite
+      # test:int contains the contract test (real responses against the zod schemas) and the full-stack smoke as a Vitest suite
       - run: pnpm test:int
-      # derselbe Smoke als Skript gegen eine frische Instanz des gebauten Artefakts (PGlite bzw. Postgres je Matrix-Eintrag)
-      - name: Full-Stack-Smoke (Skript)
+      # the same smoke as a script against a fresh instance of the built artifact (PGlite or Postgres per matrix entry)
+      - name: Full-stack smoke (script)
         run: pnpm smoke
 
-  # Supervisor im Linux-Container (UID-Wechsel, nur SETUID/SETGID/CHOWN, `id -G`, Härtung); Docker ist auf dem Runner vorhanden
+  # Supervisor in a Linux container (UID switch, only SETUID/SETGID/CHOWN, `id -G`, hardening); Docker is available on the runner
   container:
     runs-on: ubuntu-latest
     steps:
@@ -78,8 +78,8 @@ jobs:
       - run: node scripts/build-supervisor.mjs
       - run: pnpm test:container
 
-  # Beispiel-Compose (Ziel full) baut und startet frisch: Full-Stack-Smoke (Registrierung, Einladung, PAT, OAuth+PKCE, /mcp über Fake-Upstream,
-  # Isolation, Widerruf), Neustart, sauberes Ende
+  # Example compose (target full) builds and starts fresh: full-stack smoke (registration, invitation, PAT, OAuth+PKCE, /mcp via fake upstream,
+  # isolation, revocation), restart, clean shutdown
   compose-smoke:
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -93,7 +93,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm test:compose
 
-  # Ziel slim (nur Web-App): baut, startet ohne Capabilities, stdio ist fest gesperrt (image_slim)
+  # Target slim (web app only): builds, starts without capabilities, stdio is fixed off (image_slim)
   slim-smoke:
     runs-on: ubuntu-latest
     timeout-minutes: 20

@@ -1,18 +1,18 @@
-# Beispiel-Compose. Werte kommen aus .env (`pnpm env:init` erzeugt sie) oder `--env-file`.
-# Der Supervisor läuft als root mit genau drei Capabilities (UID-Wechsel für stdio-Worker, Besitzer setzen) und startet die
-# Web-App unter UID 10001 ohne jede Capability. no-new-privileges verhindert Rechtegewinn über exec (setuid() bleibt möglich).
+# Example compose file. Values come from .env (`pnpm env:init` creates it) or `--env-file`.
+# The supervisor runs as root with exactly three capabilities (UID switch for stdio workers, setting owners) and starts the
+# web app under UID 10001 without any capability. no-new-privileges prevents privilege gain via exec (setuid() remains possible).
 services:
   mcpwarden:
     build:
       context: .
-      target: full # `slim`: ohne stdio, ohne Capabilities (cap_add entfernen)
-      # Nur für Umgebungen mit eigener CA/Proxy (Basis-Image mit CA); der Standard ändert nichts.
+      target: full # `slim`: without stdio, without capabilities (remove cap_add)
+      # Only for environments with their own CA/proxy (base image with CA); the default changes nothing.
       args:
         NODE_IMAGE: ${NODE_IMAGE:-node:24-bookworm-slim}
     image: mcpwarden:full
     init: true
     restart: unless-stopped
-    stop_grace_period: 40s # 30 s Drain + Reserve
+    stop_grace_period: 40s # 30 s drain + reserve
     cap_drop: [ALL]
     cap_add: [SETUID, SETGID, CHOWN]
     security_opt:
@@ -20,24 +20,24 @@ services:
     ports:
       - "${PORT:-3000}:3000"
     environment:
-      BASE_URL: ${BASE_URL:?BASE_URL setzen (https, außer localhost)}
+      BASE_URL: ${BASE_URL:?set BASE_URL (https, except localhost)}
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?BETTER_AUTH_SECRET setzen (pnpm env:init)}
       MASTER_KEY: ${MASTER_KEY:?MASTER_KEY setzen (pnpm env:init)}
       DATABASE_URL: ${DATABASE_URL:-}
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-}
       STDIO_MODE: ${STDIO_MODE:-auto}
       TRUST_PROXY: ${TRUST_PROXY:-false}
-      # Optional: Mailversand (leer = aus). SMTP_URL ist geheim (Zugangsdaten URL-kodiert), MAIL_FROM Pflicht, wenn SMTP_URL gesetzt ist.
+      # Optional: mail sending (empty = off). SMTP_URL is secret (credentials URL-encoded), MAIL_FROM is required when SMTP_URL is set.
       SMTP_URL: ${SMTP_URL:-}
       MAIL_FROM: ${MAIL_FROM:-}
       MAIL_NOTIFY_WINDOW_MIN: ${MAIL_NOTIFY_WINDOW_MIN:-}
     volumes:
       - data:/data
-    # Beispiel-Grenzen (Containerebene, zusätzlich zu den Grenzen je Worker):
+    # Example limits (container level, in addition to the per-worker limits):
     # pids_limit: 512
     # mem_limit: 1g
 
-  # Optional: Postgres statt eingebettetem PGlite (`docker compose --profile pg up`, DATABASE_URL entsprechend setzen)
+  # Optional: Postgres instead of embedded PGlite (`docker compose --profile pg up`, set DATABASE_URL accordingly)
   postgres:
     profiles: [pg]
     image: postgres:17

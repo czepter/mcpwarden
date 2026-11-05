@@ -1,11 +1,11 @@
 #!/bin/sh
-# Legt eine lokale .env aus .env.example an, mit frischen Zufallswerten.
-# Überschreibt eine vorhandene .env nie.
+# Creates a local .env from .env.example, with fresh random values.
+# Never overwrites an existing .env.
 set -eu
 umask 077
 cd "$(dirname "$0")/.."
 if [ -e .env ]; then
-  echo ".env existiert bereits, nichts getan."
+  echo ".env already exists, nothing done."
   exit 0
 fi
 tmp=$(mktemp .env.XXXXXX)
@@ -17,4 +17,4 @@ sed -e "s|^BETTER_AUTH_SECRET=.*|BETTER_AUTH_SECRET=$secret|" \
     .env.example > "$tmp"
 chmod 600 "$tmp"
 mv "$tmp" .env
-echo ".env angelegt."
+echo ".env created."

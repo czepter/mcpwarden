@@ -6,8 +6,8 @@ import { getMailer } from '../mail'
 import { noStore } from '../utils/api'
 
 /**
- * Oeffentlich (Login-Seite braucht es vor der Anmeldung). Verraet nur, ob Mailfunktionen aktiv sind
- * und ob die Registrierung ohne Einladung offen ist (genau dann, wenn noch kein Nutzer existiert).
+ * Public (the login page needs it before sign-in). Reveals only whether mail features are active
+ * and whether registration without an invitation is open (exactly when no user exists yet).
  */
 export default defineEventHandler(async (event): Promise<PublicConfig> => {
   noStore(event)

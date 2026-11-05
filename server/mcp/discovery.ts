@@ -1,7 +1,7 @@
 /**
- * URLs und Origin-Pruefung fuer /mcp (Plan 0b, Aufgabe 2 und 7). Die Discovery-Dokumente selbst liefert das
- * Plugin (routes/.well-known/[...path].ts reicht durch).
- * URLs kommen immer aus BASE_URL, nie aus Host- oder X-Forwarded-Headern.
+ * URLs and origin check for /mcp (plan 0b, tasks 2 and 7). The discovery documents themselves are served by the
+ * plugin (routes/.well-known/[...path].ts passes through).
+ * URLs always come from BASE_URL, never from Host or X-Forwarded headers.
  */
 import { hostHeaderValidationResponse, originValidationResponse } from '@modelcontextprotocol/server'
 
@@ -14,9 +14,9 @@ export function resourceMetadataUrl(baseUrl: URL): string {
 }
 
 /**
- * Origin-Pruefung (Gate Schritt a). Der SDK-Helfer vergleicht nur Hostnamen (ohne Port); fehlender
- * `Origin` (CLI-Clients) passiert. Zusaetzlich Host-Header gegen den Host aus BASE_URL (DNS-Rebinding).
- * Liefert eine 403-Antwort oder `undefined`.
+ * Origin check (gate step a). The SDK helper compares only hostnames (without port); a missing
+ * `Origin` (CLI clients) passes. Additionally the Host header against the host from BASE_URL (DNS rebinding).
+ * Returns a 403 response or `undefined`.
  */
 export function checkOrigin(request: Request, cfg: { baseUrl: URL, allowedOrigins: string[] }): Response | undefined {
   const hostnames = new Set<string>([cfg.baseUrl.hostname])

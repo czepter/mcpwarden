@@ -1,15 +1,15 @@
-/** Auth-Kontext pro /mcp-Request (Plan 0b, Abschnitt 10). Wird vom Gate erzeugt, im SDK als `authInfo.extra` gefuehrt. */
+/** Auth context per /mcp request (plan 0b, section 10). Created by the gate, carried in the SDK as `authInfo.extra`. */
 import type { AuthInfo } from '@modelcontextprotocol/server'
 
 export type AuthContext = {
-  userId: string // user.id aus Better Auth (Text); Basis jeder Query (Mandantentrennung)
+  userId: string // user.id from Better Auth (text); basis of every query (tenant isolation)
   role: 'admin' | 'user'
   tokenType: 'oauth' | 'pat'
-  tokenId: string // oauth: jti bzw. Client/Nutzer-Referenz, pat: PAT-ID
+  tokenId: string // oauth: jti or client/user reference, pat: PAT ID
   clientId: string | null // oauth: client_id, pat: null
-  clientName: string | null // untrusted, gekuerzt
+  clientName: string | null // untrusted, truncated
   scopes: string[]
-  expiresAt: number | null // Unix-Sekunden; PAT: null
+  expiresAt: number | null // Unix seconds; PAT: null
   resource: string // BASE_URL + '/mcp'
 }
 

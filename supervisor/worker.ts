@@ -1,6 +1,6 @@
 /**
- * Worker pro Nutzer. Kennt weder MCP noch das SDK: leitet Zeilen (opake JSON-RPC-Strings) zwischen
- * Datenverbindung (fd 3) und stdin/stdout der Kindprozesse weiter. Läuft unter der vom Supervisor vergebenen UID.
+ * Worker per user. Knows neither MCP nor the SDK: forwards lines (opaque JSON-RPC strings) between the
+ * data connection (fd 3) and stdin/stdout of the child processes. Runs under the UID assigned by the supervisor.
  */
 import { spawn, type ChildProcess } from 'node:child_process'
 import { existsSync, lstatSync, mkdirSync, realpathSync, writeSync } from 'node:fs'
@@ -10,14 +10,14 @@ import { encodeFrame, FrameError, FrameReader, MAX_DATA_FRAME, type FromWorker, 
 
 const MAX_LINE = MAX_DATA_FRAME - 1024
 const STDERR_TAIL = 8 * 1024
-// kill(-1) nur mit eigener UID (setzt der Supervisor nur nach erfolgreichem UID-Wechsel)
+// kill(-1) only with its own UID (set by the supervisor only after a successful UID switch)
 const ISOLATED = process.env.WORKER_ISOLATED === '1'
-const ROOT = process.cwd() // = DATA_DIR/stdio/<uid>, gesetzt vom Supervisor
+const ROOT = process.cwd() // = DATA_DIR/stdio/<uid>, set by the supervisor
 const MAX_CHILDREN = Number(process.env.WORKER_MAX_CHILDREN ?? 5)
 const IDLE_MS = Number(process.env.WORKER_IDLE_MIN ?? 10) * 60_000
-// ulimit -u gilt je UID (alle Prozesse und Threads): ohne eigene UID (kein ISOLATED) würde es die Web-App/den Host-Nutzer mitbegrenzen
+// ulimit -u applies per UID (all processes and threads): without its own UID (no ISOLATED) it would also limit the web app/the host user
 const CHILD_NPROC = ISOLATED ? Number(process.env.WORKER_CHILD_NPROC ?? 128) : 0
-// Weitere Grenzen je Kindprozess (0 = aus): virtueller Speicher (MB), CPU-Sekunden, größte Datei (MB). Best effort.
+// Further limits per child process (0 = off): virtual memory (MB), CPU seconds, largest file (MB). Best effort.
 const CHILD_VMEM_MB = Number(process.env.WORKER_CHILD_VMEM_MB ?? 0)
 const CHILD_CPU_S = Number(process.env.WORKER_CHILD_CPU_S ?? 0)
 const CHILD_FSIZE_MB = Number(process.env.WORKER_CHILD_FSIZE_MB ?? 1024)
@@ -30,7 +30,7 @@ let idleTimer: NodeJS.Timeout | undefined
 
 const send = (m: FromWorker) => {
   if (sock.destroyed) return
-  // Backpressure: Kindprozess-stdout wird pausiert, wenn die Verbindung voll ist (siehe unten)
+  // Backpressure: child process stdout is paused when the connection is full (see below)
   return sock.write(encodeFrame(m))
 }
 
@@ -41,19 +41,19 @@ function touch() {
 
 let stopping = false
 /**
- * Beenden. Der Supervisor hat kein CAP_KILL und kann den Worker nicht signalisieren; er schließt stattdessen fd 4
- * (siehe unten). Zum Schluss `kill(-1, SIGKILL)`: erledigt alle verbliebenen Prozesse dieser UID (auch abgespaltene).
+ * Termination. The supervisor has no CAP_KILL and cannot signal the worker; instead it closes fd 4
+ * (see below). Finally `kill(-1, SIGKILL)`: takes care of all remaining processes of this UID (also detached ones).
  */
 function shutdown(code: number) {
   if (stopping) return
   stopping = true
   for (const c of children.values()) killChild(c.proc, 'SIGTERM')
   const finish = () => {
-    // kill(-1) nur mit eigener UID (WORKER_ISOLATED=1, vom Supervisor nur nach erfolgreichem UID-Wechsel gesetzt).
-    // Sonst träfe es Web-App, Supervisor und alles andere dieser UID: dann nur die Prozessgruppen der Kinder.
+    // kill(-1) only with its own UID (WORKER_ISOLATED=1, set by the supervisor only after a successful UID switch).
+    // Otherwise it would hit the web app, supervisor and everything else of this UID: then only the process groups of the children.
     if (ISOLATED) {
-      // kill(-1) trifft auch den Worker selbst: ein regulärer Abschluss wird vorher gemeldet (sonst zählt er als Absturz)
-      if (code === 0) { try { writeSync(4, 'bye\n') } catch { /* Steuerkanal schon zu */ } }
+      // kill(-1) also hits the worker itself: a regular exit is reported beforehand (otherwise it counts as a crash)
+      if (code === 0) { try { writeSync(4, 'bye\n') } catch { /* control channel already closed */ } }
       try { process.kill(-1, 'SIGKILL') } catch { /* nichts übrig */ }
     } else {
       for (const c of children.values()) killChild(c.proc, 'SIGKILL')
@@ -64,13 +64,13 @@ function shutdown(code: number) {
   setTimeout(finish, children.size ? 800 : 0)
 }
 
-/** cwd muss unter ROOT liegen (Verteidigung in der Tiefe; der Worker hat ohnehin nur Nutzerrechte). */
+/** cwd must lie under ROOT (defense in depth; the worker only has user rights anyway). */
 function resolveCwd(rel?: string): string {
   if (!rel) { mkdirSync(join(ROOT, 'home'), { recursive: true }); return join(ROOT, 'home') }
   const n = normalize(rel)
   if (isAbsolute(n) || n === '..' || n.startsWith(`..${sep}`)) throw new Error('cwd escapes user directory')
   const rootReal = realpathSync(ROOT)
-  // Segment für Segment: erst prüfen (realpath/lstat), dann anlegen. Kein rekursives mkdir über einen Symlink hinaus.
+  // Segment by segment: first check (realpath/lstat), then create. No recursive mkdir across a symlink.
   let cur = rootReal
   for (const seg of n.split(sep).filter(x => x && x !== '.')) {
     const next = join(cur, seg)
@@ -86,12 +86,12 @@ function resolveCwd(rel?: string): string {
   return cur
 }
 
-/** Kinder laufen in eigener Prozessgruppe (detached); ohne UID-Isolation wird gezielt die Gruppe beendet, nie `kill(-1)`. */
+/** Children run in their own process group (detached); without UID isolation the group is ended specifically, never `kill(-1)`. */
 function killChild(proc: ChildProcess, sig: NodeJS.Signals) {
   try {
     if (ISOLATED || !proc.pid) proc.kill(sig)
     else process.kill(-proc.pid, sig)
-  } catch { try { proc.kill(sig) } catch { /* schon beendet */ } }
+  } catch { try { proc.kill(sig) } catch { /* already ended */ } }
 }
 
 function startChild(m: Extract<ToWorker, { t: 'start' }>) {
@@ -102,9 +102,9 @@ function startChild(m: Extract<ToWorker, { t: 'start' }>) {
     mkdirSync(join(ROOT, 'home'), { recursive: true }); mkdirSync(join(ROOT, 'tmp'), { recursive: true })
     cwd = resolveCwd(m.cwdRel)
   } catch (e) { return send({ t: 'error', childId: m.childId, code: 'bad_cwd', message: (e as Error).message }) }
-  // Saubere Env: nur Übergebenes + PATH/HOME/TMPDIR (nichts vom Worker/Supervisor).
+  // Clean env: only what was passed + PATH/HOME/TMPDIR (nothing from the worker/supervisor).
   const env = { ...m.env, PATH: process.env.PATH ?? '/usr/local/bin:/usr/bin:/bin', HOME: join(ROOT, 'home'), TMPDIR: join(ROOT, 'tmp') }
-  // ulimit -u: Prozesse pro UID (best effort, Fork-Bomben-Schutz; bash, da dash die Option nicht kennt)
+  // ulimit -u: processes per UID (best effort, fork-bomb protection; bash, since dash does not know the option)
   const proc = spawn(existsSync('/bin/bash') ? '/bin/bash' : '/bin/sh', ['-c', LIMIT_SCRIPT, String(CHILD_NPROC), String(CHILD_VMEM_MB * 1024), String(CHILD_CPU_S), String(CHILD_FSIZE_MB * 1024), m.command, ...m.args], { cwd, env, stdio: ['pipe', 'pipe', 'pipe'], detached: true })
   const entry = { proc, stderr: '', buf: '' }
   children.set(m.childId, entry)
@@ -143,12 +143,12 @@ sock.on('data', (chunk) => {
     } else if (raw.t === 'stop') { const c = children.get(raw.childId); if (c) killChild(c.proc, 'SIGTERM') }
   }
 })
-// EOF der Web-App (Verbindung zu) => alles beenden. Umgekehrt sieht die Web-App beim Worker-Exit EOF.
+// EOF from the web app (connection closed) => end everything. Conversely the web app sees EOF when the worker exits.
 sock.on('end', () => shutdown(0))
 sock.on('close', () => shutdown(0))
 sock.on('error', () => shutdown(1))
 process.on('SIGTERM', () => shutdown(0))
-// Steuerkanal zum Supervisor (fd 4): Daten ('stop') oder EOF (Supervisor weg/stopWorker) beenden den Worker.
+// Control channel to the supervisor (fd 4): data ('stop') or EOF (supervisor gone/stopWorker) ends the worker.
 const ctl = new net.Socket({ fd: 4, readable: true, writable: false })
 ctl.on('data', () => shutdown(0)); ctl.on('end', () => shutdown(0)); ctl.on('close', () => shutdown(0)); ctl.on('error', () => shutdown(0))
 send({ t: 'ready' })

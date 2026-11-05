@@ -1,4 +1,4 @@
-/** Drizzle-Implementierung des `AccessStore` (Plan 0b, Aufgabe 6): eine indizierte Abfrage je Request. */
+/** Drizzle implementation of the `AccessStore` (plan 0b, task 6): one indexed query per request. */
 import { and, eq, sql } from 'drizzle-orm'
 import type { Db } from '../db'
 import { oauthClient, oauthConsent, oauthRefreshToken, user } from '../db/schema/auth'
@@ -16,7 +16,7 @@ export function createDrizzleAccessStore(db: Db): AccessStore {
         id: user.id, role: user.role, banned: user.banned, banExpires: user.banExpires,
         cId: oauthClient.clientId, cName: oauthClient.name, cDisabled: oauthClient.disabled,
         hasConsent: sql<boolean>`exists (select 1 from ${oauthConsent} where ${oauthConsent.userId} = ${user.id} and ${oauthConsent.clientId} = ${clientId})`,
-        // Lebender Refresh-Token: nicht widerrufen, nicht abgelaufen (Review B11; offline_access ist Pflicht-Scope).
+        // Live refresh token: not revoked, not expired (review B11; offline_access is a required scope).
         hasLiveRefreshToken: sql<boolean>`exists (select 1 from ${oauthRefreshToken} where ${oauthRefreshToken.userId} = ${user.id} and ${oauthRefreshToken.clientId} = ${clientId} and ${oauthRefreshToken.revoked} is null and ${oauthRefreshToken.expiresAt} > ${now})`,
       }).from(user).leftJoin(oauthClient, eq(oauthClient.clientId, clientId)).where(eq(user.id, userId)).limit(1)
       if (!row) return { user: null, client: null, hasConsent: false, hasLiveRefreshToken: false }

@@ -1,8 +1,8 @@
 /**
- * Brücke zwischen den Widerrufspfaden (Admin-/Self-Service-Routen) und dem /mcp-Gateway (Plan 0b, Aufgabe 8).
- * Das Gateway registriert sich beim Start von routes/mcp.ts; ohne Gateway (z. B. Tests ohne /mcp-Traffic)
- * sind die Aufrufe wirkungslos. Phase 1 ruft `notifyToolsChanged` beim Toggle und `closeUserStreams` aus
- * `user-lifecycle.ts` beim Sperren/Loeschen.
+ * Bridge between the revocation paths (admin/self-service routes) and the /mcp gateway (plan 0b, task 8).
+ * The gateway registers itself at the start of routes/mcp.ts; without a gateway (e.g. tests without /mcp traffic)
+ * the calls have no effect. Phase 1 calls `notifyToolsChanged` on toggle and `closeUserStreams` from
+ * `user-lifecycle.ts` on ban/delete.
  */
 export interface StreamControl {
   notifyToolsChanged(userId: string): void
@@ -15,12 +15,12 @@ export function bindStreamControl(c: StreamControl | undefined): void {
   g.__mcpwStreams = c
 }
 
-/** Meldet `tools/list_changed` an die offenen Listen-Streams genau dieses Nutzers. */
+/** Reports `tools/list_changed` to exactly this user's open list streams. */
 export function notifyToolsChanged(userId: string): void {
   g.__mcpwStreams?.notifyToolsChanged(userId)
 }
 
-/** Beendet alle offenen Streams/Anfragen dieses Nutzers (Widerruf, Sperre). */
+/** Closes all open streams/requests of this user (revocation, ban). */
 export async function closeUserStreams(userId: string): Promise<void> {
   await g.__mcpwStreams?.closeUserStreams(userId)
 }

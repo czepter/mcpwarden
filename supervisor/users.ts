@@ -5,7 +5,7 @@ import { USER_ID_RE } from './protocol'
 export const UID_MIN = 20000
 export const UID_MAX = 59999
 
-/** Dateisystem-Operationen als Schnittstelle, damit Unit-Tests ohne Root laufen. */
+/** File-system operations as an interface so that unit tests run without root. */
 export type FsOps = {
   chown: (fh: fsp.FileHandle, uid: number, gid: number) => Promise<void>
 }
@@ -17,9 +17,9 @@ export class UnsafeDirectory extends Error {}
 type MapFile = { v: 1, next: number, users: Record<string, number> }
 
 /**
- * `user_id -> uid` gehört dem Supervisor (root-eigen, 0600). Fortlaufende Vergabe, nie Wiederverwendung
- * (auch nicht nach Löschen), niemals 0 oder die Web-UID (Bereich 20000-59999). Die Datei wird beim Laden geprüft:
- * Besitzer = Supervisor-UID, Modus ohne Gruppen-/Other-Rechte, jede UID im Bereich, nicht reserviert, ohne Duplikate.
+ * `user_id -> uid` belongs to the supervisor (root-owned, 0600). Sequential assignment, never reuse
+ * (not even after deletion), never 0 or the web UID (range 20000-59999). The file is checked on load:
+ * owner = supervisor UID, mode without group/other permissions, every UID in range, not reserved, no duplicates.
  */
 export class UidMap {
   private users = new Map<string, number>()
@@ -69,7 +69,7 @@ export class UidMap {
     try { await dir.sync() } finally { await dir.close() }
   }
 
-  /** Serialisiert (ein Supervisor-Prozess); liefert dieselbe UID für dieselbe userId. */
+  /** Serialized (one supervisor process); returns the same UID for the same userId. */
   uidFor(userId: string): Promise<number> {
     if (!USER_ID_RE.test(userId)) return Promise.reject(new Error('invalid userId'))
     const run = this.chain.then(async () => {
@@ -91,9 +91,9 @@ export class UidMap {
 }
 
 /**
- * Prüft und richtet die Verzeichnisse unter DATA_DIR ein, ohne Symlinks zu folgen: lstat (kein Symlink, Verzeichnis),
- * dann Besitzer/Modus über einen O_NOFOLLOW|O_DIRECTORY-Deskriptor (fstat/fchmod/fchown). `dataDir` und `stdio` müssen
- * dem Supervisor gehören (fremder Besitzer => Abbruch; zu offener Modus => fchmod). `pgdata` gehört der Web-UID.
+ * Checks and sets up the directories under DATA_DIR without following symlinks: lstat (no symlink, directory),
+ * then owner/mode via an O_NOFOLLOW|O_DIRECTORY descriptor (fstat/fchmod/fchown). `dataDir` and `stdio` must
+ * belong to the supervisor (foreign owner => abort; mode too open => fchmod). `pgdata` belongs to the web UID.
  */
 export async function prepareDataDirs(o: { dataDir: string, rootUid: number, webUid: number, webGid: number, stdio: boolean, chown?: boolean }) {
   const open = async (path: string, mode: number): Promise<fsp.FileHandle> => {
@@ -115,20 +115,20 @@ export async function prepareDataDirs(o: { dataDir: string, rootUid: number, web
   const pgdata = join(o.dataDir, 'pgdata')
   const pst = await fsp.lstat(pgdata).catch(() => null)
   if (pst && (pst.isSymbolicLink() || !pst.isDirectory())) throw new UnsafeDirectory(`${pgdata} is not a plain directory`)
-  // Web-eigenes pgdata (0700) kann der Supervisor ohne DAC_OVERRIDE nicht öffnen und fasst es nicht an: lstat genügt.
+  // The web-owned pgdata (0700) cannot be opened by the supervisor without DAC_OVERRIDE and is not touched: lstat suffices.
   if (pst && pst.uid === o.webUid) return
   if (pst && pst.uid !== o.rootUid) {
-    throw new UnsafeDirectory(`DATA_DIR/pgdata gehört uid ${pst.uid}, erwartet ${o.webUid}. Einmalig: chown -R ${o.webUid}:${o.webGid} <Volume>/pgdata`)
+    throw new UnsafeDirectory(`DATA_DIR/pgdata belongs to uid ${pst.uid}, expected ${o.webUid}. One-time: chown -R ${o.webUid}:${o.webGid} <Volume>/pgdata`)
   }
-  const fh = await open(pgdata, 0o700) // neu oder root-eigen (Einrichtung unterbrochen): über den O_NOFOLLOW-Deskriptor übergeben
+  const fh = await open(pgdata, 0o700) // new or root-owned (setup interrupted): hand over via the O_NOFOLLOW descriptor
   try {
     if (o.chown) { await fh.chmod(0o700); await fh.chown(o.webUid, o.webGid) }
   } finally { await fh.close() }
 }
 
 /**
- * Legt `stdio/<uid>` an (exklusives mkdir). Existiert es: lstat muss Verzeichnis (kein Symlink) sein, Besitzer root oder uid.
- * Besitzer/Modus werden über den O_NOFOLLOW-Deskriptor gesetzt. Danach fasst Root nichts mehr innerhalb an.
+ * Creates `stdio/<uid>` (exclusive mkdir). If it exists: lstat must be a directory (no symlink), owner root or uid.
+ * Owner/mode are set via the O_NOFOLLOW descriptor. Afterwards root touches nothing inside anymore.
  */
 export async function ensureUserDir(dataDir: string, uid: number, fs: FsOps = realFs, rootUid = 0): Promise<string> {
   const dir = join(dataDir, 'stdio', String(uid))
@@ -136,15 +136,15 @@ export async function ensureUserDir(dataDir: string, uid: number, fs: FsOps = re
     if ((e as NodeJS.ErrnoException).code !== 'EEXIST') throw e
     const st = await fsp.lstat(dir)
     if (st.isSymbolicLink() || !st.isDirectory()) throw new UnsafeDirectory('user dir is not a plain directory')
-    if (st.uid === uid) return dir // fertig eingerichtet: root fasst (und kann ohne DAC_OVERRIDE) nichts darin anfassen
+    if (st.uid === uid) return dir // fully set up: root touches nothing inside (and cannot without DAC_OVERRIDE)
     if (st.uid !== rootUid) throw new UnsafeDirectory('user dir has unexpected owner')
-    // root-eigen: Einrichtung war unterbrochen, unten über den O_NOFOLLOW-Deskriptor abschließen
+    // root-owned: setup was interrupted, finish below via the O_NOFOLLOW descriptor
   }
   const fh = await fsp.open(dir, C.O_RDONLY | C.O_DIRECTORY | C.O_NOFOLLOW)
   try {
     const st = await fh.stat()
     if (!st.isDirectory()) throw new UnsafeDirectory('not a directory')
-    // Reihenfolge: erst chmod (solange root Eigentümer ist; ohne CAP_FOWNER danach nicht mehr möglich), dann chown.
+    // Order: chmod first (while root is the owner; afterwards impossible without CAP_FOWNER), then chown.
     await fh.chmod(0o700)
     await fs.chown(fh, uid, uid)
   } finally { await fh.close() }
@@ -152,14 +152,14 @@ export async function ensureUserDir(dataDir: string, uid: number, fs: FsOps = re
 }
 
 /**
- * Löschen erst nach Stopp aller Prozesse dieser UID. Root kann das 0700-Nutzerverzeichnis ohne CAP_DAC_OVERRIDE nicht
- * betreten und folgt nie Nutzerpfaden: der Inhalt wird per `find -delete` unter der Nutzer-UID entfernt
- * (`find` folgt keinen Symlinks), danach `rmdir` des leeren Verzeichnisses im root-eigenen Elternverzeichnis.
+ * Deleting only after all processes of this UID have stopped. Root cannot enter the 0700 user directory without CAP_DAC_OVERRIDE
+ * and never follows user paths: the content is removed via `find -delete` under the user UID
+ * (`find` follows no symlinks), afterwards `rmdir` of the empty directory in the root-owned parent directory.
  */
 export async function purgeUserDir(dataDir: string, uid: number, runAsUser: (argv: string[]) => Promise<number>) {
   const dir = join(dataDir, 'stdio', String(uid))
   if (!(await fsp.lstat(dir).catch(() => null))) return
-  // Verzeichnisse ohne Rechte (chmod 000) würden find -delete scheitern lassen: erst u+rwx (unter der Nutzer-UID, ohne Symlinks zu folgen)
+  // Directories without permissions (chmod 000) would make find -delete fail: first u+rwx (under the user UID, without following symlinks)
   await runAsUser(['find', dir, '-type', 'd', '-exec', 'chmod', 'u+rwx', '{}', ';'])
   const code = await runAsUser(['find', dir, '-mindepth', '1', '-delete'])
   if (code !== 0) throw new Error(`purge failed (find exit ${code})`)

@@ -1,8 +1,8 @@
 /**
- * /mcp-Handler (Plan 0b, Aufgaben 7 und 8): Gate-Reihenfolge Origin -> Methode -> Token ->
- * Zusatzpruefung (im Guard) -> MCP-Handler. Ein SDK-Handler je Nutzer, damit `list_changed` nur
- * die Streams dieses Nutzers erreicht. Zustandslos (`legacy: 'stateless'`), keine Session-ID.
- * Framework-frei: nimmt eine Web-`Request`, gibt eine Web-`Response` zurueck.
+ * /mcp handler (plan 0b, tasks 7 and 8): gate order Origin -> method -> token ->
+ * additional check (in the guard) -> MCP handler. One SDK handler per user so that `list_changed` reaches
+ * only this user's streams. Stateless (`legacy: 'stateless'`), no session ID.
+ * Framework-free: takes a web `Request`, returns a web `Response`.
  */
 import { createMcpHandler, Server, type McpHttpHandler } from '@modelcontextprotocol/server'
 import { getAuthContext, toAuthInfo, type AuthContext } from '../auth/auth-context'
@@ -14,18 +14,18 @@ export type GatewayDeps = {
   authenticate(request: Request): Promise<{ ctx: AuthContext, token: string } | Response>
   tools: ToolSource
   cfg: { baseUrl: URL, allowedOrigins: string[] }
-  /** Handler eines Nutzers ohne Aktivitaet so lange offen halten (Standard 10 min). */
+  /** Keep a user's handler open this long without activity (default 10 min). */
   idleMs?: number
-  /** Hoechstlaufzeit eines subscriptions/listen-Streams (Standard = Access-Token-TTL 300 s). */
+  /** Maximum run time of a subscriptions/listen stream (default = access token TTL 300 s). */
   streamMaxMs?: number
   maxSubscriptions?: number
-  /** Hoechstgroesse des Request-Bodys in Bytes (Standard 4 MiB); groessere Anfragen bekommen 413, ohne dass sie ganz gelesen werden. */
+  /** Maximum size of the request body in bytes (default 4 MiB); larger requests get 413 without being read in full. */
   maxBodyBytes?: number
 }
 
 export const MAX_BODY_BYTES = 4 * 1024 * 1024
 
-/** Liest den Body hoechstens bis `max` Bytes (auch ohne Content-Length) und liefert einen neuen, lesbaren Request; sonst 413. */
+/** Reads the body up to at most `max` bytes (even without Content-Length) and returns a new, readable request; otherwise 413. */
 async function boundedRequest(request: Request, max: number): Promise<Request | Response> {
   const declared = Number(request.headers.get('content-length'))
   if (Number.isFinite(declared) && declared > max) return payloadTooLarge()
@@ -65,7 +65,7 @@ async function isListen(request: Request): Promise<boolean> {
   }
 }
 
-/** Schliesst den Antwort-Stream nach `maxMs` (Client verbindet neu und durchlaeuft das Gate erneut). */
+/** Closes the response stream after `maxMs` (the client reconnects and passes the gate again). */
 function limitStream(res: Response, maxMs: number): Response {
   if (!res.body) return res
   const reader = res.body.getReader()
@@ -108,20 +108,20 @@ export function createGateway(deps: GatewayDeps) {
     async handle(request: Request): Promise<Response> {
       const rejected = checkOrigin(request, deps.cfg) // (a) Origin
       if (rejected) return rejected
-      if (request.method !== 'POST') return methodNotAllowed() // (b) Methode
-      const auth = await deps.authenticate(request) // (c)+(d) Token und Zusatzpruefung
+      if (request.method !== 'POST') return methodNotAllowed() // (b) method
+      const auth = await deps.authenticate(request) // (c)+(d) token and additional check
       if (auth instanceof Response) return auth
-      const req = await boundedRequest(request, deps.maxBodyBytes ?? MAX_BODY_BYTES) // erst nach dem Token: Unbekannte lassen wir nichts hochladen
+      const req = await boundedRequest(request, deps.maxBodyBytes ?? MAX_BODY_BYTES) // only after the token: we let unknown callers upload nothing
       if (req instanceof Response) return req
-      const listen = await isListen(req) // vor fetch: danach ist der Body verbraucht
+      const listen = await isListen(req) // before fetch: afterwards the body is consumed
       const res = await handlerFor(auth.ctx.userId).fetch(req, { authInfo: toAuthInfo(auth.ctx, auth.token) }) // (e)
       return listen ? limitStream(res, deps.streamMaxMs ?? 300_000) : res
     },
-    /** Meldet `tools/list_changed` an die offenen Listen-Streams genau dieses Nutzers. */
+    /** Reports `tools/list_changed` to exactly this user's open list streams. */
     notifyToolsChanged(userId: string): void {
       handlers.get(userId)?.handler.notify.toolsChanged()
     },
-    /** Beendet alle offenen Streams/Anfragen eines Nutzers (Widerruf, Sperre). */
+    /** Closes all open streams/requests of a user (revocation, ban). */
     async closeUserStreams(userId: string): Promise<void> {
       const e = handlers.get(userId)
       handlers.delete(userId)

@@ -1,12 +1,12 @@
 import { BlockList, isIP, isIPv4, isIPv6 } from 'node:net'
 import { lookup as dnsLookup } from 'node:dns/promises'
 
-/** Einheitliche, bewusst unspezifische Meldung: nennt nie die interne Adresse. */
+/** Uniform, deliberately unspecific message: never names the internal address. */
 export const SSRF_MESSAGE = 'Ziel nicht erlaubt (SSRF-Schutz)'
 
 export class SsrfBlockedError extends Error {
   readonly code = 'ssrf_blocked'
-  /** Nur fürs Log, nie für API-Antworten. */
+  /** For the log only, never for API responses. */
   readonly detail: string
   constructor(detail: string) {
     super(SSRF_MESSAGE)
@@ -25,9 +25,9 @@ const V6_BLOCKED = [
   '2001::/32' /* Teredo */, '64:ff9b:1::/48' /* NAT64 lokal */, '::ffff:0:0:0/96' /* SIIT IPv4-translated */,
 ]
 
-/** Cloud-Metadatendienste: nie über Hostnamen-Ausnahmen, nur über ausdrücklich genannte Einzeladresse. */
+/** Cloud metadata services: never via hostname exceptions, only via an explicitly named single address. */
 const METADATA = ['169.254.169.254', '169.254.170.2', '100.100.100.200', '192.0.0.192', 'fd00:ec2::254']
-/** Link-Local: nie über Hostnamen-Ausnahmen, nur über CIDR/IP. */
+/** Link-local: never via hostname exceptions, only via CIDR/IP. */
 const LINK_LOCAL = netList(['169.254.0.0/16'], ['fe80::/10'])
 
 function netList(v4: string[], v6: string[]) {
@@ -38,10 +38,10 @@ function netList(v4: string[], v6: string[]) {
 }
 const blocked = netList(V4_BLOCKED, V6_BLOCKED)
 
-/** IPv6-Text -> 16 Bytes (kennt `::` und eingebettetes Dotted-v4). */
+/** IPv6 text -> 16 bytes (understands `::` and embedded dotted v4). */
 export function ipv6ToBytes(input: string): Uint8Array | null {
   let s = input.toLowerCase()
-  if (s.includes('%')) return null // Zonen nie erlauben
+  if (s.includes('%')) return null // never allow zones
   let tail: number[] = []
   const m = /(\d+\.\d+\.\d+\.\d+)$/.exec(s)
   if (m) {
@@ -74,7 +74,7 @@ const sameV6 = (a: string, b: string) => {
 }
 const v4From = (b: Uint8Array, o: number) => `${b[o]}.${b[o + 1]}.${b[o + 2]}.${b[o + 3]}`
 
-/** Liefert alle Adressen, die geprüft werden müssen (die Adresse selbst plus eingebettete v4). */
+/** Returns all addresses that must be checked (the address itself plus embedded v4). */
 function expand(ip: string): string[] | null {
   if (isIPv4(ip)) return [ip]
   if (!isIPv6(ip)) return null
@@ -83,23 +83,23 @@ function expand(ip: string): string[] | null {
   const out = [ip]
   const zeros = (from: number, to: number) => b.slice(from, to).every(x => x === 0)
   if (zeros(0, 10) && b[10] === 255 && b[11] === 255) out.push(v4From(b, 12)) // ::ffff:0:0/96
-  else if (zeros(0, 12) && !zeros(12, 16)) out.push(v4From(b, 12)) // veraltetes IPv4-kompatibel ::a.b.c.d
+  else if (zeros(0, 12) && !zeros(12, 16)) out.push(v4From(b, 12)) // deprecated IPv4-compatible ::a.b.c.d
   if (b[0] === 0 && b[1] === 0x64 && b[2] === 0xff && b[3] === 0x9b && zeros(4, 12)) out.push(v4From(b, 12)) // 64:ff9b::/96
   if (b[0] === 0x20 && b[1] === 0x02) out.push(v4From(b, 2)) // 6to4 2002::/16
   return out
 }
 
-/** true = Adresse liegt in einem gesperrten Netz (ohne Ausnahmeliste). */
+/** true = address lies in a blocked network (without the exception list). */
 export function isBlockedAddress(ip: string): boolean {
   const all = expand(ip)
-  if (!all) return true // nicht parsebar -> sperren
+  if (!all) return true // not parseable -> block
   return all.some(a => blocked.check(a, isIPv4(a) ? 'ipv4' : 'ipv6'))
 }
 
-/** Admin-Ausnahmeliste `ssrf.allow`: CIDR oder genauer Hostname. */
+/** Admin exception list `ssrf.allow`: CIDR or exact hostname. */
 const HOSTNAME_RE = /^(?=.{1,253}$)([a-z0-9_]([a-z0-9_-]{0,61}[a-z0-9_])?)(\.[a-z0-9_]([a-z0-9_-]{0,61}[a-z0-9_])?)*$/
 
-/** Prüft einen Eintrag der Ausnahmeliste; liefert den Fehlertext oder null. Für Admin-Routen und Konfiguration. */
+/** Validates an entry of the exception list; returns the error text or null. For admin routes and configuration. */
 export function validateAllowEntry(raw: string): string | null {
   const e = raw.trim().toLowerCase()
   if (!e) return 'leerer Eintrag'
@@ -119,9 +119,9 @@ export function validateAllowEntry(raw: string): string | null {
 
 export class AllowList {
   private cidrs = new BlockList()
-  private exact = new BlockList() // nur Einzeladressen (Literal oder /32, /128): einzig gültig für Metadatendienste
+  private exact = new BlockList() // single addresses only (literal or /32, /128): the only valid kind for metadata services
   private hosts = new Set<string>()
-  /** Ungültige Einträge werfen sofort (Konfigurationszeit); `AllowList.lenient` überspringt sie für den Laufzeitpfad. */
+  /** Invalid entries throw immediately (configuration time); `AllowList.lenient` skips them for the runtime path. */
   constructor(entries: readonly string[] = []) {
     for (const raw of entries) {
       const bad = validateAllowEntry(raw)
@@ -129,7 +129,7 @@ export class AllowList {
       this.add(raw.trim().toLowerCase())
     }
   }
-  /** Laufzeit: ein kaputter gespeicherter Eintrag darf nicht jeden Abruf lahmlegen; er öffnet nichts. */
+  /** Runtime: a broken stored entry must not cripple every fetch; it opens nothing. */
   static lenient(entries: readonly string[] = []): { list: AllowList, invalid: string[] } {
     const ok: string[] = []
     const invalid: string[] = []
@@ -150,7 +150,7 @@ export class AllowList {
       this.exact.addAddress(e, v)
     } else this.hosts.add(e)
   }
-  /** Ausdrücklich als Einzeladresse freigegeben (kein Bereich). */
+  /** Explicitly allowed as a single address (no range). */
   allowsExactAddress(ip: string) {
     const all = expand(ip) ?? []
     return all.length > 0 && all.every(a => this.exact.check(a, isIPv4(a) ? 'ipv4' : 'ipv6'))
@@ -163,7 +163,7 @@ export class AllowList {
 }
 export const emptyAllow = new AllowList()
 
-/** Prüft die Adressen eines Hostnamens (oder ein Literal). Wirft SsrfBlockedError. */
+/** Checks the addresses of a hostname (or a literal). Throws SsrfBlockedError. */
 export function assertAddressesAllowed(host: string, addresses: string[], allow: AllowList = emptyAllow) {
   if (addresses.length === 0) throw new SsrfBlockedError(`no address for ${host}`)
   const hostAllowed = allow.allowsHost(host)
@@ -171,16 +171,16 @@ export function assertAddressesAllowed(host: string, addresses: string[], allow:
     if (!isBlockedAddress(a)) continue
     const all = expand(a) ?? [a]
     if (all.some(x => METADATA.includes(x.toLowerCase()) || (isIPv6(x) && sameV6(x, 'fd00:ec2::254')))) {
-      // Metadaten: nur eine ausdrücklich genannte Einzeladresse öffnet sie, nie Hostname oder Bereich
+      // Metadata: only an explicitly named single address opens it, never a hostname or range
       if (allow.allowsExactAddress(a)) continue
     } else if (all.some(x => LINK_LOCAL.check(x, isIPv4(x) ? 'ipv4' : 'ipv6'))) {
-      if (allow.allowsAddress(a)) continue // CIDR/IP, aber nie per Hostname
+      if (allow.allowsAddress(a)) continue // CIDR/IP, but never via hostname
     } else if (hostAllowed || allow.allowsAddress(a)) continue
     throw new SsrfBlockedError(`${host} -> ${a}`)
   }
 }
 
-/** Literal-Prüfung vor dem Connect + Schema/Userinfo. Kein DNS. */
+/** Literal check before connecting + scheme/userinfo. No DNS. */
 export function assertUrlAllowed(input: string | URL, allow: AllowList = emptyAllow): URL {
   let url: URL
   try { url = new URL(input) } catch { throw new SsrfBlockedError('invalid url') }
@@ -195,8 +195,8 @@ export type Resolver = (host: string) => Promise<string[]>
 export const systemResolver: Resolver = async host => (await dnsLookup(host, { all: true, verbatim: true })).map(r => r.address)
 
 /**
- * `lookup`-Funktion für undici `connect.lookup`: die geprüfte Antwort ist zugleich die, mit der
- * verbunden wird (keine zweite Auflösung -> kein Rebinding-Fenster).
+ * `lookup` function for undici `connect.lookup`: the checked answer is also the one used
+ * to connect (no second resolution -> no rebinding window).
  */
 export function createSafeLookup(getAllow: () => AllowList | Promise<AllowList>, resolver: Resolver = systemResolver) {
   return (hostname: string, options: { all?: boolean, family?: number }, cb: (err: Error | null, address?: unknown, family?: number) => void) => {
@@ -211,7 +211,7 @@ export function createSafeLookup(getAllow: () => AllowList | Promise<AllowList>,
   }
 }
 
-/** Frühe Rückmeldung beim Speichern/Testen: nur Komfort, nie Schutz. */
+/** Early feedback when saving/testing: convenience only, never protection. */
 export async function precheckUrl(input: string, allow: AllowList, resolver: Resolver = systemResolver) {
   const url = assertUrlAllowed(input, allow)
   const host = url.hostname.replace(/^\[|\]$/g, '')

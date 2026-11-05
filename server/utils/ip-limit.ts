@@ -1,4 +1,4 @@
-/** Einfaches Fenster-Limit je (Schlüssel, IP) im Speicher; für öffentliche Routen ohne Better-Auth-Limiter. */
+/** Simple window limit per (key, IP) in memory; for public routes without the Better Auth limiter. */
 const hits = new Map<string, { n: number, resetAt: number }>()
 
 export function allowRequest(ip: string, bucket: string, max: number, windowMs: number, now = Date.now()): boolean {

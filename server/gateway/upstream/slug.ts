@@ -1,4 +1,4 @@
-/** Slug-Regeln und Namespacing `<slug>__<tool>` (P0-1, O2). Kein `_` im Slug, damit `__` eindeutig trennt. */
+/** Slug rules and namespacing `<slug>__<tool>` (P0-1, O2). No `_` in the slug so that `__` separates unambiguously. */
 export const SLUG_RE = /^[a-z0-9][a-z0-9-]{0,31}$/
 export const RESERVED_SLUGS = new Set(['mcpwarden'])
 export const SEPARATOR = '__'
@@ -14,7 +14,7 @@ export function suggestSlug(name: string): string {
 
 export const namespaced = (slug: string, tool: string) => `${slug}${SEPARATOR}${tool}`
 
-/** Trennt am ersten `__`. Der Slug muss gültig sein, das Tool darf `__` enthalten. */
+/** Splits at the first `__`. The slug must be valid, the tool may contain `__`. */
 export function parseToolName(full: string): { slug: string, tool: string } | null {
   const i = full.indexOf(SEPARATOR)
   if (i <= 0) return null

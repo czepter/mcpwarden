@@ -5,8 +5,8 @@ export function escapeHtml(s: string): string {
 }
 
 /**
- * Links entstehen ausschliesslich aus BASE_URL (Origin) plus festem Pfad. Nutzereingaben (Host-Header, redirectTo)
- * fliessen nie ein. Das Token steht im Fragment: es landet in keinem Access-Log und keinem Referer.
+ * Links are built exclusively from BASE_URL (origin) plus a fixed path. User input (Host header, redirectTo)
+ * never flows in. The token is in the fragment: it ends up in no access log and no referer.
  */
 export function buildLink(baseUrl: string | URL, path: string, fragment?: Record<string, string>): string {
   const u = new URL(path, new URL(baseUrl).origin)
@@ -36,7 +36,7 @@ export function resetPasswordMail(to: string, baseUrl: string | URL, token: stri
 
 export const INVITE_TTL_DAYS_TEXT = 7
 
-/** Einladung. `link` ist `/invite/<token>` aus BASE_URL (derselbe Link, den der Admin sieht). */
+/** Invitation. `link` is `/invite/<token>` from BASE_URL (the same link the admin sees). */
 export function inviteMail(to: string, link: string): Mail {
   const intro = 'Du wurdest zu mcpwarden eingeladen.'
   const valid = `Der Link ist ${INVITE_TTL_DAYS_TEXT} Tage gültig und nur einmal verwendbar. Registrieren kannst du dich nur mit dieser E-Mail-Adresse.`
@@ -53,8 +53,8 @@ const MAX_NAME = 60
 const MAX_REASON = 200
 
 /**
- * Macht fremden Text (Upstream-Name, statusReason) fuer Mails unbedenklich: Steuer- und Zeilentrenner-Zeichen weg,
- * Leerraum zusammengefasst, URLs, Hostnamen und Adressen entschaerft (keine Links aus Fremdtext), gekuerzt.
+ * Makes foreign text (upstream name, statusReason) harmless for mails: control and line-separator characters removed,
+ * whitespace collapsed, URLs, hostnames and addresses defused (no links from foreign text), truncated.
  */
 export function sanitizeUntrusted(v: string | null | undefined, max: number): string {
   let s = (v ?? '')
@@ -77,7 +77,7 @@ const STATE_TEXT: Record<NotifyState, { subject: string, headline: string }> = {
   healthy: { subject: 'wieder erreichbar', headline: 'ist wieder erreichbar' },
 }
 
-/** Statusmail an den Besitzer: nur Name, Zustand, bereinigter Grund und der Link auf die Upstream-Seite (aus BASE_URL). */
+/** Status mail to the owner: only name, state, sanitized reason and the link to the upstream page (from BASE_URL). */
 export function upstreamStatusMail(to: string, baseUrl: string | URL, up: { id: string, name: string, state: NotifyState, reason: string | null }): Mail {
   const name = sanitizeUntrusted(up.name, MAX_NAME) || 'Upstream'
   const reason = up.state === 'healthy' ? '' : sanitizeUntrusted(up.reason, MAX_REASON)
