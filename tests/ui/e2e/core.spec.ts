@@ -11,8 +11,8 @@ test('Login, Navigation, Einklappen bleibt nach Neuladen, Strg+B', async ({ page
   await expect(page.locator('[data-slot="sidebar"]').first()).toHaveAttribute('data-state', 'collapsed')
   await page.keyboard.press('Control+b')
   await expect(page.locator('[data-slot="sidebar"]').first()).toHaveAttribute('data-state', 'expanded')
-  const w = await page.locator('[data-slot="sidebar-container"]').first().evaluate(e => e.getBoundingClientRect().width)
-  expect(w).toBe(248)
+  const panel = page.locator('[data-sidebar="sidebar"]').first().locator('xpath=..')
+  await expect.poll(() => panel.evaluate(e => e.getBoundingClientRect().width)).toBe(248)
 })
 
 test('falsches Passwort zeigt Fehler, Registrierung ohne Einladung gesperrt', async ({ page }) => {
@@ -60,6 +60,11 @@ test('Consent: unbekannter Client braucht Haekchen, bekannter nicht, ungueltige 
   await expect(allow).toBeEnabled()
   await expect(page.getByText('mcp:tools')).toBeVisible()
   await expect(page.getByText('mcpwarden:admin')).toHaveCount(0)
+  // Auch wenn der Server den Admin-Scope schon anbietet (Phase 2): bis dahin kein Schalter.
+  await page.goto('/consent?client_id=agent-admin&sig=ok')
+  await expect(page.getByRole('heading', { name: 'Dieser Client darf' })).toBeVisible()
+  await expect(page.getByText('mcpwarden:admin')).toHaveCount(0)
+  await expect(page.getByRole('switch')).toHaveCount(0)
   await page.goto('/consent?client_id=claude-code&sig=ok')
   await expect(page.getByRole('checkbox')).toHaveCount(0)
   await expect(page.getByRole('button', { name: 'Zugriff erlauben' })).toBeEnabled()
@@ -153,13 +158,13 @@ test('Secret-Canary: eingegeben, gespeichert, nirgends wieder sichtbar', async (
     expect(await page.content()).not.toContain(canary)
   }
   await page.getByRole('link', { name: 'Upstreams' }).first().click()
-  await page.getByRole('link', { name: /Geheim/ }).click()
+  await page.getByRole('link', { name: /^Geheim/ }).click()
   await page.getByRole('tab', { name: 'Auth' }).click()
   await expect(page.getByText('Gesetzt').first()).toBeVisible()
   expect(await page.getByLabel('Neues Secret').inputValue()).toBe('')
   const stores = await page.evaluate(() => JSON.stringify([localStorage, sessionStorage, document.cookie]))
   expect(stores).not.toContain(canary)
-  expect(bodies.join('')).not.toContain(canary.replace('CANARY-', 'CANARY-')) // Antworten enthalten das Secret nie
+  expect(bodies.join('')).not.toContain(canary) // Antworten enthalten das Secret nie
   expect(logs.join('\n')).not.toContain(canary)
 })
 
@@ -217,7 +222,21 @@ test('Gestrichenes ist nirgends erreichbar (F12)', async ({ page }) => {
     for (const b of banned) expect(text, `${p} ${b}`).not.toMatch(b)
   }
   await page.goto('/settings')
-  await expect(page.getByLabel('Systemfarbschema')).toHaveCount(0)
+  await expect(page.getByRole('radio')).toHaveCount(0)
+  const settings = await page.locator('main, body').first().innerText()
+  expect(settings).not.toMatch(/Farbschema|Dunkel|\bHell\b|\bSystem\b/)
+})
+
+test('Darstellung: Standard "eingeklappt" wirkt, eigenes Umschalten hat Vorrang', async ({ page }) => {
+  await login(page)
+  await page.goto('/settings')
+  await page.getByLabel('Seitenleiste standardmäßig eingeklappt').click()
+  await page.context().clearCookies({ name: 'sidebar_state' })
+  await page.goto('/')
+  await expect(page.locator('[data-slot="sidebar"]').first()).toHaveAttribute('data-state', 'collapsed')
+  await page.getByTestId('collapse').click()
+  await page.reload()
+  await expect(page.locator('[data-slot="sidebar"]').first()).toHaveAttribute('data-state', 'expanded')
 })
 
 test('375 px: Seitenleiste als Off-Canvas, Seite nutzbar', async ({ page }) => {
@@ -239,7 +258,7 @@ test('Auto-Refresh-Auswahl und Formatierung', async ({ page }) => {
 })
 
 test.describe('axe je Seite', () => {
-  const pages = ['/', '/upstreams', '/upstreams/new', '/upstreams/up_1', '/upstreams/up_1/edit', '/upstreams/up_1?tab=tools', '/upstreams/up_1?tab=auth', '/stats', '/audit', '/settings', '/settings/tokens', '/settings/connections', '/admin/users', '/admin/oauth', '/admin/settings', '/upstreams/up_1/approve']
+  const pages = ['/', '/upstreams', '/upstreams/new', '/upstreams/up_1', '/upstreams/up_1/edit', '/upstreams/up_1?tab=tools', '/upstreams/up_1?tab=auth', '/stats', '/audit', '/settings', '/settings/tokens', '/settings/connections', '/admin/users', '/admin/oauth', '/admin/settings', '/upstreams/up_1/approve', '/__styleguide']
   for (const p of pages) {
     test(p, async ({ page }) => {
       await login(page)

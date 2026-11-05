@@ -10,3 +10,5 @@ data/
 .DS_Store
 .mocks-public/
 .output-mock/
+test-results/
+playwright-report/
