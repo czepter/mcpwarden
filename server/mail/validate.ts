@@ -1,10 +1,16 @@
 import { isMailFrom } from '../utils/config'
 import { MailError, type Mail } from './types'
 
-const CTRL = new RegExp('[\\r\\n\\x00\\u2028\\u2029]')
 const ADDR = /^[^\s@<>",;:()[\]\\]+@[^\s@<>",;:()[\]\\]+\.[^\s@<>",;:()[\]\\]+$/
 
-export const hasLineBreak = (v: string) => CTRL.test(v)
+/** CR, LF, NUL sowie U+2028/U+2029 (Zeilentrenner in manchen Parsern). */
+export function hasLineBreak(v: string): boolean {
+  for (let i = 0; i < v.length; i++) {
+    const c = v.charCodeAt(i)
+    if (c === 10 || c === 13 || c === 0 || c === 0x2028 || c === 0x2029) return true
+  }
+  return false
+}
 
 /** Eine einzelne Empfaengeradresse, kein Anzeigename, keine Liste. */
 export const isRecipient = (v: unknown): v is string => typeof v === 'string' && v.length <= 254 && ADDR.test(v)

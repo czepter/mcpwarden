@@ -1,4 +1,4 @@
-import { MailError, type Mail, type Mailer } from './types'
+import type { Mail, MailError, Mailer } from './types'
 import { assertMail } from './validate'
 
 export interface MemoryMailer extends Mailer {
