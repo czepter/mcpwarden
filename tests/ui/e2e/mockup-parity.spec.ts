@@ -110,3 +110,16 @@ test('stdio approval: checklist with icon and text per row, block reasons from t
   await expect(page.getByTestId('stdio-block-reason')).toContainText('ausgeschaltet')
   await axe(page)
 })
+
+test('Password toggle "Anzeigen": hit area 44 px, input group 44 px, icon stays small', async ({ page }) => {
+  await login(page)
+  await page.goto('/settings')
+  const toggle = page.getByRole('button', { name: 'Anzeigen' }).first()
+  const b = (await toggle.boundingBox())!
+  expect(b.width).toBeGreaterThanOrEqual(44)
+  expect(b.height).toBeGreaterThanOrEqual(44)
+  const group = toggle.locator('xpath=ancestor::*[@data-slot="input-group"]')
+  expect((await group.boundingBox())!.height).toBeGreaterThanOrEqual(44)
+  const icon = (await toggle.locator('svg').boundingBox())!
+  expect(icon.width).toBeLessThanOrEqual(18)
+})
