@@ -2,6 +2,7 @@ import { drizzleAdapter } from '@better-auth/drizzle-adapter'
 import { betterAuth } from 'better-auth'
 import { count } from 'drizzle-orm'
 import { getDb } from '../db'
+import { getMailer } from '../mail'
 import { user } from '../db/schema'
 import { getConfig } from '../utils/config'
 import { getRegistrationPolicy, recordClientMeta, seedAllowlist } from './dcr-store'
@@ -17,6 +18,7 @@ function create() {
         secret: cfg.betterAuthSecret,
         allowedOrigins: cfg.allowedOrigins,
         rateLimitEnabled: cfg.rateLimitEnabled,
+        mailer: getMailer(),
         countUsers: async () => (await db.select({ n: count() }).from(user))[0]?.n ?? 0,
         dcr: {
           getPolicy: () => getRegistrationPolicy(db),
