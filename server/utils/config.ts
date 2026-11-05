@@ -22,7 +22,8 @@ function parseMasterKey(raw: string): Buffer | undefined {
   if (/^[0-9a-fA-F]{64}$/.test(raw)) return Buffer.from(raw, 'hex')
   if (/^[A-Za-z0-9+/]{43}=$/.test(raw)) {
     const buf = Buffer.from(raw, 'base64')
-    if (buf.length === 32) return buf
+    // Kanonisch: erneutes Kodieren muss den Eingabestring exakt ergeben (keine gesetzten Restbits).
+    if (buf.length === 32 && buf.toString('base64') === raw) return buf
   }
   return undefined
 }

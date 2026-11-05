@@ -443,7 +443,7 @@ Abnahmeprotokoll: Tabelle Client × Version × Protokollrevision × Ergebnis × 
 | R12: Handler je Nutzer: Speicher/Anzahl bei vielen Nutzern | Ressourcenverbrauch | Leerlauf-Entsorgung, Single-Instance-Ziel (wenige Nutzer); Variante B (Bus-Filter) als Alternative |
 | R13: CIMD wird Standard-Pfad der Clients (DCR "nur Fallback") | CIMD-only-Clients können sich nicht registrieren | Beobachten; `@better-auth/cimd` mit derselben Allowlist als Folgeaufgabe |
 | R14: Consent-Weiterleitung hängt an Details des Better-Auth-Clientplugins; `/login` aus 0a muss die signierte Query erhalten | Aufwand im Frontend | Spike in Aufgabe 1/4, Beispiel der Doku befolgen |
-| R15: Refresh-Token-Prüfung greift nicht bei Clients ohne `offline_access` | Einzel-Token-Widerruf dort nicht sofort | Spike (Aufgabe 6); notfalls `offline_access` erzwingen |
+| R15: Refresh-Token-Prüfung greift nicht bei Clients ohne `offline_access` | Einzel-Token-Widerruf dort nicht sofort | **Entschieden (Teil 1): `offline_access` ist Pflicht-Scope.** Consent bietet immer `openid offline_access mcp:tools` an und verlangt alle; der Guard verlangt bei jedem OAuth-Token einen lebenden Refresh-Token (Tests grün). Offen (Spike, wartet auf 0a): ob das Plugin `offline_access` beim Authorize ergänzen kann; sonst Clients ohne `offline_access` mit klarem Fehler ablehnen und dokumentieren. |
 | R16: Schema-Migrationen aus parallelen Branches kollidieren im Journal | Migrationsfehler | Strikt sequentiell 0000 → 0001 → 0002 → Phase 1; `db:check` in CI |
 
 ## 8. Unverifiziertes (Sammlung)
@@ -487,3 +487,14 @@ Verträge für Phase 1:
 - Frontend-Vertrag: Die Routen und Typen aus 4.1 sind Teil der Schnittstelle. Phase 1 nutzt dieselbe Fehlerform (E19) und ergänzt `shared/api-types.ts`, ohne bestehende 0b-Felder umzubenennen oder zu entfernen. `ConnectionSummary.active` (Statuswort "Aktiv") und `lastUsedAt` bleiben die Quelle für die Clients-Tabelle des Dashboards.
 - Offen für Phase 1: Das Dashboard-Leerzustand-Frontend braucht die MCP-URL (`BASE_URL + '/mcp'`); `ConsentInfo.resource` liefert sie nur im Consent-Fall. Vorschlag: Feld `mcpUrl` in `GET /api/me/capabilities` (Phase 1).
 - Migrationen: 0001 und 0002 stammen aus 0b, Phase 1 beginnt bei 0003.
+
+## 11. Befunde Teil 1 (Umsetzung ohne 0a, 2026-11-04, Node 24.13, `@modelcontextprotocol/server`/`client` 2.4.0)
+
+Belegt durch `tests/unit/mcp-gateway.test.ts` (echter HTTP-Server, SDK-Client v2):
+
+- `createMcpHandler(factory, { legacy: 'stateless' })` bedient 2025-11-25 (Client `mode: 'legacy'`, `initialize`, ohne Session-ID) und 2026-07-28 (`mode: 'auto'`) am selben Endpoint. GET/DELETE beantwortet das Gate mit 405.
+- `authInfo` kommt in der Fabrik als `mctx.authInfo` an (Wert aus `handler.fetch(request, { authInfo })`); der `AuthContext` reist in `authInfo.extra`. Der Abbruch erreicht `ctx.mcpReq.signal`, wenn die Web-`Request` ein `signal` trägt (Schließen des Antwort-Streams); A10 auf dieser Ebene belegt.
+- `handler.notify.toolsChanged()` erreicht nur Listen-Streams des eigenen Handlers; mit einem Handler je Nutzer ist Mandantentrennung belegt (A9). 2025er-Client erhält keinen Push. `client.listen()` läuft nur auf 2026-Verbindungen.
+- Höchstlaufzeit der Listen-Streams wird im Wrapper (`limitStream`) durchgesetzt; `closeUserStreams` = `handler.close()` plus Verwerfen des Handlers. Der Body muss vor `handler.fetch` ausgewertet werden (danach verbraucht).
+- Origin-/Host-Helfer des SDK vergleichen nur Hostnamen (port-agnostisch); fehlender `Origin` passiert, `null`/Unparsbares wird 403.
+- Offen, wartet auf 0a: gestreamte Web-`Response` aus dem h3-Handler im gebauten Nitro, Bindung an `requireMcpAuth`/`verifyAccessTokenRequest`, alle Spike-Fragen aus Aufgabe 1.

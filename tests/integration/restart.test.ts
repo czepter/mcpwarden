@@ -1,5 +1,9 @@
+import { readFileSync } from 'node:fs'
 import { afterAll, beforeAll, expect, it } from 'vitest'
 import { ADMIN, api, countMigrations, createInstance, signUpFirstAdmin, startServer, type TestInstance } from './harness'
+
+// Erwartete Zahl = Eintraege im Drizzle-Journal; wiederholter Start darf sie nicht erhoehen.
+const JOURNAL_ENTRIES: number = JSON.parse(readFileSync('server/db/migrations/meta/_journal.json', 'utf8')).entries.length
 
 let inst: TestInstance
 beforeAll(async () => { inst = await createInstance() })
@@ -10,7 +14,7 @@ it('Neustart (SIGTERM) behaelt Nutzer; Migrationen idempotent (A2, A4)', async (
   await signUpFirstAdmin(s1)
   expect(await s1.stop()).toBe(0)
   expect(s1.logs()).toContain('shutdown: db closed')
-  expect(await countMigrations(inst)).toBe(1)
+  expect(await countMigrations(inst)).toBe(JOURNAL_ENTRIES)
 
   const s2 = await startServer(inst)
   const c = api(s2.url)
@@ -20,5 +24,5 @@ it('Neustart (SIGTERM) behaelt Nutzer; Migrationen idempotent (A2, A4)', async (
   // Registrierung bleibt nach dem Neustart gesperrt.
   expect((await api(s2.url).request('/api/auth/sign-up/email', { body: { name: 'Z', email: 'z@example.com', password: 'z-passwort-1234' } })).status).toBe(403)
   expect(await s2.stop()).toBe(0)
-  expect(await countMigrations(inst)).toBe(1)
+  expect(await countMigrations(inst)).toBe(JOURNAL_ENTRIES)
 })

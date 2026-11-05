@@ -41,3 +41,78 @@ export interface AuthErrorBody {
 
 /** Stabiler Fehlercode (HTTP 403) von `POST /api/auth/sign-up/email`, wenn die Registrierung gesperrt ist. */
 export const REGISTRATION_CLOSED = 'REGISTRATION_CLOSED'
+
+// --- Phase 0b: OAuth-Provider, Consent, PATs, Clients (docs/plans/phase-0b.md, Abschnitt 4.1) ---
+
+export type DcrMode = 'off' | 'allowlist' | 'open'
+export type DcrPolicy = { mode: DcrMode } // Standard 'open'
+
+// Consent: Name, Redirect-URIs, Allowlist-Status, Scopes (ohne Titel, Titel stehen im Frontend)
+// `host` ist bei kind 'app' mit Scheme (z. B. `evil-app://claude.ai`), sonst der reine Host.
+export type ConsentRedirectKind = 'web' | 'loopback' | 'app'
+export type ConsentRedirect = { uri: string, host: string, kind: ConsentRedirectKind, loopback: boolean }
+export type ConsentScope = { name: string, required: boolean }
+export type ConsentInfo = {
+  client: {
+    id: string
+    name: string // untrusted, auf 80 Zeichen gekürzt, nur als Text rendern
+    redirects: ConsentRedirect[]
+    allowlisted: boolean // live gegen die aktuelle Allowlist berechnet
+    registeredAt: string
+    viaDcr: boolean
+  }
+  scopes: ConsentScope[] // 'mcpwarden:admin' nur, wenn aktiviert (in 0b nie)
+  resource: string // BASE_URL + '/mcp'
+  loopback: boolean // mindestens eine Redirect-URI ist Loopback (Zusatzwarnung)
+}
+
+// PATs: Klartext nur in PatCreated.token
+export type PatSummary = {
+  id: string
+  name: string
+  prefix: string // 'mcpw_pat_' + 4 Zeichen
+  createdAt: string
+  lastUsedAt: string | null
+  revokedAt: string | null
+}
+export type PatList = { items: PatSummary[], limit: { max: number, active: number } } // max = 20
+export type PatCreated = PatSummary & { token: string }
+export type PatCreateInput = { name: string } // 1 bis 64 Zeichen
+
+// Clients des Nutzers (UI-Wort "Clients", Pfad bleibt "connections")
+export type ConnectionSummary = {
+  clientId: string
+  name: string
+  scopes: string[]
+  redirectHost: string
+  allowlisted: boolean
+  grantedAt: string
+  lastUsedAt: string | null // letzter Aufruf auf /mcp, gedrosselt auf 1 min genau
+  active: boolean // lastUsedAt höchstens 5 min her; Anzeige "Aktiv"/"Inaktiv" im Frontend
+}
+export type ConnectionList = { items: ConnectionSummary[] }
+
+// Admin: Allowlist und Registrierungen
+export type AllowlistEntry = {
+  id: string
+  label: string
+  namePattern: string
+  redirectPatterns: string[]
+  builtin: boolean
+  createdAt: string
+}
+export type AllowlistInput = Pick<AllowlistEntry, 'label' | 'namePattern' | 'redirectPatterns'>
+export type AllowlistList = { items: AllowlistEntry[] }
+export type OAuthClientAdmin = {
+  id: string
+  name: string
+  redirectUris: string[]
+  createdAt: string
+  lastUsedAt: string | null
+  userCount: number // Anzahl Consents
+  allowlisted: boolean // live berechnet
+  registeredVia: 'dcr' | 'admin'
+  disabled: boolean
+  expiresAt: string | null // createdAt + 30 Tage, solange nie genutzt; sonst null
+}
+export type OAuthClientAdminList = { items: OAuthClientAdmin[] }
