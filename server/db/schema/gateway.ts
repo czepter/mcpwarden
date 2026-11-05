@@ -1,7 +1,6 @@
 import { sql } from 'drizzle-orm'
 import { bigserial, boolean, check, index, integer, jsonb, pgTable, smallint, text, timestamp, unique, uuid, primaryKey } from 'drizzle-orm/pg-core'
-// Beim Merge mit 0a: './auth' (generiertes Better-Auth-Schema) statt des Stubs.
-import { user } from '../../_stubs/db/auth'
+import { user } from './auth'
 
 const userFk = () => text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' })
 

@@ -3,7 +3,7 @@ import { drizzle } from 'drizzle-orm/pglite'
 import { pushSchema } from 'drizzle-kit/api'
 import { sql } from 'drizzle-orm'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import * as auth from '../../server/_stubs/db/auth'
+import * as auth from '../../server/db/schema/auth'
 import * as gw from '../../server/db/schema/gateway'
 
 // Schema-Test ohne Migrationsdateien (Migrationen entstehen erst mit dem 0a-Tooling): Tabellen werden direkt gepusht.
