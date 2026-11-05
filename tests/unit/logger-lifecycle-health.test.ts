@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { createLogger, maskPath, redact } from '../../server/utils/logger'
-import { registerLifecycleHandler, resetLifecycleHandlers, runUserDeleted, runUserDisabled, setLifecycleErrorSink } from '../../server/utils/user-lifecycle'
+import { registerLifecycleHandler, resetLifecycleHandlers, runUserBanned, runUserDeleted, runUserDisabled, setLifecycleErrorSink } from '../../server/utils/user-lifecycle'
 import { liveness, readiness } from '../../server/gateway/health'
 
 describe('logger redaction', () => {
@@ -28,6 +28,16 @@ describe('user lifecycle registry', () => {
     await runUserDeleted('u')
     expect(order).toEqual(['a', 'c', 'del'])
     expect(errs).toEqual(['b'])
+  })
+  it('a ban revokes credentials first, then stops runtime resources; withdrawing stdio (disabled) never revokes credentials', async () => {
+    const order: string[] = []
+    registerLifecycleHandler({ name: 'creds', onUserBanned: () => { order.push('revoke') } })
+    registerLifecycleHandler({ name: 'gw', onUserDisabled: () => { order.push('stop') } })
+    await runUserBanned('u')
+    expect(order).toEqual(['revoke', 'stop'])
+    order.length = 0
+    await runUserDisabled('u')
+    expect(order).toEqual(['stop'])
   })
 })
 

@@ -27,10 +27,10 @@ export interface AuthDeps {
     bind: (inviteId: string, userId: string) => Promise<void>
   }
   /**
-   * Sicherheitsnetz: Sperren/Loeschen ueber irgendeinen Better-Auth-Pfad (auch Direktaufrufe) stoesst dieselbe Aufraeumkette an
+   * Sicherheitsnetz: Sperren/Loeschen ueber irgendeinen Better-Auth-Pfad (auch Direktaufrufe) stoesst dieselbe Aufraeumkette an (Widerruf der Zugangsdaten, dann Laufzeit-Ressourcen)
    * wie die mcpwarden-Admin-Routen (Pool, Worker, PATs, OAuth-Grants). Muss idempotent sein.
    */
-  lifecycle?: { onUserDisabled: (userId: string) => Promise<void> }
+  lifecycle?: { onUserBanned: (userId: string) => Promise<void> }
   /** Optional. Nur ein aktivierter Mailer schaltet Passwort-Reset per Mail ein. */
   mailer?: Mailer
 }
@@ -129,12 +129,12 @@ export function buildAuthOptions(d: AuthDeps) {
         },
         update: {
           after: async (user) => {
-            if (user?.banned === true) await d.lifecycle?.onUserDisabled(user.id as string)
+            if (user?.banned === true) await d.lifecycle?.onUserBanned(user.id as string)
           },
         },
         delete: {
           before: async (user) => {
-            await d.lifecycle?.onUserDisabled(user.id as string)
+            await d.lifecycle?.onUserBanned(user.id as string)
           },
         },
       },

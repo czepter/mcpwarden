@@ -41,6 +41,19 @@ export async function revokePat(db: Db, userId: string, id: string): Promise<boo
   return true
 }
 
+/** Sperre/Loeschen (P0-4): alle PATs des Nutzers widerrufen; Entsperren belebt sie nicht wieder. Idempotent. */
+export async function revokePatsOfUser(db: Db, userId: string): Promise<void> {
+  await db.update(personalAccessToken).set({ revokedAt: new Date() }).where(and(eq(personalAccessToken.userId, userId), isNull(personalAccessToken.revokedAt)))
+}
+
+/** Sperre/Loeschen (P0-4): alle Zustimmungen sowie Access- und Refresh-Tokens des Nutzers entfernen. Idempotent. */
+export async function revokeOAuthGrantsOfUser(db: Db, userId: string): Promise<void> {
+  await db.delete(oauthConsent).where(eq(oauthConsent.userId, userId))
+  await db.delete(oauthAccessToken).where(eq(oauthAccessToken.userId, userId))
+  await db.delete(oauthRefreshToken).where(eq(oauthRefreshToken.userId, userId))
+  await db.delete(oauthConnectionUse).where(eq(oauthConnectionUse.userId, userId))
+}
+
 export async function listConnections(db: Db, userId: string, now: Date): Promise<ConnectionSummary[]> {
   const [consents, uses, allowlist] = await Promise.all([
     db.select({ consent: oauthConsent, client: oauthClient }).from(oauthConsent).innerJoin(oauthClient, eq(oauthClient.clientId, oauthConsent.clientId)).where(eq(oauthConsent.userId, userId)),

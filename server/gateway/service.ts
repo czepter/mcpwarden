@@ -20,7 +20,7 @@ import { LimitReached, SlugTaken, type NewUpstream } from './upstream/repo'
 import type { Runtime } from './runtime'
 import { getMasterKey } from '../utils/master-key'
 import { notifyToolsChanged, closeUserStreams } from '../mcp/notify'
-import { runUserDeleted, runUserDisabled } from '../utils/user-lifecycle'
+import { runUserBanned, runUserDeleted, runUserDisabled } from '../utils/user-lifecycle'
 import type { upstream as upstreamTable } from '../db/schema'
 
 type Who = { id: string, role: 'admin' | 'user' }
@@ -454,7 +454,7 @@ export async function adminBan(rt: Runtime, admin: Who, api: AuthAdminApi, targe
     await guardTarget(rt, admin, targetId, 'ban')
     await api.banUser({ userId: targetId, banReason })
   })
-  await runUserDisabled(targetId)
+  await runUserBanned(targetId)
   await closeUserStreams(targetId)
   await audit(rt.repo, { userId: targetId, actor: `admin:${admin.id}`, action: 'user.ban', targetType: 'user', targetId })
 }
@@ -466,7 +466,7 @@ export async function adminUnban(rt: Runtime, admin: Who, api: AuthAdminApi, tar
 export async function adminDelete(rt: Runtime, admin: Who, api: AuthAdminApi, targetId: string) {
   await serialized(async () => {
     await guardTarget(rt, admin, targetId, 'delete')
-    await runUserDisabled(targetId)
+    await runUserBanned(targetId)
     await closeUserStreams(targetId)
     await api.removeUser({ userId: targetId })
   })

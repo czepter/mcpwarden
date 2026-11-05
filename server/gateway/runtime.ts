@@ -18,6 +18,8 @@ import { createStatusNotifier } from '../mail/notify'
 import { getConfig } from '../utils/config'
 import { notifyToolsChanged } from '../mcp/notify'
 import { registerGatewayLifecycle } from './lifecycle'
+import { registerLifecycleHandler } from '../utils/user-lifecycle'
+import { revokeOAuthGrantsOfUser, revokePatsOfUser } from '../auth/pat-store'
 
 export type Runtime = {
   repo: GatewayRepo
@@ -99,6 +101,11 @@ async function create(): Promise<Runtime> {
       : undefined,
   })
   registerGatewayLifecycle(gw, { stopWorker: async (u, o) => { sessions.get(u)?.close(); sessions.delete(u); await supervisor?.stopWorker(u, o.purge).catch(e => log('stopWorker', e)) } })
+
+  registerLifecycleHandler({
+    name: 'credentials',
+    onUserBanned: async (u) => { await revokePatsOfUser(repo.db, u); await revokeOAuthGrantsOfUser(repo.db, u) },
+  })
 
   const purge = setInterval(() => { void repo.purgeStats(STATS.retentionDays).catch(e => log('stats purge', e)) }, 24 * 3_600_000)
   purge.unref()

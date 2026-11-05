@@ -5,7 +5,7 @@ import { getDb } from '../db'
 import { getMailer } from '../mail'
 import { user } from '../db/schema'
 import { getConfig } from '../utils/config'
-import { runUserDisabled } from '../utils/user-lifecycle'
+import { runUserBanned } from '../utils/user-lifecycle'
 import { GatewayRepo } from '../gateway/upstream/repo'
 import { getRegistrationPolicy, recordClientMeta, seedAllowlist } from './dcr-store'
 import { buildAuthOptions } from './options'
@@ -36,7 +36,7 @@ function create() {
           }
         })(),
         mailer: getMailer(),
-        lifecycle: { onUserDisabled: runUserDisabled },
+        lifecycle: { onUserBanned: runUserBanned },
         countUsers: async () => (await db.select({ n: count() }).from(user))[0]?.n ?? 0,
         dcr: {
           getPolicy: () => getRegistrationPolicy(db),

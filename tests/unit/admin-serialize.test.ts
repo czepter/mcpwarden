@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
 vi.mock('../../server/mcp/notify', () => ({ notifyToolsChanged: vi.fn(), closeUserStreams: vi.fn(async () => {}) }))
-vi.mock('../../server/utils/user-lifecycle', () => ({ runUserDeleted: vi.fn(async () => {}), runUserDisabled: vi.fn(async () => {}) }))
+vi.mock('../../server/utils/user-lifecycle', () => ({ runUserBanned: vi.fn(async () => {}), runUserDeleted: vi.fn(async () => {}), runUserDisabled: vi.fn(async () => {}) }))
 vi.mock('../../server/utils/audit', () => ({ audit: vi.fn(async () => {}) }))
 
 const { adminBan, admitAdminAction } = await import('../../server/gateway/service')

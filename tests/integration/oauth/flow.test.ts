@@ -217,7 +217,7 @@ describe('instant revocation (scenario 7): the still valid JWT is refused on the
     const again = await refresh(srv.url, { clientId: f.clientId, refreshToken: f.refresh })
     expect(again.status).toBeGreaterThanOrEqual(400)
   })
-  it('(c)(f) user banned: OAuth token and PAT are refused at once; unbanned works again', async () => {
+  it('(c)(f) user banned: OAuth token and PAT are refused at once and stay revoked after unban (review M-B); new credentials work', async () => {
     const f = await flowFor(userB)
     const pat = (await userB.request('/api/me/pats', { body: { name: 'ban-test' } })).json.token as string
     expect((await toolsList(f.access)).status).toBe(200)
@@ -226,11 +226,20 @@ describe('instant revocation (scenario 7): the still valid JWT is refused on the
     expect((await toolsList(f.access)).status).toBe(401)
     expect((await toolsList(pat)).status).toBe(401)
     expect((await admin.request(`/api/admin/users/${userBId}/unban`, { body: {} })).status).toBe(204)
-    expect((await toolsList(f.access)).status).toBe(200)
-    expect((await toolsList(pat)).status).toBe(200)
+    // Entsperren erweckt alte Zugangsdaten nicht wieder (Spec P0-4: Sperre beendet OAuth-Tokens und PATs)
+    expect((await toolsList(f.access)).status).toBe(401)
+    expect((await toolsList(pat)).status).toBe(401)
+    expect((await refresh(srv.url, { clientId: f.clientId, refreshToken: f.refresh })).status).toBeGreaterThanOrEqual(400)
     // Sitzung des Nutzers B nach dem Sperren neu aufbauen
     userB = api(srv.url)
     expect((await userB.request('/api/auth/sign-in/email', { body: { email: 'b@example.com', password: 'passwort-b-12345' } })).status).toBe(200)
+    const pats = (await userB.request('/api/me/pats')).json as { items: Array<{ name: string, revokedAt: string | null }> }
+    expect(pats.items.find(p => p.name === 'ban-test')?.revokedAt).not.toBeNull()
+    expect(((await userB.request('/api/me/connections')).json as ConnectionList).items.filter(i => i.clientId === f.clientId)).toHaveLength(0)
+    // neue Zugangsdaten funktionieren
+    const fresh = await userB.request('/api/me/pats', { body: { name: 'after-unban' } })
+    expect((await toolsList(fresh.json.token as string)).status).toBe(200)
+    expect((await toolsList((await flowFor(userB)).access)).status).toBe(200)
   })
 })
 
