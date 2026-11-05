@@ -31,6 +31,17 @@ test('falsches Passwort zeigt Fehler, Registrierung ohne Einladung gesperrt', as
   await expect(page.getByText('nur mit Einladung')).toBeVisible()
 })
 
+test('Login zeigt den Registrieren-Link nur bei public-config.registrationOpen', async ({ page }) => {
+  await prep(page)
+  await page.goto('/login')
+  await expect(page.getByText('nur mit Einladung')).toBeVisible()
+  await expect(page.getByRole('link', { name: 'Registrieren' })).toHaveCount(0)
+  await page.evaluate(() => localStorage.setItem('mockRegistration', 'open'))
+  await page.reload()
+  await expect(page.getByRole('link', { name: 'Registrieren' })).toBeVisible()
+  await expect(page.getByText('nur mit Einladung')).toHaveCount(0)
+})
+
 test('Einladung: gueltig, gebunden, abgelaufen, verbraucht', async ({ page }) => {
   await prep(page)
   await page.goto('/invite/abgelaufen-token')

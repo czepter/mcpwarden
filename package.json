@@ -27,7 +27,9 @@
     "ui:dev": "pnpm ui:prep && VITE_API_MOCK=all nuxt dev",
     "ui:build": "pnpm ui:prep && VITE_API_MOCK=all nuxt build",
     "ui:test": "vitest run --config tests/ui/vitest.config.ts",
-    "ui:e2e": "pnpm ui:build && playwright test --config tests/ui/playwright.config.ts",
+    "ui:e2e:mock": "pnpm ui:build && playwright test --config tests/ui/playwright.config.ts",
+    "ui:e2e:real": "pnpm build && playwright test --config tests/ui/playwright.real.config.ts",
+    "ui:e2e": "pnpm ui:e2e:mock && pnpm ui:e2e:real",
     "ui:check": "pnpm typecheck && pnpm lint && pnpm ui:test",
     "ui:prep": "msw init .mocks-public --no-save",
     "ui:check-build": "node tests/ui/check-no-mock.mjs .output"
