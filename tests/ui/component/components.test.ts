@@ -1,6 +1,7 @@
 import { mount } from '@vue/test-utils'
 import { describe, expect, it, vi } from 'vitest'
 import { defineComponent, h, ref } from 'vue'
+import ConfirmDialog from '~/components/common/ConfirmDialog.vue'
 import OneTimeSecret from '~/components/common/OneTimeSecret.vue'
 import SecretField from '~/components/common/SecretField.vue'
 import StatusBadge from '~/components/common/StatusBadge.vue'
@@ -69,5 +70,26 @@ describe('ToolTable', () => {
     const w = mount(ToolTable, { props: { tools: [tool('a')], save: vi.fn() } })
     expect(w.find('b').exists()).toBe(false)
     expect(w.text()).toContain('<b>x</b>')
+  })
+})
+
+describe('ConfirmDialog', () => {
+  it('meldet confirm, solange die Seite ihr Ziel noch kennt, und schliesst danach', async () => {
+    const target = ref<string | null>('token-1')
+    const seen: Array<string | null> = []
+    const Host = defineComponent({
+      setup: () => () => h(ConfirmDialog, {
+        'open': target.value !== null, 'title': 'Token widerrufen?', 'confirmLabel': 'Widerrufen',
+        'onUpdate:open': (v: boolean) => { if (!v) target.value = null },
+        'onConfirm': () => seen.push(target.value),
+      }),
+    })
+    const w = mount(Host, { attachTo: document.body })
+    await vi.waitFor(() => expect(document.body.querySelector('[role="alertdialog"]')).toBeTruthy())
+    const btn = [...document.body.querySelectorAll('button')].find(b => b.textContent?.trim() === 'Widerrufen')!
+    btn.click()
+    await vi.waitFor(() => expect(target.value).toBeNull())
+    expect(seen).toEqual(['token-1'])
+    w.unmount()
   })
 })

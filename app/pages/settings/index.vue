@@ -27,9 +27,12 @@ const savePw = pw.submit(async (v) => {
 
 const { data: sessions, refresh } = useApi('sessions', authApi.listSessions)
 async function revoke(token: string) { try { await authApi.revokeSession(token); await refresh() } catch { toast.error('Abmelden fehlgeschlagen.') } }
-const collapsedDefault = ref(false)
-onMounted(() => { collapsedDefault.value = localStorage.getItem('sidebarCollapsedDefault') === '1' })
-watch(collapsedDefault, v => localStorage.setItem('sidebarCollapsedDefault', v ? '1' : '0'))
+// Wirkt, solange der Nutzer die Leiste nicht selbst umgeschaltet hat (Cookie sidebar_state hat Vorrang, siehe layouts/default.vue).
+const collapsedCookie = useCookie('sidebar_default_collapsed', { maxAge: 60 * 60 * 24 * 365 })
+const collapsedDefault = computed({
+  get: () => String(collapsedCookie.value) === 'true',
+  set: (v: boolean) => { collapsedCookie.value = v ? 'true' : 'false' },
+})
 </script>
 
 <template>

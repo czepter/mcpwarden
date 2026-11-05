@@ -2,6 +2,7 @@ import { toTypedSchema } from '@vee-validate/zod'
 import { describe, expect, it } from 'vitest'
 import { formatCountdown, formatNumber, formatPercent, formatRelative } from '~/lib/format'
 import { HEALTH_VALUES, OUTCOME_VALUES, SETUP_VALUES, healthLabel, outcomeLabel, scopeLabel, setupLabel, toolKind } from '~/lib/labels'
+import { FEATURES } from '~/lib/features'
 import { navFor } from '~/lib/nav'
 import { SLUG_RE, signUpSchema, upstreamSchema } from '~/lib/zod-schemas'
 
@@ -61,5 +62,17 @@ describe('zod-schemas', () => {
     expect(upstreamSchema.safeParse({ ...base, url: 'https://x.example/mcp' }).success).toBe(true)
     expect(upstreamSchema.safeParse({ ...base, url: 'https://u:p@x.example/' }).success).toBe(false)
     expect(upstreamSchema.safeParse({ ...base, type: 'stdio', command: 'uvx x', cwd: '../x' }).success).toBe(false)
+  })
+})
+
+describe('Phasen-Schalter', () => {
+  it('Dunkelmodus-Wahl und Admin-Scope im Consent sind bis Phase 2 aus', () => {
+    expect(FEATURES.colorSchemeChoice).toBe(false)
+    expect(FEATURES.consentAdminScope).toBe(false)
+  })
+  it('Passwort: Mindestlaenge 12 wie vom Server geprueft', () => {
+    const base = { name: 'x', email: 'a@b.de', confirm: '' }
+    expect(signUpSchema.safeParse({ ...base, password: 'a'.repeat(11), confirm: 'a'.repeat(11) }).success).toBe(false)
+    expect(signUpSchema.safeParse({ ...base, password: 'a'.repeat(12), confirm: 'a'.repeat(12) }).success).toBe(true)
   })
 })

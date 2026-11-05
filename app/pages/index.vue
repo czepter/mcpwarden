@@ -19,6 +19,8 @@ import { Button } from '~/components/ui/button'
 import { formatNumber, formatPercent } from '~/lib/format'
 
 useHead({ title: 'Dashboard · mcpwarden' })
+const route = useRoute()
+const adminHint = computed(() => route.query.hinweis === 'admin')
 const { data, error, status, refresh } = useApi('dashboard', dashboardApi.get)
 const caps = useApi('caps', meApi.capabilities)
 const rate = ref(0)
@@ -35,7 +37,7 @@ const k = computed(() => data.value?.kpis)
 
 <template>
   <PageHeader title="Dashboard"><AutoRefresh v-model="rate" /></PageHeader>
-  <p v-if="useRoute().query.hinweis === 'admin'" role="status" class="rounded-sm border border-[#fcd34d] bg-[#fef3c7] px-3 py-2 text-[13px] text-[#78350f]">Dieser Bereich ist nur für Admins.</p>
+  <p v-if="adminHint" role="status" class="rounded-sm border border-[#fcd34d] bg-[#fef3c7] px-3 py-2 text-[13px] text-[#78350f]">Dieser Bereich ist nur für Admins.</p>
   <LoadingRows v-if="status === 'pending' && !data" />
   <ErrorState v-else-if="error" :error="error" @retry="refresh()" />
   <template v-else-if="data">
