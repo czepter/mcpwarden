@@ -9,12 +9,12 @@
  * GID (keine Gruppe 0). Es gilt das Design aus Plan 4.1; der Rohpipe-Fallback ist nicht nötig.
  */
 import { spawn, type ChildProcess } from 'node:child_process'
-import { chmodSync, chownSync, existsSync, mkdirSync, statSync, unlinkSync } from 'node:fs'
+import { chmodSync, chownSync, existsSync, mkdirSync, unlinkSync } from 'node:fs'
 import net from 'node:net'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { encodeFrame, FrameReader, MAX_CONTROL_FRAME, parseCommand, type Command, type FrameError } from './protocol'
-import { ensureUserDir, purgeUserDir, realFs, UidMap, UnsafeDirectory, type FsOps } from './users'
+import { ensureUserDir, prepareDataDirs, purgeUserDir, realFs, UidMap, UnsafeDirectory, type FsOps } from './users'
 
 export type SupervisorOptions = {
   dataDir: string
@@ -31,6 +31,7 @@ export type SupervisorOptions = {
 }
 
 type Worker = { proc: ChildProcess, uid: number, userId: string }
+const SECRET_ENV = ['MASTER_KEY', 'BETTER_AUTH_SECRET', 'DATABASE_URL']
 const BACKOFF_MIN = 1000
 const BACKOFF_MAX = 30_000
 const HARD = { maxProcs: 20, idleMin: 120 }
@@ -39,25 +40,16 @@ export async function startSupervisor(o: SupervisorOptions) {
   const log = o.log ?? ((m: string) => process.stderr.write(`[supervisor] ${m}\n`))
   const isRoot = process.getuid?.() === 0
   const workers = new Map<string, Worker>()
+  const starting = new Set<string>()
   const crashes = new Map<string, { n: number, until: number }>()
   let canSwitchUser = false
   let shuttingDown = false
 
-  // --- Verzeichnisse: erst mkdir/chmod, dann chown (ohne FOWNER/DAC_OVERRIDE geht chmod danach nicht mehr). Kein rekursives chown.
+  // --- Verzeichnisse: kein Symlink, Besitzer geprüft, chmod/chown über O_NOFOLLOW-Deskriptoren (siehe prepareDataDirs).
   mkdirSync(dirname(o.socketPath), { recursive: true, mode: 0o755 })
   chmodSync(dirname(o.socketPath), 0o755)
   mkdirSync(o.dataDir, { recursive: true, mode: 0o755 })
-  if (o.stdioMode !== 'off') {
-    mkdirSync(join(o.dataDir, 'stdio'), { recursive: true, mode: 0o711 })
-    chmodSync(join(o.dataDir, 'stdio'), 0o711)
-  }
-  const pgdata = join(o.dataDir, 'pgdata')
-  mkdirSync(pgdata, { recursive: true, mode: 0o700 })
-  if (isRoot) {
-    const st = statSync(pgdata)
-    if (st.uid === 0) chownSync(pgdata, o.webUid, o.webGid) // frisch angelegt: Web-UID
-    else if (st.uid !== o.webUid) throw new Error(`DATA_DIR/pgdata gehört uid ${st.uid}, erwartet ${o.webUid}. Einmalig: chown -R ${o.webUid}:${o.webGid} <Volume>/pgdata`)
-  }
+  await prepareDataDirs({ dataDir: o.dataDir, rootUid: process.getuid?.() ?? 0, webUid: o.webUid, webGid: o.webGid, stdio: o.stdioMode !== 'off', chown: isRoot })
 
   // --- Fähigkeitsprobe
   if (o.stdioMode !== 'off' && isRoot) {
@@ -69,7 +61,7 @@ export async function startSupervisor(o: SupervisorOptions) {
   }
   log(`stdio=${o.stdioMode} canSwitchUser=${canSwitchUser} root=${isRoot}`)
 
-  const uidmap = new UidMap(join(o.dataDir, 'stdio', '.uidmap'), [o.webUid])
+  const uidmap = new UidMap(join(o.dataDir, 'stdio', '.uidmap'), [o.webUid], process.getuid?.() ?? 0)
   if (o.stdioMode !== 'off') await uidmap.load()
   const fsOps: FsOps = canSwitchUser ? realFs : { chown: async () => {} }
 
@@ -93,15 +85,19 @@ export async function startSupervisor(o: SupervisorOptions) {
         if (cmd.cmd === 'attach') {
           // Der Socket wird übergeben: keine weiteren Bytes dürfen schon gelesen sein.
           if (reader.pending !== 0 || frames.length !== 1) { conn.destroy(); return }
-          conn.off('data', onData)
+          conn.off('data', handler)
           conn.pause()
           await handleAttach(conn, cmd).catch((e) => { log(`attach failed: ${(e as Error).message}`); try { reply(conn, { ok: false, error: 'internal' }) } catch { /* Verbindung schon weg */ } conn.destroy() })
           return
         }
-        await handleControl(conn, cmd)
+        await handleControl(conn, cmd).catch((e) => {
+          log(`control ${cmd.cmd} failed: ${(e as Error).message}`)
+          try { reply(conn, { ok: false, error: cmd.cmd === 'stopWorker' ? 'purge_failed' : 'internal' }) } catch { /* Verbindung schon weg */ }
+        })
       }
     }
-    conn.on('data', onData)
+    const handler = (chunk: Buffer) => { onData(chunk).catch((e) => { log(`connection handler failed: ${(e as Error).message}`); conn.destroy() }) }
+    conn.on('data', handler)
     conn.on('error', () => {})
   }
 
@@ -122,7 +118,12 @@ export async function startSupervisor(o: SupervisorOptions) {
     if (o.stdioMode === 'off') { reply(conn, { ok: false, error: 'stdio_off' }); conn.end(); return }
     if (shuttingDown) { reply(conn, { ok: false, error: 'shutting_down' }); conn.end(); return }
     if (isRoot && !canSwitchUser) { reply(conn, { ok: false, error: 'no_capabilities' }); conn.end(); return } // nie Worker als root
-    if (workers.has(cmd.userId)) { reply(conn, { ok: false, error: 'busy' }); conn.end(); return }
+    if (workers.has(cmd.userId) || starting.has(cmd.userId)) { reply(conn, { ok: false, error: 'busy' }); conn.end(); return }
+    starting.add(cmd.userId) // Platz synchron reservieren: zwischen Prüfung und workers.set liegen awaits
+    try { await startWorker(conn, cmd) } finally { starting.delete(cmd.userId) }
+  }
+
+  async function startWorker(conn: net.Socket, cmd: Extract<Command, { cmd: 'attach' }>) {
     const bo = crashes.get(cmd.userId)
     if (bo && Date.now() < bo.until) { reply(conn, { ok: false, error: 'backoff', retryMs: bo.until - Date.now() }); conn.end(); return }
     // UID und Verzeichnis ausschließlich aus der userId abgeleitet
@@ -138,6 +139,9 @@ export async function startSupervisor(o: SupervisorOptions) {
     const env: Record<string, string> = {
       PATH: process.env.PATH ?? '/usr/local/bin:/usr/bin:/bin', HOME: join(dir, 'home'), TMPDIR: join(dir, 'tmp'), LANG: 'C.UTF-8',
       NODE_OPTIONS: '--max-old-space-size=256', WORKER_MAX_CHILDREN: String(maxProcs), WORKER_IDLE_MIN: String(idleMin * (o.idleUnitMs ?? 60_000) / 60_000),
+      // kill(-1) ist nur sicher, wenn der Worker eine eigene UID hat; ohne UID-Wechsel würde es die Web-App töten
+      ...(canSwitchUser ? { WORKER_ISOLATED: '1' } : {}),
+      ...Object.fromEntries(['WORKER_CHILD_NPROC', 'WORKER_CHILD_VMEM_MB', 'WORKER_CHILD_CPU_S', 'WORKER_CHILD_FSIZE_MB'].flatMap(k => process.env[k] ? [[k, process.env[k]!]] : [])),
     }
     reply(conn, { ok: true }) // Ack vor der Übergabe; danach spricht nur noch der Worker
     // libuv wechselt das Verzeichnis VOR setuid: root ohne CAP_DAC_OVERRIDE kommt nicht in das 0700-Nutzerverzeichnis.
@@ -148,16 +152,21 @@ export async function startSupervisor(o: SupervisorOptions) {
       ...(canSwitchUser ? { uid, gid: uid } : {}),
     })
     workers.set(cmd.userId, { proc, uid, userId: cmd.userId })
+    let clean = false
+    const ctlStream = proc.stdio[4] as import('node:stream').Duplex | null
+    ctlStream?.on('data', (d: Buffer) => { if (d.toString().includes('bye')) clean = true })
+    ctlStream?.on('error', () => { /* Worker beendet: ECONNRESET auf dem Steuerkanal ist erwartet */ })
     proc.on('error', (e) => { log(`worker spawn error: ${e.message}`); workers.delete(cmd.userId); conn.destroy() })
     proc.on('spawn', () => setTimeout(() => conn.destroy(), 0)) // Supervisor lässt seine Kopie los
     proc.on('exit', (code, sig) => {
       log(`worker ${cmd.userId} exit code=${code} sig=${sig}`)
       if (workers.get(cmd.userId)?.proc === proc) workers.delete(cmd.userId)
-      if (code !== 0 && code !== null && !shuttingDown) {
+      // Tod durch Signal (code === null, z. B. OOM-Kill) zählt als Absturz; reguläre Beendigung meldet der Worker per 'bye'
+      if (code !== 0 && !clean && !shuttingDown) {
         const prev = crashes.get(cmd.userId)
         const n = (prev?.n ?? 0) + 1
         crashes.set(cmd.userId, { n, until: Date.now() + Math.min(BACKOFF_MIN * 2 ** (n - 1), BACKOFF_MAX) })
-      } else if (code === 0) crashes.delete(cmd.userId)
+      } else if (code === 0 || clean) crashes.delete(cmd.userId)
     })
   }
 
@@ -184,7 +193,12 @@ export async function startSupervisor(o: SupervisorOptions) {
   }
 
   // --- Web-App
-  const web = spawn(o.webCmd[0]!, o.webCmd.slice(1), { stdio: 'inherit', env: process.env, ...(isRoot ? { uid: o.webUid, gid: o.webGid } : {}) })
+  // Schlüsselmaterial nur an die Web-App weiterreichen; der Supervisor behält es nicht im eigenen Prozess-Env.
+  // Grenze: /proc/<pid>/environ des Supervisors zeigt weiter das Start-Env (nur root lesbar). Vollständig lösbar nur,
+  // wenn die Web-App die Werte aus Datei/Docker-Secret liest (MASTER_KEY_FILE) — siehe README.
+  const webEnv = { ...process.env }
+  for (const k of SECRET_ENV) Reflect.deleteProperty(process.env, k)
+  const web = spawn(o.webCmd[0]!, o.webCmd.slice(1), { stdio: 'inherit', env: webEnv, ...(isRoot ? { uid: o.webUid, gid: o.webGid } : {}) })
   web.on('error', (e) => { log(`cannot start web app: ${e.message}${isRoot ? ' (fehlen SETUID/SETGID im Container? Siehe README)' : ''}`); void shutdown(1) })
   web.on('exit', (code, sig) => { log(`web app exited (${code ?? sig})`); void shutdown(code ?? 1) })
 
@@ -201,6 +215,7 @@ export async function startSupervisor(o: SupervisorOptions) {
     exitHandler(code)
   }
   let exitHandler: (code: number) => void = c => process.exit(c)
+  process.on('unhandledRejection', (e) => { log(`unhandled rejection: ${(e as Error)?.message ?? String(e)}`) })
   process.on('SIGTERM', () => { void shutdown(0) })
   process.on('SIGINT', () => { void shutdown(0) })
 

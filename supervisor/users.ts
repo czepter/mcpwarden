@@ -18,24 +18,52 @@ type MapFile = { v: 1, next: number, users: Record<string, number> }
 
 /**
  * `user_id -> uid` gehört dem Supervisor (root-eigen, 0600). Fortlaufende Vergabe, nie Wiederverwendung
- * (auch nicht nach Löschen), niemals 0 oder die Web-UID (Bereich 20000-59999).
+ * (auch nicht nach Löschen), niemals 0 oder die Web-UID (Bereich 20000-59999). Die Datei wird beim Laden geprüft:
+ * Besitzer = Supervisor-UID, Modus ohne Gruppen-/Other-Rechte, jede UID im Bereich, nicht reserviert, ohne Duplikate.
  */
 export class UidMap {
-  private data: MapFile = { v: 1, next: UID_MIN, users: {} }
+  private users = new Map<string, number>()
+  private next = UID_MIN
   private chain: Promise<unknown> = Promise.resolve()
-  constructor(private file: string, private reserved: number[] = []) {}
+  constructor(private file: string, private reserved: number[] = [], private ownerUid: number = process.getuid?.() ?? 0) {}
 
   async load() {
+    let raw: string
     try {
-      const d = JSON.parse(await fsp.readFile(this.file, 'utf8')) as MapFile
-      if (d.v === 1 && Number.isInteger(d.next) && d.users) this.data = d
-    } catch (e) { if ((e as NodeJS.ErrnoException).code !== 'ENOENT') throw e }
+      const fh = await fsp.open(this.file, C.O_RDONLY | C.O_NOFOLLOW)
+      try {
+        const st = await fh.stat()
+        if (!st.isFile()) throw new UnsafeDirectory('.uidmap is not a regular file')
+        if (st.uid !== this.ownerUid) throw new UnsafeDirectory(`.uidmap owner ${st.uid}, expected ${this.ownerUid}`)
+        if (st.mode & 0o077) throw new UnsafeDirectory('.uidmap must not be accessible to group/other (mode 0600)')
+        raw = await fh.readFile('utf8')
+      } finally { await fh.close() }
+    } catch (e) {
+      if ((e as NodeJS.ErrnoException).code === 'ENOENT') return
+      throw e
+    }
+    const d = JSON.parse(raw) as MapFile
+    if (d.v !== 1 || !Number.isInteger(d.next) || !d.users || typeof d.users !== 'object') throw new UnsafeDirectory('.uidmap malformed')
+    const seen = new Set<number>()
+    let max = UID_MIN - 1
+    const users = new Map<string, number>()
+    for (const [id, uid] of Object.entries(d.users)) {
+      if (!USER_ID_RE.test(id)) throw new UnsafeDirectory('.uidmap contains an invalid user id')
+      if (!Number.isInteger(uid) || uid < UID_MIN || uid > UID_MAX) throw new UnsafeDirectory(`.uidmap uid ${uid} outside ${UID_MIN}..${UID_MAX}`)
+      if (this.reserved.includes(uid)) throw new UnsafeDirectory(`.uidmap uid ${uid} is reserved`)
+      if (seen.has(uid)) throw new UnsafeDirectory(`.uidmap uid ${uid} assigned twice`)
+      seen.add(uid); users.set(id, uid); max = Math.max(max, uid)
+    }
+    this.users = users
+    this.next = Math.max(d.next, max + 1, UID_MIN)
   }
 
   private async persist() {
     const tmp = `${this.file}.${process.pid}.tmp`
     const fh = await fsp.open(tmp, 'w', 0o600)
-    try { await fh.writeFile(JSON.stringify(this.data)); await fh.sync() } finally { await fh.close() }
+    try {
+      await fh.writeFile(JSON.stringify({ v: 1, next: this.next, users: Object.fromEntries(this.users) } satisfies MapFile)); await fh.sync()
+    } finally { await fh.close() }
     await fsp.rename(tmp, this.file)
     const dir = await fsp.open(join(this.file, '..'), 'r')
     try { await dir.sync() } finally { await dir.close() }
@@ -45,13 +73,13 @@ export class UidMap {
   uidFor(userId: string): Promise<number> {
     if (!USER_ID_RE.test(userId)) return Promise.reject(new Error('invalid userId'))
     const run = this.chain.then(async () => {
-      const known = this.data.users[userId]
+      const known = this.users.get(userId)
       if (known !== undefined) return known
-      let uid = this.data.next
+      let uid = this.next
       while (this.reserved.includes(uid)) uid++
       if (uid > UID_MAX) throw new UidExhausted('uid range exhausted')
-      this.data.users[userId] = uid
-      this.data.next = uid + 1
+      this.users.set(userId, uid)
+      this.next = uid + 1
       await this.persist()
       return uid
     })
@@ -59,7 +87,39 @@ export class UidMap {
     return run
   }
 
-  lookup(userId: string): number | undefined { return this.data.users[userId] }
+  lookup(userId: string): number | undefined { return this.users.get(userId) }
+}
+
+/**
+ * Prüft und richtet die Verzeichnisse unter DATA_DIR ein, ohne Symlinks zu folgen: lstat (kein Symlink, Verzeichnis),
+ * dann Besitzer/Modus über einen O_NOFOLLOW|O_DIRECTORY-Deskriptor (fstat/fchmod/fchown). `dataDir` und `stdio` müssen
+ * dem Supervisor gehören (fremder Besitzer => Abbruch; zu offener Modus => fchmod). `pgdata` gehört der Web-UID.
+ */
+export async function prepareDataDirs(o: { dataDir: string, rootUid: number, webUid: number, webGid: number, stdio: boolean, chown?: boolean }) {
+  const open = async (path: string, mode: number): Promise<fsp.FileHandle> => {
+    const st = await fsp.lstat(path).catch(() => null)
+    if (!st) await fsp.mkdir(path, { mode })
+    else if (st.isSymbolicLink() || !st.isDirectory()) throw new UnsafeDirectory(`${path} is not a plain directory`)
+    return await fsp.open(path, C.O_RDONLY | C.O_DIRECTORY | C.O_NOFOLLOW)
+  }
+  const own = async (path: string, mode: number) => {
+    const fh = await open(path, mode)
+    try {
+      const st = await fh.stat()
+      if (st.uid !== o.rootUid) throw new UnsafeDirectory(`${path} is owned by uid ${st.uid}, expected ${o.rootUid}`)
+      if ((st.mode & 0o777) !== mode) await fh.chmod(mode)
+    } finally { await fh.close() }
+  }
+  await own(o.dataDir, 0o755)
+  if (o.stdio) await own(join(o.dataDir, 'stdio'), 0o711)
+  const fh = await open(join(o.dataDir, 'pgdata'), 0o700)
+  try {
+    const st = await fh.stat()
+    if (st.uid === o.rootUid && o.chown) { await fh.chmod(0o700); await fh.chown(o.webUid, o.webGid) } // frisch angelegt: Web-UID
+    else if (st.uid !== o.webUid && st.uid !== o.rootUid) {
+      throw new UnsafeDirectory(`DATA_DIR/pgdata gehört uid ${st.uid}, erwartet ${o.webUid}. Einmalig: chown -R ${o.webUid}:${o.webGid} <Volume>/pgdata`)
+    }
+  } finally { await fh.close() }
 }
 
 /**
@@ -95,6 +155,8 @@ export async function ensureUserDir(dataDir: string, uid: number, fs: FsOps = re
 export async function purgeUserDir(dataDir: string, uid: number, runAsUser: (argv: string[]) => Promise<number>) {
   const dir = join(dataDir, 'stdio', String(uid))
   if (!(await fsp.lstat(dir).catch(() => null))) return
+  // Verzeichnisse ohne Rechte (chmod 000) würden find -delete scheitern lassen: erst u+rwx (unter der Nutzer-UID, ohne Symlinks zu folgen)
+  await runAsUser(['find', dir, '-type', 'd', '-exec', 'chmod', 'u+rwx', '{}', ';'])
   const code = await runAsUser(['find', dir, '-mindepth', '1', '-delete'])
   if (code !== 0) throw new Error(`purge failed (find exit ${code})`)
   await fsp.rmdir(dir)

@@ -35,7 +35,10 @@ export class SupervisorClient {
 
   async ping() { try { return (await this.request({ v: 1, cmd: 'ping' }, 2000)).ok === true } catch { return false } }
   async capabilities() { return await this.request({ v: 1, cmd: 'capabilities' }) as Reply & { canSwitchUser: boolean, stdioMode: string, workers: number } }
-  async stopWorker(userId: string, purge = false) { await this.request({ v: 1, cmd: 'stopWorker', userId, purge }, 30_000) }
+  async stopWorker(userId: string, purge = false) {
+    const r = await this.request({ v: 1, cmd: 'stopWorker', userId, purge }, 30_000)
+    if (!r.ok) throw new SupervisorError(r.error ?? 'stop_failed')
+  }
 
   /** attach: danach spricht nur noch der Worker über diese Verbindung (fd 3 im Worker). */
   async attach(userId: string, limits: { maxProcs?: number, idleMin?: number } = {}): Promise<WorkerSession> {

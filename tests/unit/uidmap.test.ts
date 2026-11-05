@@ -34,7 +34,7 @@ describe('uidmap', () => {
     const first = await m.uidFor('u1')
     await purgeUserDir(d, first, async () => 0)
     expect(await m.uidFor('u2')).not.toBe(first)
-    ;(m as unknown as { data: { next: number } }).data.next = UID_MAX + 1
+    ;(m as unknown as { next: number }).next = UID_MAX + 1
     await expect(m.uidFor('overflow')).rejects.toThrow('exhausted')
   })
   it('rejects invalid user ids', async () => {
