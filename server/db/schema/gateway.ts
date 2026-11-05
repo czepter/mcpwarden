@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm'
-import { bigserial, boolean, check, index, integer, jsonb, pgTable, smallint, text, timestamp, unique, uuid, primaryKey } from 'drizzle-orm/pg-core'
+import { bigserial, boolean, check, foreignKey, index, integer, jsonb, pgTable, smallint, text, timestamp, unique, uuid, primaryKey } from 'drizzle-orm/pg-core'
 import { user } from './auth'
 
 const userFk = () => text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' })
@@ -34,6 +34,8 @@ export const upstream = pgTable('upstream', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 }, t => [
   unique('upstream_user_slug_uq').on(t.userId, t.slug),
+  // Ziel der zusammengesetzten Fremdschluessel von upstream_secret/upstream_tool: eine Zeile kann nie zu einem Upstream eines anderen Nutzers gehoeren
+  unique('upstream_user_id_id_uq').on(t.userId, t.id),
   check('upstream_type_ck', sql`${t.type} in ('http','stdio')`),
   check('upstream_transport_ck', sql`${t.transport} in ('auto','streamable','sse')`),
   check('upstream_auth_type_ck', sql`${t.authType} in ('none','bearer','header','env')`),
@@ -47,7 +49,7 @@ export const upstream = pgTable('upstream', {
 export const upstreamSecret = pgTable('upstream_secret', {
   id: uuid('id').primaryKey().defaultRandom(),
   userId: userFk(),
-  upstreamId: uuid('upstream_id').notNull().references(() => upstream.id, { onDelete: 'cascade' }),
+  upstreamId: uuid('upstream_id').notNull(),
   kind: text('kind').notNull(),
   name: text('name').notNull().default(''),
   ciphertext: text('ciphertext').notNull(),
@@ -56,18 +58,22 @@ export const upstreamSecret = pgTable('upstream_secret', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 }, t => [
   unique('upstream_secret_uq').on(t.upstreamId, t.kind, t.name),
+  foreignKey({ name: 'upstream_secret_user_upstream_fk', columns: [t.userId, t.upstreamId], foreignColumns: [upstream.userId, upstream.id] }).onDelete('cascade'),
   check('upstream_secret_kind_ck', sql`${t.kind} in ('bearer','header','env')`),
 ])
 
 export const upstreamTool = pgTable('upstream_tool', {
-  upstreamId: uuid('upstream_id').notNull().references(() => upstream.id, { onDelete: 'cascade' }),
+  upstreamId: uuid('upstream_id').notNull(),
   name: text('name').notNull(),
   userId: userFk(),
   enabled: boolean('enabled').notNull().default(true),
   firstSeenAt: timestamp('first_seen_at', { withTimezone: true }).notNull().defaultNow(),
   lastSeenAt: timestamp('last_seen_at', { withTimezone: true }).notNull().defaultNow(),
   gone: boolean('gone').notNull().default(false),
-}, t => [primaryKey({ columns: [t.upstreamId, t.name] })])
+}, t => [
+  primaryKey({ columns: [t.upstreamId, t.name] }),
+  foreignKey({ name: 'upstream_tool_user_upstream_fk', columns: [t.userId, t.upstreamId], foreignColumns: [upstream.userId, upstream.id] }).onDelete('cascade'),
+])
 
 export const userGatewayLimits = pgTable('user_gateway_limits', {
   userId: text('user_id').primaryKey().references(() => user.id, { onDelete: 'cascade' }),

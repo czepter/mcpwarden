@@ -36,6 +36,20 @@
       "when": 1793866392027,
       "tag": "0004_user_preference",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1793875376438,
+      "tag": "0005_upstream_user_id_unique",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1793875377672,
+      "tag": "0006_composite_upstream_fks",
+      "breakpoints": true
     }
   ]
 }
