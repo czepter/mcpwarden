@@ -15,6 +15,8 @@ export const DEFAULT_LIMITS = {
 export const ACTIVE_WINDOW_MS = 5 * 60_000
 export const INVITE_TTL_DAYS = 7
 export const CATALOG_TTL_MS = 10 * 60_000
+/** Obergrenzen fuer `tools/list` eines Upstreams (Seiten, Tools, Gesamtgroesse); die Gesamtzeit ist `timeouts.listMs`. */
+export const CATALOG_LIMITS = { maxPages: 50, maxTools: 2_000, maxBytes: 4 * 1024 * 1024 } as const
 export const POOL_IDLE_MS = 5 * 60_000
 export const STATS = { flushMs: 5_000, flushBatch: 500, maxBuffer: 10_000, retentionDays: 14 } as const
 export const SHUTDOWN_DRAIN_MS = 30_000

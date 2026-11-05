@@ -1,6 +1,7 @@
 import { SdkHttpError, ProtocolError } from '@modelcontextprotocol/client'
 import { SsrfBlockedError, SSRF_MESSAGE } from '../net/ssrf'
 import { UpstreamRedirectError } from '../net/safe-fetch'
+import { CatalogLimitError } from './catalog'
 
 export type ErrorCode = 'ssrf_blocked' | 'redirect' | 'timeout' | 'connect_failed' | 'unauthorized' | 'upstream_error' | 'protocol' | 'awaiting_auth' | 'stdio_not_allowed' | 'cancelled'
 export type Classified = { code: ErrorCode, message: string, status?: number, /** zählt für Breaker/Degraded */ counts: boolean, auth: boolean }
@@ -12,6 +13,7 @@ export function classifyError(e: unknown, opts: { hasAuth?: boolean, aborted?: b
   const all = chain(e)
   if (all.some(x => x instanceof SsrfBlockedError || (x as Error)?.message?.includes(SSRF_MESSAGE))) return { code: 'ssrf_blocked', message: SSRF_MESSAGE, counts: false, auth: false }
   if (all.some(x => x instanceof UpstreamRedirectError)) return { code: 'redirect', message: 'Upstream leitet um, bitte Ziel-URL direkt eintragen', counts: false, auth: false }
+  if (all.some(x => x instanceof CatalogLimitError)) return { code: 'protocol', message: 'Upstream liefert eine zu grosse Tool-Liste', counts: true, auth: false }
   const http = all.find((x): x is SdkHttpError => x instanceof SdkHttpError)
   const status = http?.status ?? (all.map(x => (x as { status?: number, code?: number }).status).find(s => typeof s === 'number'))
   if (status === 401 || status === 403) {
