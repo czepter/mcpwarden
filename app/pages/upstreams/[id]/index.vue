@@ -47,7 +47,7 @@ const saveSecret = sec.submit(async (v) => {
   try { await upstreamApi.putSecret(id, { kind: u.value?.authType === 'header' ? 'header' : 'bearer', name: u.value?.authHeaderName ?? undefined, value: v.value }) } finally { sec.form.resetForm({ values: { value: '' } }) }
   replaced.value = true; await up.refresh(); toast.success('Secret ersetzt.')
 }, ['value'])
-// Reiter wie im Entwurf: Unterstreichung in der Akzentfarbe, 44 px hoch.
+// Tabs as in the draft: underline in the accent color, 44 px high.
 const TABS = [['overview', 'Übersicht'], ['tools', 'Tools'], ['auth', 'Auth']] as const
 const TAB_CLASS = '-mb-px h-11 flex-none rounded-none border-0 border-b-2 border-transparent bg-transparent px-4 text-secondary-foreground shadow-none data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none dark:data-[state=active]:border-transparent dark:data-[state=active]:border-b-primary dark:data-[state=active]:bg-transparent'
 const saveTool = (name: string, enabled: boolean) => upstreamApi.setTool(id, name, enabled)

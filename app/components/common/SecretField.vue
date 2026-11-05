@@ -3,7 +3,7 @@ import { Eye, EyeOff } from '@lucide/vue'
 import { onBeforeUnmount, ref } from 'vue'
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '~/components/ui/input-group'
 
-// Nur der gerade getippte Wert; kein Vorbefuellen. Beim Verlassen wird er geleert (Abschnitt 10).
+// Only the value just typed; no prefilling. It is cleared on leaving (section 10).
 defineProps<{ id?: string, invalid?: boolean, describedby?: string }>()
 const model = defineModel<string>({ default: '' })
 const shown = ref(false)

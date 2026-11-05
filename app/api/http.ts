@@ -16,7 +16,7 @@ export class ApiError extends Error {
 }
 
 let onUnauthorized: (() => void) | null = null
-/** Wird vom Auth-Plugin gesetzt: 401 fuehrt zu /login. */
+/** Set by the auth plugin: 401 leads to /login. */
 export function setUnauthorizedHandler(fn: () => void) { onUnauthorized = fn }
 
 export async function http<T>(method: string, path: string, opts: { body?: unknown, query?: Record<string, string | number | undefined>, headers?: Record<string, string>, skip401?: boolean } = {}): Promise<T> {

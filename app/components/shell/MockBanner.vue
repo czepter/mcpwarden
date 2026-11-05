@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '~/components/ui/select'
 
-// Nur im Mock-Modus (Build-Konstante); Rolle und Szenario liegen in localStorage, Wechsel laedt neu.
+// Mock mode only (build constant); role and scenario live in localStorage, switching reloads.
 const spec = __API_MOCK__
 const role = ref(import.meta.client ? localStorage.getItem('mockRole') ?? 'admin' : 'admin')
 const scenario = ref(import.meta.client ? localStorage.getItem('mockScenario') ?? 'default' : 'default')

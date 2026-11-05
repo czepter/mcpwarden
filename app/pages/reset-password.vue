@@ -10,12 +10,12 @@ import { useZodForm } from '~/lib/useZodForm'
 import { resetSchema } from '~/lib/zod-schemas'
 
 definePageMeta({ layout: 'auth' })
-// Token-Seite: kein Referrer, nicht indexieren. Das Token steht im Fragment (kein Access-Log) und wird nach dem Lesen aus der Adresszeile entfernt.
+// Token page: no referrer, do not index. The token is in the fragment (no access log) and is removed from the address bar after reading.
 useHead({ title: 'Neues Passwort · mcpwarden', meta: [{ name: 'referrer', content: 'no-referrer' }, { name: 'robots', content: 'noindex' }] })
 const route = useRoute()
 const token = ref('')
 const invalid = ref(false)
-const ready = ref(false) // Das Fragment sieht nur der Browser: erst nach dem Mounten rendern (kein Hydration-Unterschied).
+const ready = ref(false) // Only the browser sees the fragment: render only after mounting (no hydration mismatch).
 function readToken(h: string) {
   const t = new URLSearchParams(h.replace(/^#/, '')).get('token')
   if (!t) return
@@ -24,7 +24,7 @@ function readToken(h: string) {
   history.replaceState(history.state, '', route.path)
 }
 onMounted(() => { readToken(route.hash); ready.value = true })
-// Auch bei Hash-Navigation im selben Tab (neuer Link eingefuegt) neu einlesen.
+// Also re-read on hash navigation in the same tab (new link pasted).
 watch(() => route.hash, readToken)
 
 const { form, formError, busy, submit } = useZodForm(resetSchema, { password: '', confirm: '' })

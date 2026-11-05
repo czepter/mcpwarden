@@ -3,7 +3,7 @@ import { computed } from 'vue'
 import { healthLabel, setupLabel } from '~/lib/labels'
 
 const props = defineProps<{ status: string, setup?: string | null }>()
-// Wartezustand (setup) hat Vorrang vor dem Health-Wert, solange der Upstream nicht bereit ist.
+// The waiting state (setup) takes precedence over the health value as long as the upstream is not ready.
 const waiting = computed(() => props.setup && props.setup !== 'ready')
 const key = computed(() => (waiting.value ? 'unknown' : ['healthy', 'degraded', 'open', 'auth_expired', 'disabled', 'unknown'].includes(props.status) ? props.status : 'unknown'))
 const label = computed(() => (waiting.value ? setupLabel(props.setup!) : healthLabel(props.status)))

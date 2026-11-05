@@ -19,7 +19,7 @@ const [password] = form.defineField('password')
 const onSubmit = submit(async (v) => {
   try { await authApi.signIn(v.email, v.password) } catch (e) { form.setFieldValue('password', ''); throw e }
   await load(true)
-  // OAuth-Fortsetzung: die vom Plugin signierte Query bleibt unveraendert (gegen das echte Backend belegt: tests/helpers/oauth-client.ts).
+  // OAuth continuation: the query signed by the plugin stays unchanged (verified against the real backend: tests/helpers/oauth-client.ts).
   if (route.query.sig) { await navigateTo(`/consent?${new URLSearchParams(route.query as Record<string, string>).toString()}`); return }
   const r = typeof route.query.redirect === 'string' && route.query.redirect.startsWith('/') && !route.query.redirect.startsWith('//') ? route.query.redirect : '/'
   await navigateTo(r)

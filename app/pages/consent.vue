@@ -26,7 +26,7 @@ const adminOn = ref(true)
 const busy = ref(false)
 const failure = ref('')
 const done = computed(() => route.query.done as string | undefined)
-// mcpwarden:admin erscheint erst ab Phase 2 (FEATURES.consentAdminScope) und nur, wenn der Server den Scope anbietet.
+// mcpwarden:admin appears only from phase 2 (FEATURES.consentAdminScope) and only if the server offers the scope.
 const adminScope = computed(() => FEATURES.consentAdminScope ? info.value?.scopes.find(s => s.name === 'mcpwarden:admin') : undefined)
 const required = computed(() => info.value?.scopes.filter(s => s.required && s.name !== 'mcpwarden:admin') ?? [])
 const unknown = computed(() => info.value && !info.value.client.allowlisted)

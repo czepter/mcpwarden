@@ -1,6 +1,6 @@
-// Ohne Sitzung nur /login, /register, /forgot-password, /reset-password, /invite/*. Die signierte OAuth-Query bleibt unveraendert erhalten (0b R14).
+// Without a session only /login, /register, /forgot-password, /reset-password, /invite/*. The signed OAuth query is preserved unchanged (0b R14).
 export default defineNuxtRouteMiddleware(async (to) => {
-  if (import.meta.server) return // A5: Sitzung wird nur im Browser geprueft; die Server-Seite prueft jede Route selbst.
+  if (import.meta.server) return // A5: the session is checked only in the browser; the server side checks every route itself.
   const isPublic = to.path === '/login' || to.path === '/register' || to.path === '/forgot-password' || to.path === '/reset-password' || to.path.startsWith('/invite/')
   const { user, load } = useSessionUser()
   await load()

@@ -5,7 +5,7 @@ import { nextTick, ref } from 'vue'
 import type { z } from 'zod'
 import { ApiError } from '~/api/http'
 
-/** vee-validate + zod. Serverfehler mit `field` landen am Feld, alle anderen im `formError` (Alert ueber dem Formular). */
+/** vee-validate + zod. Server errors with `field` land on the field, all others in `formError` (alert above the form). */
 export function useZodForm<S extends z.ZodType>(schema: S, initialValues: z.input<S>) {
   const form = useForm<z.input<S> & GenericObject, z.output<S> & GenericObject>({ validationSchema: toTypedSchema(schema as never) as never, initialValues: initialValues as never })
   const formError = ref('')

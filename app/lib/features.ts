@@ -1,13 +1,13 @@
-// Phasen-Schalter der UI (Spec: Dunkelmodus und Admin-Scope im Consent erst nach bzw. ab Phase 2).
-// Bewusst Konstanten, keine Server-Antwort: Ein Server, der `mcpwarden:admin` schon anbietet, schaltet die UI nicht frei.
+// Phase switches of the UI (spec: dark mode and admin scope in the consent only after or from phase 2).
+// Deliberately constants, not a server response: a server that already offers `mcpwarden:admin` does not unlock the UI.
 export const FEATURES = {
-  /** Consent: Schalter fuer `mcpwarden:admin` anzeigen und mitsenden. */
+  /** Consent: show the switch for `mcpwarden:admin` and send it along. */
   consentAdminScope: false,
   /**
-   * Seiten, zu denen es im Phase-1-Backend keine Routen gibt (Statistik, Auth-Links, stdio-Freigabe). Nur im Mock-Build an;
-   * Der Wert kommt aus der Kompilier-Konstante des Mock-Builds und ist im Produktions-Build false.
+   * Pages for which the phase 1 backend has no routes (statistics, auth links, stdio approval). On only in the mock build;
+   * the value comes from the compile-time constant of the mock build and is false in the production build.
    */
   phase2: Boolean(__API_MOCK__),
-  /** Einstellungen: Darstellungswahl "System"/"Hell"/"Dunkel". */
+  /** Settings: appearance choice "System"/"Hell"/"Dunkel". */
   colorSchemeChoice: false,
 } as const

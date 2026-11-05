@@ -16,10 +16,10 @@ const win = ref<StatsWindow>('24h')
 const { data, error, status, refresh } = useAsyncData('stats', () => statsApi.summary(win.value), { server: false, watch: [win] })
 const max = computed(() => Math.max(1, ...(data.value?.perHour.map(p => p.calls) ?? [])))
 const total = computed(() => data.value?.outcomes.reduce((a, o) => a + o.count, 0) || 1)
-// Y-Achse: Gitterlinien auf runden Werten, Hoehe proportional zum Wert (Abgleich Punkt 27).
+// Y axis: grid lines at round values, height proportional to the value (comparison item 27).
 const ticks = computed(() => { const step = Math.pow(10, Math.floor(Math.log10(max.value))); const top = Math.ceil(max.value / step) * step; return [0, top / 2, top] })
 const top = computed(() => ticks.value[2]!)
-// Farben je Ergebnis wie im Entwurf: ok gruen, tool_error gelb, Fehler rot, Begrenzungen grau; der Text traegt die Bedeutung.
+// Colors per result as in the draft: ok green, tool_error yellow, error red, limits gray; the text carries the meaning.
 const OUTCOME_BAR: Record<string, string> = { ok: 'bg-st-healthy-bar', tool_error: 'bg-st-degraded-bar', timeout: 'bg-st-open-bar', upstream_error: 'bg-st-open-bar', rate_limited: 'bg-st-disabled-dot', breaker_open: 'bg-st-disabled-dot', denied: 'bg-st-disabled-dot' }
 const windowStart = computed(() => ({ '5m': 'vor 5 min', '1h': 'vor 1 h', '24h': 'vor 24 h', '7d': 'vor 7 Tagen' } as Record<string, string>)[win.value] ?? '')
 </script>

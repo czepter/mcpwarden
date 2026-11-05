@@ -1,6 +1,6 @@
 import { upstreamApi } from '~/api'
 
-/** Zahl der Upstreams mit degraded, open, auth_expired oder wartendem Setup (Navigations-Badge, wie die Aufmerksamkeitsliste). */
+/** Number of upstreams with degraded, open, auth_expired or a pending setup (navigation badge, like the attention list). */
 export function useAttentionCount() {
   const count = useState('attention-count', () => 0)
   async function refresh() {

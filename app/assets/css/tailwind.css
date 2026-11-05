@@ -5,7 +5,7 @@
 
 @custom-variant dark (&:is(.dark *));
 
-/* Tokens: Hexwerte der Entwürfe (docs/plans/frontend.md, Abschnitt 7). Dunkelmodus folgt nach Phase 2. */
+/* Tokens: hex values of the drafts (docs/plans/frontend.md, section 7). Dark mode follows after phase 2. */
 :root {
   --radius: 0.625rem;
   --background: #f4f4f5;
@@ -57,7 +57,7 @@
   --st-unknown-bg: #f4f4f5; --st-unknown-fg: #3f3f46; --st-unknown-dot: #71717a; --st-unknown-bar: #e4e4e7;
 }
 
-.dark { /* Platzhalter: Werte folgen nach Phase 2 (Entscheidung 8) */ }
+.dark { /* placeholder: values follow after phase 2 (decision 8) */ }
 
 @theme inline {
   --color-background: var(--background);

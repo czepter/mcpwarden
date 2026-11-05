@@ -19,7 +19,7 @@ export const authApi = {
   changePassword: (currentPassword: string, newPassword: string) => post<unknown>('/api/auth/change-password', { currentPassword, newPassword, revokeOtherSessions: false }),
   listSessions: () => get<Array<{ id: string, token: string, userAgent: string | null, ipAddress: string | null, createdAt: string, current: boolean }>>('/api/auth/list-sessions'),
   revokeSession: (token: string) => post<unknown>('/api/auth/revoke-session', { token }),
-  // Ohne redirectTo: der Link in der Mail entsteht serverseitig aus BASE_URL. Antwort ist immer gleich (kein Hinweis, ob die Adresse existiert).
+  // Without redirectTo: the link in the mail is built server-side from BASE_URL. The response is always the same (no hint whether the address exists).
   requestPasswordReset: (email: string) => http<{ status: boolean }>('POST', API_PATHS.requestPasswordReset, { body: { email }, skip401: true }),
   resetPassword: (token: string, newPassword: string) => http<{ status: boolean }>('POST', API_PATHS.resetPassword, { body: { token, newPassword }, skip401: true }),
 }
@@ -28,7 +28,7 @@ export const publicApi = { config: () => http<PublicConfig>('GET', API_PATHS.pub
 
 export const oauthApi = {
   consentInfo: (query: string) => get<ConsentInfo>(`/api/oauth/consent-info${query}`),
-  // Better-Auth oauth2.consent (durch tests/smoke und tests/integration/oauth gegen das echte Backend belegt); der Server vergibt nur die gewaehlten Scopes.
+  // Better Auth oauth2.consent (verified against the real backend by tests/smoke and tests/integration/oauth); the server grants only the chosen scopes.
   consent: (accept: boolean, scope: string[], query: string) =>
     post<{ redirectURI?: string, url?: string }>('/api/auth/oauth2/consent', { accept, scope: scope.join(' '), oauth_query: query.replace(/^\?/, '') }),
 }
@@ -54,7 +54,7 @@ export const upstreamApi = {
   test: (id: string) => post<UpstreamTestResult>(`${API_PATHS.upstreams}/${enc(id)}/test`),
   tools: (id: string) => get<UpstreamToolList>(`${API_PATHS.upstreams}/${enc(id)}/tools`),
   setTool: (id: string, name: string, enabled: boolean) => put<UpstreamToolItem>(`${API_PATHS.upstreams}/${enc(id)}/tools/${enc(name)}`, { enabled }),
-  draft: (id: string) => get<StdioDraft>(`${API_PATHS.upstreams}/${enc(id)}/draft`), // Phase 2, Vorschlag
+  draft: (id: string) => get<StdioDraft>(`${API_PATHS.upstreams}/${enc(id)}/draft`), // Phase 2, proposal
   approve: (id: string) => post<{ status: string }>(`${API_PATHS.upstreams}/${enc(id)}/approve`),
 }
 

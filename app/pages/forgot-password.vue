@@ -15,7 +15,7 @@ const { data: pub, status } = useAsyncData('public-config', () => publicApi.conf
 const { form, formError, busy, submit } = useZodForm(forgotSchema, { email: '' })
 const [email] = form.defineField('email')
 const sent = ref(false)
-// Die Antwort ist immer dieselbe: die Seite verrät nicht, ob zur Adresse ein Konto existiert.
+// The response is always the same: the page does not reveal whether an account exists for the address.
 const onSubmit = submit(async (v) => {
   await authApi.requestPasswordReset(v.email)
   sent.value = true

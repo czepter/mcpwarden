@@ -2,12 +2,12 @@
 import { SidebarInset, SidebarProvider } from '~/components/ui/sidebar'
 import AppSidebar from '~/components/shell/AppSidebar.vue'
 
-// Mock-Banner nur im Mock-Build: __API_MOCK__ ist Kompilier-Konstante, im Produktions-Build faellt Zweig samt Chunk weg.
+// Mock banner only in the mock build: __API_MOCK__ is a compile-time constant, in the production build the branch is dropped together with the chunk.
 const MockBanner = __API_MOCK__ ? defineAsyncComponent(() => import('~/components/shell/MockBanner.vue')) : undefined
 
-// Cookie `sidebar_state` schreibt der SidebarProvider; hier nur das Lesen fuer den ersten Render (useCookie liefert 'false' als Boolean).
-// Bewusst unkontrolliert (default-open): mit v-model:open schriebe der Provider den alten Wert ins Cookie.
-// Ohne eigenen Cookie gilt die Einstellung "standardmaessig eingeklappt" (Einstellungen > Darstellung).
+// The SidebarProvider writes the cookie `sidebar_state`; here only reading for the first render (useCookie returns 'false' as a boolean).
+// Deliberately uncontrolled (default-open): with v-model:open the provider would write the old value into the cookie.
+// Without an own cookie the setting "collapsed by default" applies (Settings > Appearance).
 const state = useCookie('sidebar_state')
 const collapsedDefault = useCookie('sidebar_default_collapsed')
 const defaultOpen = state.value == null ? String(collapsedDefault.value) !== 'true' : String(state.value) !== 'false'

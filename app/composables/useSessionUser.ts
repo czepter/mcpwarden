@@ -13,7 +13,7 @@ export function useSessionUser() {
   async function logout() {
     try { await authApi.signOut() } finally {
       user.value = null; loaded.value = true
-      // A9: Stores beim Abmelden leeren.
+      // A9: clear stores on sign-out.
       clearNuxtState()
       await navigateTo('/login')
     }

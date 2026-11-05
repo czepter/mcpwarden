@@ -1,6 +1,6 @@
 /**
- * Spike-Ergebnis (Aufgabe 2): @vee-validate/zod 4.15.1 `toTypedSchema` laeuft mit zod 4.6.7
- * (geprueft durch tests/ui/unit/zod-schemas.test.ts, Validierung und Fehlerpfade). Fallback nicht noetig.
+ * Spike result (task 2): @vee-validate/zod 4.15.1 `toTypedSchema` works with zod 4.6.7
+ * (verified by tests/ui/unit/zod-schemas.test.ts, validation and error paths). Fallback not needed.
  */
 import { z } from 'zod'
 

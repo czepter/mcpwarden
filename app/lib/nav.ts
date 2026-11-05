@@ -26,7 +26,7 @@ export const NAV_SETTINGS: NavItem = { label: 'Einstellungen', to: '/settings', 
 export function navFor(role: Role | undefined, phase2: boolean = FEATURES.phase2): NavGroup[] {
   return NAV.map(g => ({ ...g, items: g.items.filter(i => (!i.adminOnly || role === 'admin') && (!i.phase2 || phase2)) })).filter(g => g.items.length)
 }
-/** Aktiv: exakter Pfad; Unterpfade zaehlen, ausser fuer `/` und `/settings` (eigene Eintraege darunter). */
+/** Active: exact path; sub-paths count, except for `/` and `/settings` (own entries below). */
 export function isActive(item: NavItem, path: string): boolean {
   if (item.to === '/') return path === '/'
   if (item.to === '/settings') return path === '/settings'

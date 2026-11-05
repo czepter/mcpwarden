@@ -5,7 +5,7 @@ import LoadingRows from '~/components/common/LoadingRows.vue'
 import { formatDate } from '~/lib/format'
 
 definePageMeta({ layout: 'auth' })
-// Link-Seite: kein Referrer, nicht indexieren (Abschnitt 10 Regel 6).
+// Link page: no referrer, do not index (section 10 rule 6).
 useHead({ title: 'Einladung · mcpwarden', meta: [{ name: 'referrer', content: 'no-referrer' }, { name: 'robots', content: 'noindex' }] })
 const route = useRoute()
 const token = String(route.params.token)

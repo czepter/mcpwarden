@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// Nur im Mock-Modus erreichbar: nuxt.config.ts entfernt die Route aus Produktions-Builds (hook pages:extend).
+// Reachable in mock mode only: nuxt.config.ts removes the route from production builds (hook pages:extend).
 import { ref } from 'vue'
 import EmptyState from '~/components/common/EmptyState.vue'
 import FormRow from '~/components/common/FormRow.vue'

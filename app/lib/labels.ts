@@ -1,6 +1,6 @@
 import type { CallOutcome, DcrMode, StdioReason, UpstreamStatus, UpstreamSetup, UpstreamType } from '#shared/api-types'
 
-// Unbekannte Enumwerte zeigen den Rohwert (Fallback).
+// Unknown enum values show the raw value (fallback).
 const pick = <T extends string>(map: Record<string, string>, v: T | string) => map[v] ?? v
 
 export const HEALTH_VALUES: UpstreamStatus[] = ['healthy', 'degraded', 'open', 'auth_expired', 'disabled', 'unknown']

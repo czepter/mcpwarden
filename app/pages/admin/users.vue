@@ -29,11 +29,11 @@ const users = useApi('admin-users', adminApi.users)
 const invites = useApi('admin-invites', adminApi.invites)
 const link = ref<string | null>(null)
 
-// Einladung
+// Invitation
 const invDialog = ref(false)
 const inv = useZodForm(inviteSchema, { email: '' })
 const [invEmail] = inv.form.defineField('email')
-// Mailfunktionen sind nur sichtbar, wenn der Server einen Mailer hat (GET /api/public-config)
+// Mail features are visible only if the server has a mailer (GET /api/public-config)
 const { data: pub } = useAsyncData('public-config', () => publicApi.config().catch(() => ({ mail: false })), { server: false })
 const sendByMail = ref(false)
 const createInvite = inv.submit(async (v) => {
@@ -43,7 +43,7 @@ const createInvite = inv.submit(async (v) => {
 }, ['email'])
 async function revokeInvite(id: string) { try { await adminApi.revokeInvite(id); await invites.refresh() } catch { toast.error('Widerrufen fehlgeschlagen.') } }
 
-// Aktionen
+// Actions
 type Pending = { kind: 'ban' | 'delete', user: AdminUser }
 const pending = ref<Pending | null>(null)
 const deleteStep = ref(1)

@@ -27,7 +27,7 @@ const savePw = pw.submit(async (v) => {
 
 const { data: sessions, refresh } = useApi('sessions', authApi.listSessions)
 async function revoke(token: string) { try { await authApi.revokeSession(token); await refresh() } catch { toast.error('Abmelden fehlgeschlagen.') } }
-// Statusmails (nur sichtbar, wenn der Server Mail versenden kann)
+// Status mails (visible only if the server can send mail)
 const { data: pub } = useAsyncData('public-config', () => publicApi.config().catch(() => ({ mail: false })), { server: false })
 const { data: meSettings, refresh: refreshMe } = useApi('me-settings', meApi.settings)
 const notifyBusy = ref(false)
@@ -35,7 +35,7 @@ async function setNotify(v: boolean | 'indeterminate') {
   notifyBusy.value = true
   try { await meApi.patchSettings({ notifyStatusMail: v === true }); toast.success(v === true ? 'Benachrichtigungen eingeschaltet.' : 'Benachrichtigungen ausgeschaltet.') } catch { toast.error('Speichern fehlgeschlagen.') } finally { notifyBusy.value = false; await refreshMe() }
 }
-// Wirkt, solange der Nutzer die Leiste nicht selbst umgeschaltet hat (Cookie sidebar_state hat Vorrang, siehe layouts/default.vue).
+// Applies as long as the user has not toggled the bar themselves (cookie sidebar_state takes precedence, see layouts/default.vue).
 const collapsedCookie = useCookie('sidebar_default_collapsed', { maxAge: 60 * 60 * 24 * 365 })
 const collapsedDefault = computed({
   get: () => String(collapsedCookie.value) === 'true',

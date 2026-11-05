@@ -3,7 +3,7 @@ import { onBeforeUnmount } from 'vue'
 import { Button } from '~/components/ui/button'
 import CopyButton from './CopyButton.vue'
 
-// Der Wert lebt nur als Prop dieser Komponente; Schliessen entfernt ihn (Abschnitt 10 Regel 4).
+// The value lives only as a prop of this component; closing removes it (section 10 rule 4).
 defineProps<{ title: string, value: string }>()
 const emit = defineEmits<{ close: [] }>()
 onBeforeUnmount(() => emit('close'))

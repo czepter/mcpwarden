@@ -3,8 +3,8 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 
 withDefaults(defineProps<{ open: boolean, title: string, description?: string, confirmLabel?: string, destructive?: boolean }>(), { confirmLabel: 'Bestätigen', destructive: true, description: '' })
 const emit = defineEmits<{ 'update:open': [v: boolean], 'confirm': [] }>()
-// Der Bestaetigen-Knopf schliesst den Dialog (update:open=false) noch vor einem normalen click-Handler;
-// per Capture laeuft `confirm` zuerst, solange die Seite ihren Zustand (z. B. das Ziel) noch hat.
+// The confirm button closes the dialog (update:open=false) before a normal click handler runs;
+// via capture `confirm` runs first, as long as the page still has its state (e.g. the target).
 </script>
 
 <template>

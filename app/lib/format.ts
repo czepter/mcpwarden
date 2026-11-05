@@ -1,6 +1,6 @@
 const NNBSP = ' '
 
-/** 1840 -> "1 840" (schmales Leerzeichen), Dezimalkomma. */
+/** 1840 -> "1 840" (narrow space), decimal comma. */
 export function formatNumber(n: number, digits = 0): string {
   const [i, f] = Math.abs(n).toFixed(digits).split('.')
   const int = i!.replace(/\B(?=(\d{3})+(?!\d))/g, NNBSP)
@@ -9,7 +9,7 @@ export function formatNumber(n: number, digits = 0): string {
 export const formatMs = (ms: number | null | undefined) => ms == null ? '–' : `${formatNumber(ms)} ms`
 export const formatPercent = (share: number, digits = 1) => `${formatNumber(share * 100, digits)} %`
 
-/** "vor 8 s", "vor 2 Min.", "vor 3 Std.", "vor 2 Tg." (Intl.RelativeTimeFormat liefert im Deutschen keine eindeutigen Kurzformen). */
+/** "vor 8 s", "vor 2 Min.", "vor 3 Std.", "vor 2 Tg." (Intl.RelativeTimeFormat yields no unambiguous short forms in German). */
 export function formatRelative(iso: string | null | undefined, now = Date.now()): string {
   if (!iso) return '–'
   const diff = Math.round((new Date(iso).getTime() - now) / 1000)

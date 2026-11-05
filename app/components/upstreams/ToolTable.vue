@@ -6,7 +6,7 @@ import { Switch } from '~/components/ui/switch'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '~/components/ui/table'
 import { toolKind } from '~/lib/labels'
 
-// Optimistischer Schalter mit Rueckname bei Fehler; Beschreibungen sind untrusted und nur Text (gekuerzt).
+// Optimistic switch with rollback on error; descriptions are untrusted and text only (truncated).
 const props = defineProps<{ tools: UpstreamToolItem[], save: (name: string, enabled: boolean) => Promise<unknown> }>()
 const emit = defineEmits<{ changed: [] }>()
 const local = ref<Record<string, boolean>>({})

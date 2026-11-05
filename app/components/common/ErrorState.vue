@@ -4,7 +4,7 @@ import { Button } from '~/components/ui/button'
 
 const props = defineProps<{ error: unknown }>()
 defineEmits<{ retry: [] }>()
-// useAsyncData verpackt Fehler (NuxtError): daher nur statusCode, message und code auslesen.
+// useAsyncData wraps errors (NuxtError): therefore read out only statusCode, message and code.
 const err = computed(() => {
   const e = props.error as { statusCode?: number, message?: string, code?: string, data?: { code?: string } } | null
   return e && typeof e === 'object' ? { statusCode: e.statusCode ?? 0, message: e.message ?? '', code: e.data?.code ?? e.code ?? 'unknown' } : null
