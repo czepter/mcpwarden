@@ -25,6 +25,12 @@ export type CoreDeps = {
   notifyChanged?: (userId: string) => void
 }
 
+/**
+ * Schluessel des Token-Limits: ein OAuth-Client eines Nutzers (nicht das einzelne JWT, dessen `jti` bei jeder Erneuerung wechselt und
+ * den Speicher fuellen wuerde), ein PAT ueber seine stabile ID.
+ */
+export const limiterTokenKey = (ctx: AuthContext) => (ctx.clientId ? `${ctx.clientId}:${ctx.userId}` : ctx.tokenId)
+
 const bytes = (v: unknown) => { try { return JSON.stringify(v)?.length ?? 0 } catch { return 0 } }
 
 export class GatewayCore implements ToolSource {
@@ -104,7 +110,7 @@ export class GatewayCore implements ToolSource {
     if (this.draining) return fail('draining', 'Gateway fährt herunter', 'upstream_error')
     if (up.setup !== 'ready') return fail('awaiting_auth', 'Upstream ist noch nicht eingerichtet (Zugangsdaten fehlen)', 'denied')
     const limits = await this.d.store.getLimits(ctx.userId)
-    const lease = this.d.limiter.acquire({ userId: ctx.userId, tokenId: ctx.tokenId, upstreamId: up.id, userPerMin: limits.callsPerMin, ratePerMin: up.ratePerMin, maxConcurrent: up.maxConcurrent })
+    const lease = this.d.limiter.acquire({ userId: ctx.userId, tokenId: limiterTokenKey(ctx), upstreamId: up.id, userPerMin: limits.callsPerMin, ratePerMin: up.ratePerMin, maxConcurrent: up.maxConcurrent })
     if (!lease.ok) {
       return fail('rate_limited', `Rate-Limit erreicht (${lease.scope}). Erneut versuchen in ${lease.retryAfterSec} s.`, 'rate_limited', { retry_after: lease.retryAfterSec, limit_scope: lease.scope === 'concurrency' ? 'upstream' : lease.scope })
     }

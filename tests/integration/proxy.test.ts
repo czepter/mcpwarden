@@ -30,6 +30,20 @@ describe('proxy passthrough', () => {
     expect(fail.isError).toBe(true); expect(text(fail)).toBe('boom')
   })
 
+  it('token limit is keyed per OAuth client and user, not per JWT: new jti values neither reset the limit nor grow memory (review L-a)', async () => {
+    h = makeGateway()
+    h.store.addUpstream('A', { slug: 'one', url: a.url, ratePerMin: 1000 })
+    h.store.limits.set('A', { callsPerMin: 5 })
+    const calls: string[] = []
+    for (let i = 0; i < 12; i++) {
+      const ctx = ctxFor('A', { tokenType: 'oauth', clientId: 'client-1', tokenId: `jti-${i}` })
+      const r = await h.gw.toolSource.callTool(ctx, 'one__echo', { text: 'x' }, { signal: sig() })
+      calls.push(r.isError ? 'denied' : 'ok')
+    }
+    expect(calls.filter(c => c === 'ok')).toHaveLength(5) // das Nutzerlimit (5/min) greift trotz wechselnder jti
+    expect(h.gw.limiter.size()).toBeLessThanOrEqual(3) // Nutzer, Client, Upstream; nicht 12 Token-Buckets
+  })
+
   it('reuses the pooled connection; version change reconnects; disabling a user closes it', async () => {
     h = makeGateway()
     const up = h.store.addUpstream('A', { slug: 'one', url: a.url })

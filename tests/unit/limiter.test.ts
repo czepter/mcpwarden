@@ -53,4 +53,21 @@ describe('limiter', () => {
     if (r.ok) { r.release(); r.release() }
     expect(l.inflightCount('u', 'up')).toBe(0)
   })
+  it('prune drops idle buckets, expired blocks and old hits but keeps active ones (review L-a)', () => {
+    let t = 0
+    const l = new Limiter(() => t)
+    for (let i = 0; i < 100; i++) l.acquire({ ...base, userId: `u${i}`, tokenId: `jti-${i}`, upstreamId: 'up' })
+    l.blockUpstream('x', 1)
+    expect(l.size()).toBe(300)
+    t = 5 * 60_000
+    l.acquire({ ...base, userId: 'u0', tokenId: 'jti-0' }) // aktiv
+    l.prune(10 * 60_000)
+    expect(l.size()).toBe(300) // noch nicht lange genug ungenutzt
+    t = 20 * 60_000
+    l.acquire({ ...base, userId: 'u0', tokenId: 'jti-0' })
+    l.prune(10 * 60_000)
+    expect(l.size()).toBe(3) // nur die Buckets von u0 (Nutzer, Token, Upstream)
+    expect(l.upstreamBlockedUntil('x')).toBeNull()
+  })
+
 })

@@ -57,7 +57,7 @@ export function createGateway(o: GatewayOptions) {
   const pool = new Pool({ connect: (up, signal, owner) => connectUpstream(up, deps, signal, owner), maxFor: async u => (await o.store.getLimits(u)).maxConnections })
   // Ohne Aufraeumschleife blieben Verbindungen (und damit stdio-Kindprozesse) ewig offen: der Leerlauf-Timer des Workers
   // (Prozesse = 0) kaeme nie zum Zug.
-  const sweeper = setInterval(() => { void pool.sweepIdle(o.poolIdleMs ?? POOL_IDLE_MS).catch(e => o.log?.('pool sweep', e)) }, o.sweepMs ?? 60_000)
+  const sweeper = setInterval(() => { limiter.prune(); void pool.sweepIdle(o.poolIdleMs ?? POOL_IDLE_MS).catch(e => o.log?.('pool sweep', e)) }, o.sweepMs ?? 60_000)
   sweeper.unref()
   const catalog = new Catalog({ pool, store: o.store, now: o.now })
   const stats = new StatsBuffer({ write: o.statsWrite, log: o.log })

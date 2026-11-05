@@ -8,6 +8,8 @@ export class TokenBucket {
     this.tokens = capacity
     this.last = now()
   }
+  /** Zeitpunkt der letzten Pruefung (Aufraeumen ungenutzter Buckets). */
+  get lastUsed() { return this.last }
   configure(capacity: number, perMin: number) { this.capacity = capacity; this.perMin = perMin; this.tokens = Math.min(this.tokens, capacity) }
   private refill() {
     const t = this.now()
@@ -102,6 +104,18 @@ export class Limiter {
     const arr = (this.hits.get(upstreamId) ?? []).filter(t => t >= cut)
     this.hits.set(upstreamId, arr)
     return arr.length
+  }
+
+  /** Anzahl gehaltener Buckets (Tests, Ueberwachung). */
+  size() { return this.buckets.size }
+
+  /** Entfernt seit `idleMs` ungenutzte Buckets, abgelaufene Sperren und alte Trefferlisten, damit der Speicher nicht mit der Zahl der Schluessel waechst. */
+  prune(idleMs = 10 * 60_000) {
+    const now = this.now()
+    for (const [k, b] of this.buckets) if (now - b.lastUsed > idleMs) this.buckets.delete(k)
+    for (const [tok] of this.tokenOwner) if (!this.buckets.has(`t:${tok}`)) this.tokenOwner.delete(tok)
+    for (const [id, until] of this.blockedUntil) if (until <= now) this.blockedUntil.delete(id)
+    for (const [id, arr] of this.hits) if (!arr.some(t => t >= now - 300_000)) this.hits.delete(id)
   }
 
   /** Aufräumen beim Löschen/Sperren. */
