@@ -1,4 +1,4 @@
-import type { SecretInput, TestResult, UpstreamDetail, UpstreamInput, UpstreamPatch, UpstreamTool } from '#shared/api-types'
+import type { SecretInput, TestResult, UpstreamDetail, UpstreamInput, UpstreamList, UpstreamPatch, UpstreamSummary, UpstreamTool } from '#shared/api-types'
 import { seedTools } from '../seed'
 import { getState, role, save, scenario } from '../state'
 import { body, err, json, nid, noContent, route } from '../util'
@@ -13,6 +13,11 @@ function recount(u: UpstreamDetail) {
   u.toolsEnabled = t.filter(x => !x.gone && x.enabled).length
 }
 
+function toSummary(u: UpstreamDetail): UpstreamSummary {
+  const { id, slug, name, description, type, url, command, enabled, status, statusReason, statusChangedAt, lastError, lastOkAt, setup, toolsEnabled, toolsTotal, nextRetryAt, rateLimitHits5m, hasSecret, p95Ms, recent } = u
+  return { id, slug, name, description, type, url, command, enabled, status, statusReason, statusChangedAt, lastError, lastOkAt, setup, toolsEnabled, toolsTotal, nextRetryAt, rateLimitHits5m, hasSecret, ...(p95Ms !== undefined && { p95Ms }), ...(recent && { recent }) }
+}
+
 function huge(): UpstreamDetail[] {
   const base = getState().upstreams
   return Array.from({ length: 60 }, (_, i) => ({ ...base[i % base.length]!, id: `h_${i}`, slug: `bulk-${i}`, name: `Bulk ${i}` }))
@@ -22,8 +27,8 @@ export const upstreamHandlers = [
   route('get', '/api/upstreams', () => {
     const sc = scenario()
     if (sc === 'empty') return json({ items: [] })
-    // Antwort bewusst als Summary: Detailfelder bleiben im Detail (kein Secret je in der Liste).
-    return json({ items: sc === 'huge' ? huge() : getState().upstreams })
+    // Summary: Detailfelder (env, secretNames, Timeouts ...) bleiben im Detail (kein Secret je in der Liste).
+    return json<UpstreamList>({ items: (sc === 'huge' ? huge() : getState().upstreams).map(toSummary) })
   }),
   route('post', '/api/upstreams', async ({ request }) => {
     const b = await body<UpstreamInput>(request); const s = getState()
