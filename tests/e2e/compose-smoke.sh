@@ -1,13 +1,15 @@
 #!/bin/sh
 # Compose-Smoke: das Beispiel-Compose (compose.yaml, Ziel full) startet frisch, /healthz und /readyz antworten,
 # Erst-Registrierung -> Admin, Einladung, Upstream anlegen, Neustart behält die Daten, Härtung im laufenden Container.
-# Aufruf: sh tests/e2e/compose-smoke.sh   (Docker nötig; SMOKE_NO_BUILD=1 nutzt ein vorhandenes Image mcpwarden:full)
+# Aufruf: sh tests/e2e/compose-smoke.sh   (Docker nötig; SMOKE_NO_BUILD=1 nutzt ein vorhandenes Image mcpwarden:full;
+#          SMOKE_PG=1 startet zusätzlich das Compose-Profil `pg` und nutzt Postgres statt PGlite)
 set -eu
 cd "$(dirname "$0")/../.."
 P=mcpw-smoke
 PORT=${SMOKE_PORT:-3917}
 ENVF=$(mktemp)
-trap 'docker compose -p $P --env-file "$ENVF" down -v >/dev/null 2>&1 || true; rm -f "$ENVF" "$ENVF.jar"' EXIT
+dc() { docker compose -p $P --env-file "$ENVF" ${SMOKE_PG:+--profile pg} "$@"; }
+trap 'dc down -v >/dev/null 2>&1 || true; rm -f "$ENVF" "$ENVF.jar"' EXIT
 umask 077
 {
   echo "BASE_URL=http://localhost:$PORT"
@@ -15,8 +17,10 @@ umask 077
   echo "BETTER_AUTH_SECRET=$(openssl rand -base64 32)"
   echo "MASTER_KEY=$(openssl rand -base64 32)"
   echo "RATE_LIMIT=off"
+  [ "${SMOKE_PG:-}" = 1 ] && echo "DATABASE_URL=postgres://postgres:change-me@postgres:5432/mcpwarden"
+  true
 } > "$ENVF"
-fail() { echo "FAIL: $*"; docker compose -p $P --env-file "$ENVF" logs --no-color --tail 60 || true; exit 1; }
+fail() { echo "FAIL: $*"; dc logs --no-color --tail 60 || true; exit 1; }
 wait_http() { # url, erwarteter Status
   i=0
   while [ $i -lt 90 ]; do
@@ -30,16 +34,16 @@ post() { curl -s -b "$J" -c "$J" -H 'content-type: application/json' -H "origin:
 
 if [ "${SMOKE_NO_BUILD:-}" = 1 ]; then
   # Image `mcpwarden:full` wurde vorher gebaut (z. B. in Umgebungen, in denen der Build ein eigenes Netz/CA braucht)
-  docker compose -p $P --env-file "$ENVF" up -d --no-build >/dev/null || fail "up"
+  dc up -d --no-build >/dev/null || fail "up"
 else
-  docker compose -p $P --env-file "$ENVF" up -d --build >/dev/null || fail "up"
+  dc up -d --build >/dev/null || fail "up"
 fi
 wait_http "http://localhost:$PORT/healthz" 200 || fail "healthz"
 wait_http "http://localhost:$PORT/readyz" 200 || fail "readyz"
 echo "ok: healthz/readyz"
 
 # Härtung im laufenden Container
-CID=$(docker compose -p $P --env-file "$ENVF" ps -q mcpwarden)
+CID=$(dc ps -q mcpwarden)
 [ "$(docker inspect -f '{{.HostConfig.SecurityOpt}}' "$CID")" = "[no-new-privileges:true]" ] || fail "no-new-privileges fehlt"
 CAPS=$(docker inspect -f '{{.HostConfig.CapDrop}} {{.HostConfig.CapAdd}}' "$CID")
 echo "$CAPS" | grep -q '^\[ALL\]' || fail "cap_drop ALL fehlt: $CAPS"
@@ -74,14 +78,14 @@ post POST /api/upstreams '{"name":"Demo","slug":"demo","type":"http","url":"http
 echo "ok: registration, capabilities, settings, invite, upstream"
 
 # Neustart: Daten bleiben (Volume)
-docker compose -p $P --env-file "$ENVF" restart >/dev/null || fail "restart"
+dc restart >/dev/null || fail "restart"
 wait_http "http://localhost:$PORT/readyz" 200 || fail "readyz nach Neustart"
 post POST /api/auth/sign-in/email '{"email":"admin@example.com","password":"admin-passwort-123"}' >/dev/null
 post GET /api/upstreams '' | grep -q '"slug":"demo"' || fail "Daten nach Neustart weg"
 echo "ok: restart keeps data"
 
 # SIGTERM: sauberes Ende innerhalb der Frist (Exit 0)
-docker compose -p $P --env-file "$ENVF" stop -t 40 >/dev/null || fail "stop"
+dc stop -t 40 >/dev/null || fail "stop"
 [ "$(docker inspect -f '{{.State.ExitCode}}' "$CID")" = 0 ] || fail "Exit-Code $(docker inspect -f '{{.State.ExitCode}}' "$CID")"
 echo "ok: graceful stop (exit 0)"
 echo "SMOKE OK"
