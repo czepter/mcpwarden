@@ -58,7 +58,11 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
       - run: node scripts/build-supervisor.mjs
+      # test:int enthaelt Vertrags-Test (echte Antworten gegen die zod-Schemas) und Full-Stack-Smoke als Vitest-Suite
       - run: pnpm test:int
+      # derselbe Smoke als Skript gegen eine frische Instanz des gebauten Artefakts (PGlite bzw. Postgres je Matrix-Eintrag)
+      - name: Full-Stack-Smoke (Skript)
+        run: pnpm smoke
 
   # Supervisor im Linux-Container (UID-Wechsel, nur SETUID/SETGID/CHOWN, `id -G`, Härtung); Docker ist auf dem Runner vorhanden
   container:
@@ -74,7 +78,8 @@ jobs:
       - run: node scripts/build-supervisor.mjs
       - run: pnpm test:container
 
-  # Beispiel-Compose (Ziel full) baut und startet frisch: Registrierung, Einladung, Neustart, sauberes Ende
+  # Beispiel-Compose (Ziel full) baut und startet frisch: Full-Stack-Smoke (Registrierung, Einladung, PAT, OAuth+PKCE, /mcp über Fake-Upstream,
+  # Isolation, Widerruf), Neustart, sauberes Ende
   compose-smoke:
     runs-on: ubuntu-latest
     timeout-minutes: 30

@@ -92,3 +92,10 @@ Der Ablauf ist durch `tests/integration/migrate-pglite-to-pg.test.ts` belegt (Lo
 - `ssrf.allow` (Admin-Einstellung): CIDR oder genauer Hostname. Cloud-Metadatenadressen (169.254.169.254, 100.100.100.200, fd00:ec2::254) öffnet nur ein ausdrücklich eingetragener Einzeladresse-Eintrag, nie ein Hostname oder Bereich; Link-Local nur per CIDR/IP.
 
 Tests: `pnpm test:container` (Supervisor im Container, Docker nötig), `pnpm test:compose` (Compose-Smoke gegen ein frisch gebautes Image).
+
+Frontend gegen echte Routen: Mocks (MSW) gibt es nur in Mock-Builds (`pnpm ui:dev`, `pnpm ui:build`, `VITE_API_MOCK`); `pnpm build` und `pnpm dev` sprechen immer mit dem echten Backend (`pnpm ui:check-build` stellt sicher, dass kein Mock-Code im Build steckt). Vertrag und Full-Stack:
+
+- `tests/contract/schemas.ts`: strikte zod-Schemas je Route. Sie prüfen die Mocks (`pnpm ui:test`) und die echten Antworten des gebauten Servers auf PGlite bzw. Postgres (`tests/integration/contract.test.ts`, Teil von `pnpm test` und `pnpm test:pg`).
+- `pnpm smoke` (nach `pnpm build`): Full-Stack-Smoke gegen eine frische Instanz (Erst-Admin, Login, Einladung und zweiter Nutzer, PAT, OAuth 2.1 mit DCR, PKCE S256, Consent und Refresh, `/mcp` `tools/list` und `tools/call` über ein Fake-MCP, Mandantentrennung, falsche Audience, sofortiger Widerruf). Als Vitest-Suite: `tests/integration/smoke.test.ts`; im Container: `pnpm test:compose`.
+- `pnpm ui:e2e`: Playwright gegen die Mocks (`ui:e2e:mock`) und gegen das echte Backend ohne MSW (`ui:e2e:real`). Optional `PW_CHROMIUM_PATH`, `E2E_PORT`, `E2E_REAL_PORT`.
+
