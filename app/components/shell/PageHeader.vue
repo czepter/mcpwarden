@@ -21,7 +21,10 @@ defineProps<{ title: string, crumb?: string, description?: string, crumbs?: Arra
             <BreadcrumbItem><BreadcrumbPage>{{ crumb ?? title }}</BreadcrumbPage></BreadcrumbItem>
           </BreadcrumbList>
         </Breadcrumb>
-        <h1 class="text-xl font-semibold tracking-tight">{{ title }}</h1>
+        <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <h1 class="text-xl font-semibold tracking-tight">{{ title }}</h1>
+          <slot name="status" />
+        </div>
         <p v-if="description" class="text-[13px] text-muted-foreground">{{ description }}</p>
       </div>
     </div>

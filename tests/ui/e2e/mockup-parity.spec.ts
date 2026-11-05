@@ -123,3 +123,14 @@ test('Password toggle "Anzeigen": hit area 44 px, input group 44 px, icon stays 
   const icon = (await toggle.locator('svg').boundingBox())!
   expect(icon.width).toBeLessThanOrEqual(18)
 })
+
+test('Upstream detail: status chip sits next to the heading, actions stay on the right', async ({ page }) => {
+  await login(page)
+  await page.goto('/upstreams/up_4')
+  const h1 = (await page.locator('h1').boundingBox())!
+  const chip = (await page.getByTestId('status-badge').first().boundingBox())!
+  const testBtn = (await page.getByRole('button', { name: 'Verbindung testen' }).boundingBox())!
+  expect(chip.x).toBeGreaterThan(h1.x + h1.width - 1)
+  expect(Math.abs((chip.y + chip.height / 2) - (h1.y + h1.height / 2))).toBeLessThan(16)
+  expect(testBtn.x).toBeGreaterThan(chip.x + chip.width)
+})

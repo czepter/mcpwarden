@@ -58,7 +58,7 @@ const saveTool = (name: string, enabled: boolean) => upstreamApi.setTool(id, nam
   <LoadingRows v-else-if="!u" :rows="5" />
   <template v-else>
     <PageHeader :title="u.name" :crumbs="[{ label: 'Upstreams', to: '/upstreams' }]">
-      <StatusBadge :status="u.status" :setup="u.setup" />
+      <template #status><StatusBadge :status="u.status" :setup="u.setup" /></template>
       <Button variant="outline" :disabled="testing" @click="runTest">Verbindung testen</Button>
       <Button variant="outline" @click="toggleEnabled">{{ u.enabled ? 'Deaktivieren' : 'Aktivieren' }}</Button>
       <Button as-child variant="outline"><NuxtLink :to="`/upstreams/${id}/edit`">Bearbeiten</NuxtLink></Button>
