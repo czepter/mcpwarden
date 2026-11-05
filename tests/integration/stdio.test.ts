@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, readFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
@@ -16,12 +16,17 @@ let sup: Awaited<ReturnType<typeof startSupervisor>>
 let client: SupervisorClient
 let dataDir: string
 const fake = resolve('tests/fixtures/fake-upstream/stdio.mjs')
-const mark = join(mkdtempSync(join(tmpdir(), 'mcpw-mark-')), 'mark.txt')
+const markDir = mkdtempSync(join(tmpdir(), 'mcpw-mark-'))
+chmodSync(markDir, 0o777) // als root wechselt der Supervisor die UID, der Worker muss hier schreiben können
+const mark = join(markDir, 'mark.txt')
+writeFileSync(mark, '', { mode: 0o666 })
+chmodSync(mark, 0o666) // Workers verschiedener Nutzer-UIDs schreiben hinein (Lauf als root mit UID-Wechsel)
 const marks = () => (existsSync(mark) ? readFileSync(mark, 'utf8').trim().split('\n') : [])
 
 beforeAll(async () => {
   execFileSync('node', ['scripts/build-supervisor.mjs'], { stdio: 'ignore' })
   dataDir = mkdtempSync(join(tmpdir(), 'mcpw-data-'))
+  chmodSync(dataDir, 0o755)
   sup = await startSupervisor({ dataDir, socketPath: join(dataDir, 'sup.sock'), webUid: process.getuid!(), webGid: process.getgid!(), stdioMode: 'auto', webCmd: ['sleep', '600'], workerJs: resolve('dist/supervisor/worker.mjs'), idleUnitMs: 60_000, log: () => {} })
   client = new SupervisorClient(join(dataDir, 'sup.sock'))
 })
@@ -43,10 +48,10 @@ const stdioUp = (h: ReturnType<typeof stdioGateway>, userId: string, over = {}) 
 const text = (r: { content?: unknown }) => (r.content as Array<{ text?: string }>)[0]?.text
 
 describe('stdio upstream through supervisor + worker', () => {
-  it('lazy start: no worker before first use; capabilities report no user switch', async () => {
+  it('lazy start: no worker before first use; capabilities match the host privileges', async () => {
     expect(await client.ping()).toBe(true)
     const c = await client.capabilities()
-    expect(c).toMatchObject({ ok: true, canSwitchUser: false, workers: 0 })
+    expect(c).toMatchObject({ ok: true, canSwitchUser: process.getuid!() === 0, workers: 0 })
   })
 
   it('list + call through the shared proxy path; env secret reaches the child, MASTER_KEY & co. do not', async () => {
@@ -127,6 +132,43 @@ describe('stdio upstream through supervisor + worker', () => {
     expect(closed).toBe(true)
     const s2 = await client.attach('u-stop')
     s2.close()
+  })
+
+  it('worker shutdown never kills unrelated processes of the supervisor/web UID (H1: no kill(-1) without isolation)', async () => {
+    const { spawn } = await import('node:child_process')
+    const bystander = spawn('sleep', ['600'], { stdio: 'ignore' })
+    try {
+      const s = await client.attach('u-h1')
+      const t = new IpcTransport(s, { command: 'sleep', args: ['30'], env: {} })
+      await t.start()
+      await client.stopWorker('u-h1')
+      await new Promise(r => setTimeout(r, 1200))
+      expect(() => process.kill(bystander.pid!, 0)).not.toThrow()
+      expect(() => process.kill(process.pid, 0)).not.toThrow()
+      expect(await client.ping()).toBe(true)
+    } finally { bystander.kill('SIGKILL') }
+  })
+
+  it('purge failure does not kill the supervisor: error reply, supervisor keeps serving (H3)', async () => {
+    const s = await client.attach('u-purgefail')
+    await client.stopWorker('u-purgefail')
+    s.close()
+    const { readdirSync, rmSync, writeFileSync } = await import('node:fs')
+    const uidDir = readdirSync(join(dataDir, 'stdio')).filter(n => /^\d+$/.test(n)).map(n => join(dataDir, 'stdio', n))
+    const mine = uidDir.sort().pop()!
+    rmSync(mine, { recursive: true, force: true })
+    writeFileSync(mine, 'not a directory anymore')
+    // lstat sieht eine Datei; der Befehl muss mit purge_failed antworten statt den Supervisor zu beenden
+    await expect(client.stopWorker('u-purgefail', true)).rejects.toMatchObject({ code: 'purge_failed' })
+    expect(await client.ping()).toBe(true)
+  })
+
+  it('concurrent attach for the same user starts exactly one worker (M6)', async () => {
+    const results = await Promise.allSettled([client.attach('u-race'), client.attach('u-race'), client.attach('u-race')])
+    expect(results.filter(r => r.status === 'fulfilled')).toHaveLength(1)
+    expect(results.filter(r => r.status === 'rejected').every(r => (r as PromiseRejectedResult).reason.code === 'busy')).toBe(true)
+    for (const r of results) if (r.status === 'fulfilled') r.value.close()
+    await client.stopWorker('u-race')
   })
 
   it('unknown/other user cannot reach this user\'s tools', async () => {

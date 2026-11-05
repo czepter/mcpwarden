@@ -1,0 +1,14 @@
+{
+  // Eigenständig (Supervisor ist kein Nuxt-Code), damit Vite/oxc keine tsconfig aus einem Elternverzeichnis auflöst.
+  "compilerOptions": {
+    "target": "ES2023",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "strict": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "types": ["node"],
+    "paths": {}
+  },
+  "include": ["./**/*"]
+}

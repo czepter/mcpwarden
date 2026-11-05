@@ -9,7 +9,7 @@ const s = new McpServer({ name: 'fake-stdio', version: '1.0.0' })
 s.registerTool('echo', { description: 'Echo', inputSchema: z.object({ text: z.string() }) }, async ({ text }) => ({ content: [{ type: 'text', text }] }))
 s.registerTool('env', { description: 'Env' }, async () => ({ content: [{ type: 'text', text: JSON.stringify(process.env) }] }))
 s.registerTool('create_order', { description: 'Non-idempotent' }, async () => { mark('create_order'); return { content: [{ type: 'text', text: 'ok' }] } })
-s.registerTool('hang', { description: 'Hangs until cancelled' }, async (_a, ctx) => {
+s.registerTool('hang', { description: 'Hangs until cancelled' }, async (ctx) => {
   mark('hang-start')
   await new Promise((res) => ctx.mcpReq.signal.addEventListener('abort', res, { once: true }))
   mark('hang-cancelled')
