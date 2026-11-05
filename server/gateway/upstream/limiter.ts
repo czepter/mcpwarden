@@ -37,6 +37,7 @@ export type AcquireResult = { ok: true, release: () => void } | { ok: false, sco
 export class Limiter {
   private buckets = new Map<string, TokenBucket>()
   private inflight = new Map<string, number>()
+  private tokenOwner = new Map<string, string>() // Token-Bucket -> Nutzer, damit forgetUser sie entfernen kann
   private blockedUntil = new Map<string, number>()
   private hits = new Map<string, number[]>()
   constructor(private now: Clock = Date.now) {}
@@ -66,6 +67,7 @@ export class Limiter {
     const blocked = this.upstreamBlockedUntil(i.upstreamId)
     if (blocked) return this.deny(i.upstreamId, 'upstream', Math.max(1, Math.ceil((blocked - this.now()) / 1000)))
     const ub = this.bucket(`u:${i.userId}`, i.userPerMin)
+    if (i.tokenId) this.tokenOwner.set(i.tokenId, i.userId)
     const tb = i.tokenId ? this.bucket(`t:${i.tokenId}`, i.userPerMin) : null
     const pb = this.bucket(`p:${i.userId}:${i.upstreamId}`, i.ratePerMin)
     const wu = ub.waitSec()
@@ -104,7 +106,9 @@ export class Limiter {
 
   /** Aufräumen beim Löschen/Sperren. */
   forgetUser(userId: string) {
-    for (const k of [...this.buckets.keys()]) if (k.startsWith(`u:${userId}`) || k.startsWith(`p:${userId}:`)) this.buckets.delete(k)
+    // Nutzer-IDs enthalten kein ':'; exakte Übereinstimmung bzw. Präfix mit Trenner, damit 'ab' nicht 'abc' trifft
+    for (const k of [...this.buckets.keys()]) if (k === `u:${userId}` || k.startsWith(`p:${userId}:`)) this.buckets.delete(k)
+    for (const [tok, owner] of [...this.tokenOwner]) if (owner === userId) { this.buckets.delete(`t:${tok}`); this.tokenOwner.delete(tok) }
     for (const k of [...this.inflight.keys()]) if (k.startsWith(`${userId}:`)) this.inflight.delete(k)
   }
 }

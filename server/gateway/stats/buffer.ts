@@ -153,7 +153,7 @@ export class StatsBuffer {
     if (this.timer) clearInterval(this.timer)
     this.timer = null
     const deadline = this.now() + (this.o.stopDeadlineMs ?? 10_000)
-    while (this.items.length && this.now() < deadline) {
+    while ((this.items.length || this.flushing) && this.now() < deadline) {
       const before = this.items.length + this.dropped
       await Promise.race([this.flush(true), new Promise(r => setTimeout(r, Math.max(0, deadline - this.now())))])
       if (this.items.length + this.dropped >= before && this.flushing === null && this.items.length) {

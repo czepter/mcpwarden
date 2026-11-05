@@ -16,13 +16,18 @@ export class Catalog {
 
   invalidate(userId: string, upstreamId: string) { this.cache.delete(`${userId}:${upstreamId}`) }
   forgetUser(userId: string) { for (const k of [...this.cache.keys()]) if (k.startsWith(`${userId}:`)) this.cache.delete(k) }
+  /** true, wenn `list()` aus dem Cache bedient würde (kein Upstream-Zugriff, kein Breaker-Zugang nötig). */
+  isFresh(up: UpstreamRow): boolean {
+    const c = this.cache.get(this.key(up))
+    return !!c && c.version === up.version && this.now() - c.fetchedAt < (this.o.ttlMs ?? CATALOG_TTL_MS)
+  }
   cached(up: UpstreamRow): CatalogResult | null {
     const c = this.cache.get(this.key(up))
     return c ? { tools: c.tools, fetchedAt: c.fetchedAt, stale: true } : null
   }
 
   /** Frisch aus dem Cache oder per Upstream. Bei Fehler wirft die Methode; der Aufrufer nimmt `cached()` als stale. */
-  async list(up: UpstreamRow, signal?: AbortSignal, onClientError?: (e: unknown) => void): Promise<CatalogResult & { cacheHit: boolean }> {
+  async list(up: UpstreamRow, signal?: AbortSignal, onClientError?: (e: unknown) => void, owner: string = up.userId): Promise<CatalogResult & { cacheHit: boolean }> {
     const k = this.key(up)
     const c = this.cache.get(k)
     if (c && c.version === up.version && this.now() - c.fetchedAt < (this.o.ttlMs ?? CATALOG_TTL_MS)) return { tools: c.tools, fetchedAt: c.fetchedAt, stale: false, cacheHit: true }
@@ -30,7 +35,7 @@ export class Catalog {
     if (!p) {
       p = (async () => {
         try {
-          const entry = await this.o.pool.get(up, signal)
+          const entry = await this.o.pool.get(up, signal, owner)
           const t = mergeTimeouts(up.timeouts)
           const tools: Tool[] = []
           let cursor: string | undefined

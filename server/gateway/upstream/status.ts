@@ -61,7 +61,7 @@ export class UpstreamHealth {
   }
   success() { this.fails = 0; this.everOk = true; this.authExpired = false; this.last = undefined; this.breaker.success(); this.publish() }
   failure(kind: FailureKind) {
-    if (kind === 'auth') this.authExpired = true
+    if (kind === 'auth') { this.authExpired = true; this.breaker.cancelProbe() } // Auth zählt nicht als Ausfall, gibt aber den Half-open-Zugang frei
     else { this.fails++; this.last = kind; this.breaker.failure() }
     this.publish()
   }

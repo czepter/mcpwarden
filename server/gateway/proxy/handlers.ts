@@ -10,6 +10,7 @@ import { PoolLimitError, type Pool } from '../upstream/pool'
 import { namespaced, parseToolName } from '../upstream/slug'
 import type { UpstreamHealth } from '../upstream/status'
 import type { GatewayStore, UpstreamRow } from '../upstream/types'
+import { upstreamContext } from '../upstream/context'
 import { errorResult, type GatewayErrorCode } from './errors'
 
 export type CoreDeps = {
@@ -42,6 +43,7 @@ export class GatewayCore implements ToolSource {
     const t0 = performance.now()
     const ups = await this.d.store.listEnabledUpstreams(ctx.userId)
     const parts = await Promise.all(ups.map(async (up) => {
+      if (up.userId !== ctx.userId) return [] // Verteidigung: Store darf nie fremde Zeilen liefern
       if (up.setup !== 'ready') return []
       const h = this.d.healthFor(up)
       const u0 = performance.now()
@@ -49,10 +51,16 @@ export class GatewayCore implements ToolSource {
       let hit = false
       let status: CallStatRow['status'] = 'ok'
       try {
-        if (!h.breaker.allow()) throw Object.assign(new Error('breaker'), { breaker: true })
-        const r = await this.d.catalog.list(up)
-        tools = r.tools; hit = r.cacheHit
-        h.success()
+        // Cache-Treffer berühren den Breaker nicht: kein Erfolg ohne Upstream-Kontakt, kein verbrauchter Half-open-Zugang
+        if (this.d.catalog.isFresh(up)) {
+          const r = await this.d.catalog.list(up, undefined, undefined, ctx.userId)
+          tools = r.tools; hit = r.cacheHit
+        } else {
+          if (!h.breaker.allow()) throw Object.assign(new Error('breaker'), { breaker: true })
+          const r = await upstreamContext.run({ upstreamId: up.id }, () => this.d.catalog.list(up, undefined, undefined, ctx.userId))
+          tools = r.tools; hit = r.cacheHit
+          h.success()
+        }
       } catch (e) {
         const stale = this.d.catalog.cached(up)
         status = (e as { breaker?: boolean }).breaker ? 'breaker_open' : 'upstream_error'
@@ -78,11 +86,11 @@ export class GatewayCore implements ToolSource {
     const parsed = parseToolName(name)
     if (!parsed) throw new ToolNotFoundError(name)
     const up = await this.d.store.getUpstreamBySlug(ctx.userId, parsed.slug)
-    if (!up || !up.enabled) throw new ToolNotFoundError(name)
+    if (!up || !up.enabled || up.userId !== ctx.userId) throw new ToolNotFoundError(name)
     // Filter wird bei JEDEM Aufruf serverseitig geprüft; unbekannte Namen erst gegen den Katalog synchronisieren.
     let flags = await this.d.store.toolFlags(up.userId, up.id)
     if (!flags.has(parsed.tool) && up.setup === 'ready') {
-      try { await this.d.catalog.list(up, opts.signal); flags = await this.d.store.toolFlags(up.userId, up.id) } catch { /* unbekannt bleibt unbekannt */ }
+      try { await this.d.catalog.list(up, opts.signal, undefined, ctx.userId); flags = await this.d.store.toolFlags(up.userId, up.id) } catch { /* unbekannt bleibt unbekannt */ }
     }
     if (flags.get(parsed.tool) !== true) throw new ToolNotFoundError(name)
 
@@ -112,7 +120,8 @@ export class GatewayCore implements ToolSource {
     const t = mergeTimeouts(up.timeouts)
     const u0 = performance.now()
     try {
-      const entry = await this.d.pool.get(up, ctl.signal)
+      return await upstreamContext.run({ upstreamId: up.id }, async () => {
+      const entry = await this.d.pool.get(up, ctl.signal, ctx.userId)
       entry.inflight++
       try {
         const sig = AbortSignal.any([ctl.signal, AbortSignal.timeout(t.callMs)])
@@ -121,8 +130,9 @@ export class GatewayCore implements ToolSource {
         h.success()
         return done(res, res.isError ? 'tool_error' : 'ok', performance.now() - u0, entry.retries)
       } finally { entry.inflight-- }
+      })
     } catch (e) {
-      if (e instanceof PoolLimitError) return fail('limit', 'Verbindungslimit erreicht', 'upstream_error')
+      if (e instanceof PoolLimitError) { h.breaker.cancelProbe(); return fail('limit', 'Verbindungslimit erreicht', 'upstream_error') }
       const c = classifyError(e, { hasAuth: up.authType !== 'none', aborted: opts.signal.aborted })
       if (c.auth) h.failure('auth')
       else if (c.counts) h.failure(c.code === 'timeout' ? 'timeout' : c.status && c.status >= 500 ? 'http5xx' : 'connect')

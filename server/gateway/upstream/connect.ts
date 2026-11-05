@@ -11,7 +11,7 @@ export type Credentials = { bearer?: string, headers?: Record<string, string>, e
 export type ConnectDeps = {
   safeFetch: FetchLike
   /** Entschlüsselt frisch (nur hier, nie gecacht). */
-  credentials: (up: UpstreamRow) => Promise<Credentials>
+  credentials: (up: UpstreamRow, owner: string) => Promise<Credentials>
   clientInfo?: { name: string, version: string }
   /** Für stdio: liefert den Transport über den Worker (Aufgabe 1.3). */
   stdioTransport?: (up: UpstreamRow, creds: Credentials) => Promise<Transport>
@@ -62,17 +62,25 @@ async function connectOnce(up: UpstreamRow, connectMs: number, kind: 'streamable
 }
 
 /** Verbindungsaufbau mit Timeout und (bei `auto`) SSE-Fallback mit frischem Client. Retry nur hier (Connect/Init). */
-export async function connectUpstream(up: UpstreamRow, deps: ConnectDeps, signal?: AbortSignal): Promise<Connected & { retries: number }> {
+export async function connectUpstream(up: UpstreamRow, deps: ConnectDeps, signal?: AbortSignal, owner: string = up.userId): Promise<Connected & { retries: number }> {
   const t = mergeTimeouts(up.timeouts)
   if (up.type === 'stdio') {
     if (!deps.stdioTransport) throw new Error('stdio not available')
     const ms = Math.max(t.connectMs, 60_000)
     const client = new Client(deps.clientInfo ?? { name: 'mcpwarden', version: '0.1.0' }, clientOptions(ms))
     const sig = AbortSignal.any([AbortSignal.timeout(ms), ...(signal ? [signal] : [])])
-    await raceAbort(client.connect(await deps.stdioTransport(up, await deps.credentials(up)), { signal: sig }), sig)
+    const transport = await deps.stdioTransport(up, await deps.credentials(up, owner))
+    try {
+      await raceAbort(client.connect(transport, { signal: sig }), sig)
+    } catch (e) {
+      // Timeout/Abbruch: sonst bleibt der Kindprozess im Worker übrig und erschöpft MAX_CHILDREN
+      await client.close().catch(() => {})
+      await transport.close().catch(() => {})
+      throw e
+    }
     return { client, transport: 'stdio', retries: 0 }
   }
-  const headers = authHeaders(up, await deps.credentials(up))
+  const headers = authHeaders(up, await deps.credentials(up, owner))
   const attempt = async () => {
     const sig = AbortSignal.any([AbortSignal.timeout(t.connectMs), ...(signal ? [signal] : [])])
     const order: Array<'streamable' | 'sse'> = up.transport === 'auto' ? ['streamable', 'sse'] : [up.transport]

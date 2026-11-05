@@ -6,7 +6,7 @@ export type FakeState = {
   calls: Record<string, number>
   cancelled: number
   aborted: number // Verbindungen, die vor der Antwort geschlossen wurden
-  mode: 'ok' | 'hang' | 'status500' | 'hang-http'
+  mode: 'ok' | 'hang' | 'status500' | 'hang-http' | 'retry429'
   slowMs: number
   extraTools: Array<{ name: string, description?: string }>
   requests: Array<{ method: string, headers: Record<string, string | string[] | undefined> }>

@@ -6,6 +6,7 @@ import { StatsBuffer, type CallStatRow } from './stats/buffer'
 import { Catalog } from './upstream/catalog'
 import { connectUpstream, type ConnectDeps, type Credentials } from './upstream/connect'
 import { Limiter } from './upstream/limiter'
+import { upstreamContext } from './upstream/context'
 import { Pool } from './upstream/pool'
 import { UpstreamHealth, type StatusSink } from './upstream/status'
 import type { GatewayStore, UpstreamRow } from './upstream/types'
@@ -32,12 +33,16 @@ export function createGateway(o: GatewayOptions) {
   const limiter = new Limiter(o.now)
   const safeFetch = o.safeFetch ?? createSafeFetch({
     getAllow: o.getAllow,
-    onRetryAfter: () => {}, // Host->Upstream-Zuordnung folgt mit der DB-Anbindung (blockUpstream)
+    // Retry-After des Upstreams (429/503) sperrt genau diesen Upstream im Limiter (P0-5); Zuordnung über den Aufrufkontext
+    onRetryAfter: (_host, seconds) => { const c = upstreamContext.getStore(); if (c) limiter.blockUpstream(c.upstreamId, Math.min(seconds, 3600)) },
   })
-  const credentials = async (up: UpstreamRow): Promise<Credentials> => {
+  const credentials = async (up: UpstreamRow, owner: string = up.userId): Promise<Credentials> => {
+    // Schlüssel und Abfrage immer vom Eigentümer aus dem Auth-Kontext, nie aus der geladenen Zeile
+    if (owner !== up.userId) throw new Error('upstream owner mismatch')
     const out: Credentials = { headers: {}, env: {} }
-    for (const s of await o.store.getSecrets(up.userId, up.id)) {
-      const v = decryptSecret(o.masterKey, up.userId, { upstreamId: s.upstreamId, kind: s.kind, name: s.name }, s.ciphertext)
+    for (const s of await o.store.getSecrets(owner, up.id)) {
+      if (s.upstreamId !== up.id) throw new Error('secret row does not belong to this upstream')
+      const v = decryptSecret(o.masterKey, owner, { upstreamId: s.upstreamId, kind: s.kind, name: s.name }, s.ciphertext)
       if (s.kind === 'bearer') out.bearer = v
       else if (s.kind === 'header') out.headers![s.name] = v
       else if (s.kind === 'env') out.env![s.name] = v
@@ -45,9 +50,10 @@ export function createGateway(o: GatewayOptions) {
     return out
   }
   const deps: ConnectDeps = { safeFetch, credentials, stdioTransport: o.stdioTransport }
-  const pool = new Pool({ connect: (up, signal) => connectUpstream(up, deps, signal), maxFor: async u => (await o.store.getLimits(u)).maxConnections })
+  const pool = new Pool({ connect: (up, signal, owner) => connectUpstream(up, deps, signal, owner), maxFor: async u => (await o.store.getLimits(u)).maxConnections })
   const catalog = new Catalog({ pool, store: o.store, now: o.now })
   const stats = new StatsBuffer({ write: o.statsWrite, log: o.log })
+  stats.start() // zeitgesteuertes Flush (flushMs), sonst blieben Zeilen bis zum Shutdown im Speicher
   const health = new Map<string, UpstreamHealth>()
   const healthFor = (up: UpstreamRow) => {
     let h = health.get(up.id)

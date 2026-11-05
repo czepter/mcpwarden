@@ -28,6 +28,7 @@ export async function startFakeHttp(opts: { toolNames?: string[] } = {}): Promis
     if (required && req.headers[required[0].toLowerCase()] !== required[1]) { res.writeHead(401, { 'content-type': 'text/plain' }).end('unauthorized'); return }
     if (state.mode === 'hang-http') return // Antwort nie senden
     if (state.mode === 'status500' && req.method === 'POST') { res.writeHead(500).end('boom'); return }
+    if (state.mode === 'retry429' && req.method === 'POST') { res.writeHead(429, { 'retry-after': '30' }).end('slow down'); return }
     void node(req, res)
   })
   server.on('connection', (s) => { sockets.add(s); s.on('close', () => sockets.delete(s)) })

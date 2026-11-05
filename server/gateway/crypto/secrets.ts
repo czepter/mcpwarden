@@ -19,7 +19,11 @@ function deriveUserKey(masterKey: Buffer, userId: string): Buffer {
   return key
 }
 
-const aad = (userId: string, c: SecretContext) => Buffer.from(`${userId}|${c.upstreamId}|${c.kind}|${c.name}`)
+/** Längenpräfix je Feld: kein Trennzeichen kann Feldgrenzen verschieben ("a|b","c" != "a","b|c"). */
+const aad = (userId: string, c: SecretContext) => {
+  const parts = [userId, c.upstreamId, c.kind, c.name].map(x => Buffer.from(x, 'utf8'))
+  return Buffer.concat(parts.flatMap((p) => { const h = Buffer.alloc(4); h.writeUInt32BE(p.length); return [h, p] }))
+}
 const b64 = (b: Buffer) => b.toString('base64url')
 
 /** `userId` kommt immer aus dem Auth-Kontext, nie aus der Zeile. */

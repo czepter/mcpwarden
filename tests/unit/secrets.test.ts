@@ -32,10 +32,10 @@ describe('secrets', () => {
     expect(() => decryptSecret(mk, 'userA', ctx, parts.join('.'))).toThrow()
     expect(() => decryptSecret(mk, 'userA', ctx, 'nope')).toThrow()
   })
-  it('fixed test vector (format stability)', () => {
+  it('fixed test vector (format stability; AAD is length-prefixed since L10, nothing was persisted before)', () => {
     const iv = Buffer.alloc(12, 1)
     const c = encryptSecret(Buffer.alloc(32, 0), 'u', { upstreamId: 'a', kind: 'bearer', name: '' }, 'hello', iv)
-    expect(c).toBe('v1.AQEBAQEBAQEBAQEB.mHYaxuA.4NStfJm4-387gPNBb21qmQ')
+    expect(c).toBe('v1.AQEBAQEBAQEBAQEB.mHYaxuA.bjFCbZkvXp-sYGy4Pzlo3g')
     expect(decryptSecret(Buffer.alloc(32, 0), 'u', { upstreamId: 'a', kind: 'bearer', name: '' }, c)).toBe('hello')
   })
   it('rejects wrong master key length', () => {

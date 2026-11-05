@@ -14,14 +14,16 @@ export class IpcTransport implements Transport {
   onmessage?: Transport['onmessage']
   private childId = randomUUID()
   private closedFlag = false
+  private started = false
   stderrTail = ''
   constructor(private session: WorkerSession, private spec: { command: string, args: string[], env: Record<string, string>, cwdRel?: string }) {}
 
   async start() {
     await new Promise<void>((res, rej) => {
       this.session.register(this.childId, (m: FromWorker) => {
-        if (m.t === 'started') return res()
-        if (m.t === 'error') { const e = new StdioChildError(m.code, m.message); if (this.closedFlag) this.onerror?.(e); return rej(e) }
+        if (m.t === 'started') { this.started = true; return res() }
+        // Vor dem Start scheitert start(); danach gehört der Fehler an onerror (sonst würde er verschluckt)
+        if (m.t === 'error') { const e = new StdioChildError(m.code, m.message); if (this.started) this.onerror?.(e); else rej(e); return }
         if (m.t === 'msg') {
           try { this.onmessage?.(JSON.parse(m.line) as JSONRPCMessage) } catch (e) { this.onerror?.(e as Error) }
           return

@@ -11,12 +11,14 @@ export class PoolLimitError extends Error { constructor() { super('Verbindungsli
 export class Pool {
   private entries = new Map<string, PoolEntry>()
   private connecting = new Map<string, Promise<PoolEntry>>()
-  constructor(private o: { connect: (up: UpstreamRow, signal?: AbortSignal) => Promise<Connected & { retries?: number }>, maxFor: (userId: string) => number | Promise<number>, now?: Clock }) {}
+  constructor(private o: { connect: (up: UpstreamRow, signal: AbortSignal | undefined, owner: string) => Promise<Connected & { retries?: number }>, maxFor: (userId: string) => number | Promise<number>, now?: Clock }) {}
   private now() { return (this.o.now ?? Date.now)() }
   private key = (userId: string, id: string) => `${userId}:${id}`
 
   /** Schlüssel enthält die Nutzer-ID: Isolation durch Konstruktion. */
-  async get(up: UpstreamRow, signal?: AbortSignal): Promise<PoolEntry> {
+  async get(up: UpstreamRow, signal?: AbortSignal, owner: string = up.userId): Promise<PoolEntry> {
+    // `owner` kommt aus dem Auth-Kontext; eine fremde Zeile wird nie verbunden (und nie mit fremdem Schlüssel entschlüsselt)
+    if (owner !== up.userId) throw new Error('upstream owner mismatch')
     const k = this.key(up.userId, up.id)
     const hit = this.entries.get(k)
     if (hit && hit.version === up.version) { hit.lastUsed = this.now(); return hit }
@@ -25,7 +27,7 @@ export class Pool {
     if (pending) return pending
     const p = (async () => {
       await this.makeRoom(up.userId)
-      const c = await this.o.connect(up, signal)
+      const c = await this.o.connect(up, signal, owner)
       const entry: PoolEntry = { client: c.client, version: up.version, transport: c.transport, lastUsed: this.now(), inflight: 0, retries: c.retries ?? 0 }
       c.client.onclose = () => { if (this.entries.get(k) === entry) this.entries.delete(k) }
       this.entries.set(k, entry)
