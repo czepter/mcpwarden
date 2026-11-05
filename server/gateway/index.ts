@@ -1,3 +1,4 @@
+import { POOL_IDLE_MS } from './config'
 import { decryptSecret } from './crypto/secrets'
 import { createSafeFetch, type FetchLike } from './net/safe-fetch'
 import type { AllowList } from './net/ssrf'
@@ -23,6 +24,9 @@ export type GatewayOptions = {
   notifyChanged?: (userId: string) => void
   log?: (msg: string, err?: unknown) => void
   now?: () => number
+  /** Leerlaufgrenze der Pool-Verbindungen (Default POOL_IDLE_MS) und Takt der Aufräumschleife (Default 60 s); für Tests. */
+  poolIdleMs?: number
+  sweepMs?: number
 }
 
 /**
@@ -51,6 +55,10 @@ export function createGateway(o: GatewayOptions) {
   }
   const deps: ConnectDeps = { safeFetch, credentials, stdioTransport: o.stdioTransport }
   const pool = new Pool({ connect: (up, signal, owner) => connectUpstream(up, deps, signal, owner), maxFor: async u => (await o.store.getLimits(u)).maxConnections })
+  // Ohne Aufraeumschleife blieben Verbindungen (und damit stdio-Kindprozesse) ewig offen: der Leerlauf-Timer des Workers
+  // (Prozesse = 0) kaeme nie zum Zug.
+  const sweeper = setInterval(() => { void pool.sweepIdle(o.poolIdleMs ?? POOL_IDLE_MS).catch(e => o.log?.('pool sweep', e)) }, o.sweepMs ?? 60_000)
+  sweeper.unref()
   const catalog = new Catalog({ pool, store: o.store, now: o.now })
   const stats = new StatsBuffer({ write: o.statsWrite, log: o.log })
   stats.start() // zeitgesteuertes Flush (flushMs), sonst blieben Zeilen bis zum Shutdown im Speicher
@@ -73,6 +81,7 @@ export function createGateway(o: GatewayOptions) {
       for (const [id, h] of health) if (h.userId === userId) health.delete(id)
     },
     async shutdown(drainMs = 30_000) {
+      clearInterval(sweeper)
       await core.drain(drainMs)
       await pool.closeAll()
       await stats.stop()

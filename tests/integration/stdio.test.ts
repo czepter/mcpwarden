@@ -177,4 +177,35 @@ describe('stdio upstream through supervisor + worker', () => {
     await expect(h.gw.toolSource.callTool(ctxFor('u-b'), 'fs__echo', { text: 'x' }, { signal: sig() })).rejects.toBeInstanceOf(ToolNotFoundError)
     await h.gw.shutdown(300)
   })
+  it('idle: the pool sweep closes the idle child, then the worker idle timer ends the worker (review M-C)', async () => {
+    const dir2 = mkdtempSync(join(tmpdir(), 'mcpw-data-'))
+    chmodSync(dir2, 0o755)
+    // idleUnitMs 100 x idleMin 3 = Worker-Leerlauf nach 300 ms ohne Kindprozess
+    const sup2 = await startSupervisor({ dataDir: dir2, socketPath: join(dir2, 'sup.sock'), webUid: process.getuid!(), webGid: process.getgid!(), stdioMode: 'auto', webCmd: ['sleep', '600'], workerJs: resolve('dist/supervisor/worker.mjs'), idleUnitMs: 100, log: () => {} })
+    const client2 = new SupervisorClient(join(dir2, 'sup.sock'))
+    try {
+      const sessions = new Map<string, WorkerSession>()
+      const h = makeGateway({
+        poolIdleMs: 300, sweepMs: 100,
+        stdioTransport: async (up, creds) => {
+          let s = sessions.get(up.userId)
+          if (!s || s.closed) { s = await client2.attach(up.userId, { maxProcs: 3, idleMin: 3 }); sessions.set(up.userId, s) }
+          return new IpcTransport(s, { command: up.command!, args: up.args, env: { ...up.env, ...creds.env }, cwdRel: up.cwd ?? undefined })
+        },
+      })
+      stdioUp(h as never, 'u-idle')
+      const ctx = ctxFor('u-idle')
+      expect(text(await h.gw.toolSource.callTool(ctx, 'fs__echo', { text: 'hi' }, { signal: sig() }))).toBe('hi')
+      expect((await client2.capabilities()).workers).toBe(1)
+      await expect.poll(async () => (await client2.capabilities()).workers, { timeout: 10_000, interval: 100 }).toBe(0)
+      expect(h.gw.pool.count('u-idle')).toBe(0)
+      // der naechste Aufruf startet transparent einen neuen Worker
+      expect(text(await h.gw.toolSource.callTool(ctx, 'fs__echo', { text: 'again' }, { signal: sig() }))).toBe('again')
+      await h.gw.shutdown(300)
+    } finally {
+      sup2.onExit(() => {})
+      await sup2.shutdown(0)
+    }
+  })
+
 })
