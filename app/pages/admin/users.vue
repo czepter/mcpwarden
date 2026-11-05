@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { AdminUser } from '#shared/api-types'
 import { toast } from 'vue-sonner'
-import { adminApi } from '~/api'
+import { adminApi, publicApi } from '~/api'
 import ConfirmDialog from '~/components/common/ConfirmDialog.vue'
 import DataSection from '~/components/common/DataSection.vue'
 import EmptyState from '~/components/common/EmptyState.vue'
@@ -33,9 +33,13 @@ const link = ref<string | null>(null)
 const invDialog = ref(false)
 const inv = useZodForm(inviteSchema, { email: '' })
 const [invEmail] = inv.form.defineField('email')
+// Mailfunktionen sind nur sichtbar, wenn der Server einen Mailer hat (GET /api/public-config)
+const { data: pub } = useAsyncData('public-config', () => publicApi.config().catch(() => ({ mail: false })), { server: false })
+const sendByMail = ref(false)
 const createInvite = inv.submit(async (v) => {
-  const r = await adminApi.createInvite(v.email || undefined)
-  link.value = r.link; invDialog.value = false; inv.form.resetForm(); await invites.refresh()
+  const r = await adminApi.createInvite(v.email || undefined, !!pub.value?.mail && sendByMail.value && !!v.email)
+  link.value = r.link; invDialog.value = false; inv.form.resetForm(); sendByMail.value = false; await invites.refresh()
+  if (r.mailQueued) toast.success('Einladung per E-Mail versendet. Der Link bleibt hier einmalig sichtbar.')
 }, ['email'])
 async function revokeInvite(id: string) { try { await adminApi.revokeInvite(id); await invites.refresh() } catch { toast.error('Widerrufen fehlgeschlagen.') } }
 
@@ -124,6 +128,10 @@ const saveLimits = lim.submit(async (v) => {
         <FormRow id="inv-email" label="E-Mail" optional description="Bindet die Einladung an diese Adresse." :error="inv.form.errors.value.email">
           <template #default="{ id, invalid, describedby }"><Input :id="id" v-model="invEmail" type="email" :aria-invalid="invalid || undefined" :aria-describedby="describedby" /></template>
         </FormRow>
+        <div v-if="pub?.mail" class="flex items-center gap-2">
+          <Checkbox id="inv-send" v-model="sendByMail" class="size-5" :disabled="!invEmail" />
+          <label for="inv-send" class="text-sm" :class="invEmail ? '' : 'text-muted-foreground'">Per E-Mail senden<span v-if="!invEmail" class="text-xs"> (E-Mail-Adresse nötig)</span></label>
+        </div>
         <DialogFooter><Button type="button" variant="outline" @click="invDialog = false">Abbrechen</Button><Button type="submit" :disabled="inv.busy.value">Erzeugen</Button></DialogFooter>
       </form>
     </DialogContent>

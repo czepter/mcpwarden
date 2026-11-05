@@ -5,7 +5,7 @@
 import { z } from 'zod'
 import type {
   AdminSettingsResult, AdminUserList, AllowlistList, AuditList, AuthSession, Capabilities, ConnectionList, ConsentInfo, Dashboard, DcrPolicy,
-  InviteCreated, InviteInfo, InviteList, OAuthClientAdminList, PatCreated, PatList, PublicConfig, UpstreamDetail, UpstreamList, UpstreamTestResult, UpstreamToolList,
+  InviteCreated, InviteInfo, InviteList, MeSettings, OAuthClientAdminList, PatCreated, PatList, PublicConfig, UpstreamDetail, UpstreamList, UpstreamTestResult, UpstreamToolList,
 } from '#shared/api-types'
 
 const { string: str, number: num, boolean: bool } = z
@@ -60,7 +60,7 @@ export const schemas = {
   invites: z.strictObject({
     items: z.array(z.strictObject({ id: str(), email: nstr, createdAt: str(), expiresAt: str(), status: z.enum(['open', 'used', 'expired', 'revoked']), usedAt: nstr, usedByUserId: nstr, createdByUserId: nstr })),
   }) satisfies z.ZodType<InviteList>,
-  inviteCreated: z.strictObject({ id: str(), email: nstr, createdAt: str(), expiresAt: str(), link: str() }) satisfies z.ZodType<InviteCreated>,
+  inviteCreated: z.strictObject({ id: str(), email: nstr, createdAt: str(), expiresAt: str(), link: str(), mailQueued: bool().optional() }) satisfies z.ZodType<InviteCreated>,
   inviteCheck: z.union([
     z.strictObject({ valid: z.literal(true), email: nstr, expiresAt: str() }),
     z.strictObject({ valid: z.literal(false), reason: z.enum(['expired', 'used', 'revoked', 'unknown']) }),
@@ -91,6 +91,7 @@ export const schemas = {
     })),
     nextCursor: nstr,
   }) satisfies z.ZodType<AuditList>,
+  meSettings: z.strictObject({ notifyStatusMail: bool() }) satisfies z.ZodType<MeSettings>,
   publicConfig: z.strictObject({ mail: bool(), registrationOpen: bool() }) satisfies z.ZodType<PublicConfig>,
   /** Nitro-Fehlerform (`ApiErrorBody`), nicht `/api/auth/*`. */
   apiError: z.looseObject({ statusCode: num(), statusMessage: str(), data: z.looseObject({ code: str().optional(), field: str().optional(), message: str().optional() }).optional() }),

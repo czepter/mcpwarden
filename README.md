@@ -20,6 +20,7 @@ Vor dem ersten `dev` einmal `pnpm env:init` (legt `.env` mit Zufallswerten und M
 | `ALLOWED_ORIGINS` | kommagetrennte Origins, Default Origin von `BASE_URL` |
 | `SMTP_URL` | optional: `smtps://user:pass@host:465` oder `smtp://user:pass@host:587` (STARTTLS Pflicht, Klartext nur an localhost). Geheim, URL-kodieren |
 | `MAIL_FROM` | Absender, Pflicht wenn `SMTP_URL` gesetzt ist, z. B. `mcpwarden <noreply@example.com>` |
+| `MAIL_NOTIFY_WINDOW_MIN` | optional: Mindestabstand der Statusmails je Upstream und Zustand in Minuten (1 bis 10080), Default `60` |
 | `RATE_LIMIT` | nur Tests: `off` schaltet das Better-Auth-Rate-Limit ab |
 
 Der Start bricht mit Exit-Code 1 ab, wenn eine Pflichtvariable fehlt oder ungültig ist (Meldung nennt nur Namen, nie Werte).
@@ -32,7 +33,7 @@ Hinweise: Single-Instance (prozessweiter Mutex für die Registrierung, PGlite er
 
 ## Sendet mcpwarden E-Mails?
 
-Optional. Ohne `SMTP_URL` nicht: Es wird kein Mailserver gebraucht, Einladungen bleiben Links, und alle Mailfunktionen sind ausgeblendet. Mit `SMTP_URL` und `MAIL_FROM` (siehe Tabelle) schaltet sich der Mailversand ein; heute ist das „Passwort vergessen“ (Link 15 Minuten gültig, einmal verwendbar). Der Versand ist begrenzt (je Empfänger 3 pro Stunde), ein Fehler beim Versand bricht nie eine Anfrage ab, und weder Zugangsdaten noch Tokens landen im Log. Der Start bricht ab, wenn `SMTP_URL` ungültig ist oder `MAIL_FROM` fehlt.
+Optional. Ohne `SMTP_URL` nicht: Es wird kein Mailserver gebraucht, Einladungen bleiben Links, und alle Mailfunktionen sind ausgeblendet. Mit `SMTP_URL` und `MAIL_FROM` (siehe Tabelle) schaltet sich der Mailversand ein; gebaut sind „Passwort vergessen“ (Link 15 Minuten gültig, einmal verwendbar), Einladungsmails und Statusmails. Beim Erzeugen einer an eine Adresse gebundenen Einladung kann der Admin „Per E-Mail senden“ ankreuzen; der Link `/invite/<token>` geht dann zusätzlich an diese Adresse und bleibt im Dialog einmalig sichtbar. Wechselt ein Upstream nach `open` oder `auth_expired` (und einmal zurück nach gesund), bekommt nur sein Besitzer eine Mail mit Name, Zustand, einem bereinigten Grund und dem Link auf die Upstream-Seite (nie Secrets, nie Links aus Upstream-Text). Je Upstream und Zustand geht höchstens eine Mail pro Fenster raus (`MAIL_NOTIFY_WINDOW_MIN`, Default eine Stunde; der Zähler liegt im Speicher und beginnt nach einem Neustart neu), der Versand läuft im Hintergrund über eine begrenzte Warteschlange und kann einen Aufruf nie verlangsamen. Jeder Nutzer kann die Statusmails unter Einstellungen > Benachrichtigungen abschalten (Standard: an). Der Versand ist begrenzt (je Empfänger 3 pro Stunde), ein Fehler beim Versand bricht nie eine Anfrage ab, und weder Zugangsdaten noch Tokens landen im Log. Der Start bricht ab, wenn `SMTP_URL` ungültig ist oder `MAIL_FROM` fehlt.
 
 ## Client verbinden
 

@@ -27,6 +27,8 @@ export interface AppConfig {
   /** Optionaler Mailversand (P1 "Mailer"). Ohne SMTP_URL bleibt alles Link-basiert. */
   smtp: SmtpConfig | undefined
   mailFrom: string | undefined
+  /** Mindestabstand je (Upstream, Zustand) fuer Statusmails in Minuten (MAIL_NOTIFY_WINDOW_MIN, Default 60). */
+  statusMailWindowMin: number
 }
 
 const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]'])
@@ -157,6 +159,14 @@ export function parseConfig(env: Record<string, string | undefined>): AppConfig 
     else if (!isMailFrom(mailFrom)) problems.push('MAIL_FROM ist keine gueltige Absenderadresse')
   }
 
+  let statusMailWindowMin = 60
+  const rawWindow = get('MAIL_NOTIFY_WINDOW_MIN')
+  if (rawWindow) {
+    const n = Number(rawWindow)
+    if (!/^\d+$/.test(rawWindow) || n < 1 || n > 10_080) problems.push('MAIL_NOTIFY_WINDOW_MIN muss eine ganze Zahl von 1 bis 10080 sein')
+    else statusMailWindowMin = n
+  }
+
   if (problems.length || !baseUrl || !betterAuthSecret || !masterKey) throw new ConfigError(problems)
 
   return Object.freeze({
@@ -169,6 +179,7 @@ export function parseConfig(env: Record<string, string | undefined>): AppConfig 
     rateLimitEnabled: rateLimit !== 'off',
     smtp,
     mailFrom,
+    statusMailWindowMin,
   })
 }
 

@@ -225,17 +225,72 @@ test('Dashboard leer, Fehler, 403 und nichts-zu-tun', async ({ page }) => {
 
 test('Gestrichenes ist nirgends erreichbar (F12)', async ({ page }) => {
   await login(page)
-  const banned = [/Tags/, /Alle testen/, /Konto löschen/, /E-Mail ändern/, /Benachrichtigung/, /Dunkel/, /Gerät/]
+  const banned = [/Tags/, /Alle testen/, /Konto löschen/, /E-Mail ändern/, /Dunkel/, /Gerät/]
   for (const p of ['/', '/upstreams', '/settings', '/settings/connections', '/admin/settings', '/upstreams/up_1']) {
     await page.goto(p)
     await page.waitForLoadState('networkidle')
     const text = await page.locator('body').innerText()
     for (const b of banned) expect(text, `${p} ${b}`).not.toMatch(b)
+    // Statusmails (P1 Mailer) sind nur auf /settings und nur mit aktivem Mailer vorgesehen (dort: eigener Test)
+    if (p !== '/settings') expect(text, `${p} Benachrichtigung`).not.toMatch(/Benachrichtigung/)
   }
   await page.goto('/settings')
   await expect(page.getByRole('radio')).toHaveCount(0)
   const settings = await page.locator('main, body').first().innerText()
   expect(settings).not.toMatch(/Farbschema|Dunkel|\bHell\b|\bSystem\b/)
+})
+
+test('Admin: Einladung per E-Mail senden nur mit aktivem Mailer und eingetragener Adresse', async ({ page }) => {
+  await login(page)
+  await page.goto('/admin/users')
+  await page.getByRole('button', { name: '+ Einladung erzeugen' }).click()
+  const box = page.getByRole('dialog').getByRole('checkbox', { name: /Per E-Mail senden/ })
+  await expect(box).toBeVisible()
+  await expect(box).toBeDisabled() // ohne Adresse nicht wählbar
+  await page.getByRole('dialog').getByLabel('E-Mail (optional)').fill('neu@example.test')
+  await expect(box).toBeEnabled()
+  await box.click()
+  await page.getByRole('dialog').getByRole('button', { name: 'Erzeugen' }).click()
+  await expect(page.getByTestId('one-time-value')).toContainText('/invite/') // Link bleibt einmalig sichtbar
+  await expect(page.getByText('Einladung per E-Mail versendet')).toBeVisible()
+})
+
+test('Admin: ohne Mailer gibt es die Option „Per E-Mail senden“ nicht', async ({ page }) => {
+  await prep(page, { mail: 'off' })
+  await page.goto('/login')
+  await page.getByLabel('E-Mail').fill('admin@example.test')
+  await page.getByLabel('Passwort').fill('irgendeinpasswort')
+  await page.getByRole('button', { name: 'Anmelden' }).click()
+  await expect(page.getByRole('heading', { name: 'Dashboard', level: 1 })).toBeVisible()
+  await page.goto('/admin/users')
+  await page.getByRole('button', { name: '+ Einladung erzeugen' }).click()
+  await expect(page.getByRole('dialog').getByLabel('E-Mail (optional)')).toBeVisible()
+  await expect(page.getByRole('checkbox', { name: /Per E-Mail senden/ })).toHaveCount(0)
+})
+
+test('Einstellungen: Statusmail-Schalter nur mit Mailer, Standard an, Umschalten bleibt nach Reload', async ({ page }) => {
+  await login(page)
+  await page.goto('/settings')
+  const sw = page.getByRole('switch', { name: 'E-Mail bei Statuswechsel meiner Upstreams' })
+  await expect(sw).toBeChecked()
+  await axe(page)
+  await sw.click()
+  await expect(page.getByText('Benachrichtigungen ausgeschaltet.')).toBeVisible()
+  await expect(sw).not.toBeChecked()
+  await page.reload()
+  await expect(page.getByRole('switch', { name: 'E-Mail bei Statuswechsel meiner Upstreams' })).not.toBeChecked()
+})
+
+test('Einstellungen: ohne Mailer fehlt der Abschnitt Benachrichtigungen', async ({ page }) => {
+  await prep(page, { mail: 'off' })
+  await page.goto('/login')
+  await page.getByLabel('E-Mail').fill('admin@example.test')
+  await page.getByLabel('Passwort').fill('irgendeinpasswort')
+  await page.getByRole('button', { name: 'Anmelden' }).click()
+  await expect(page.getByRole('heading', { name: 'Dashboard', level: 1 })).toBeVisible()
+  await page.goto('/settings')
+  await expect(page.getByRole('heading', { name: 'Darstellung' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Benachrichtigungen' })).toHaveCount(0)
 })
 
 test('Darstellung: Standard "eingeklappt" wirkt, eigenes Umschalten hat Vorrang', async ({ page }) => {

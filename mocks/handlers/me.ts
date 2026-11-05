@@ -1,4 +1,4 @@
-import type { Capabilities, ConnectionList, PatCreated, PatList } from '#shared/api-types'
+import type { Capabilities, ConnectionList, MeSettings, PatCreated, PatList } from '#shared/api-types'
 import { getState, role, save, scenario } from '../state'
 import { body, err, json, nid, noContent, route } from '../util'
 
@@ -13,6 +13,16 @@ export const meHandlers = [
       features: { healthHistory: false, toolMode: false, callLog: false },
     }
     return json(caps)
+  }),
+  route('get', '/api/me/settings', () => json<MeSettings>({ notifyStatusMail: getState().notifyStatusMail ?? true })),
+  route('patch', '/api/me/settings', async ({ request }) => {
+    const b = await body<Record<string, unknown>>(request)
+    const unknown = Object.keys(b).find(k => k !== 'notifyStatusMail')
+    if (unknown) return err(422, 'validation', 'Unbekanntes Feld', unknown)
+    if (b.notifyStatusMail !== undefined && typeof b.notifyStatusMail !== 'boolean') return err(422, 'validation', 'notifyStatusMail muss true oder false sein', 'notifyStatusMail')
+    const s = getState()
+    if (typeof b.notifyStatusMail === 'boolean') { s.notifyStatusMail = b.notifyStatusMail; save() }
+    return json<MeSettings>({ notifyStatusMail: s.notifyStatusMail ?? true })
   }),
   route('get', '/api/me/pats', () => {
     const items = scenario() === 'empty' ? [] : getState().pats

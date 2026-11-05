@@ -1,6 +1,6 @@
 import type { AdminUserLimitsInput, AdminSettings, AdminSettingsResult, AllowlistInput, DcrMode } from '#shared/api-types'
 import { DEFAULT_LIMITS } from '../seed'
-import { getState, save, scenario, volatileInviteTokens } from '../state'
+import { getState, mailEnabled, save, scenario, volatileInviteTokens } from '../state'
 import { body, err, json, nid, noContent, route } from '../util'
 
 const A = { admin: true }
@@ -36,14 +36,18 @@ export const adminHandlers = [
   }, A),
   route('get', '/api/admin/invites', () => json({ items: getState().invites }), A),
   route('post', '/api/admin/invites', async ({ request }) => {
-    const b = await body<{ email?: string }>(request)
+    const b = await body<{ email?: string, sendMail?: boolean }>(request)
     if (b.email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(b.email)) return err(422, 'validation', 'Ungültige E-Mail-Adresse.', 'email')
+    if (b.sendMail) {
+      if (!b.email) return err(422, 'validation', 'Für den Versand per E-Mail ist eine E-Mail-Adresse nötig.', 'sendMail')
+      if (!mailEnabled()) return err(422, 'validation', 'E-Mail-Versand ist nicht eingerichtet.', 'sendMail')
+    }
     const s = getState()
     const inv = { id: nid('inv'), email: b.email ?? null, createdAt: new Date().toISOString(), expiresAt: new Date(Date.now() + 7 * 86_400_000).toISOString(), status: 'open' as const, usedAt: null, usedByUserId: null, createdByUserId: 'usr_1' }
     s.invites.unshift(inv); save()
     const token = `inv-${Math.random().toString(36).slice(2)}${Math.random().toString(36).slice(2)}`
     volatileInviteTokens.set(token, inv.id)
-    return json({ id: inv.id, email: inv.email, createdAt: inv.createdAt, expiresAt: inv.expiresAt, link: `${location.origin}/invite/${token}` }, 201)
+    return json({ id: inv.id, email: inv.email, createdAt: inv.createdAt, expiresAt: inv.expiresAt, link: `${location.origin}/invite/${token}`, mailQueued: b.sendMail === true }, 201)
   }, A),
   route('delete', '/api/admin/invites/:id', ({ params }) => {
     const inv = getState().invites.find(x => x.id === params.id)

@@ -5,7 +5,7 @@
 import { createHash, randomBytes } from 'node:crypto'
 import { and, asc, count, desc, eq, gt, inArray, isNull, lt, max, notInArray, or, sql } from 'drizzle-orm'
 import type { Db } from '../../db'
-import { appSetting, auditLog, callStat, personalAccessToken, upstream, upstreamSecret, upstreamTool, user, userGatewayLimits, userInvite } from '../../db/schema'
+import { appSetting, auditLog, callStat, personalAccessToken, upstream, upstreamSecret, upstreamTool, user, userGatewayLimits, userInvite, userPreference } from '../../db/schema'
 import { ACTIVE_WINDOW_MS, DEFAULT_LIMITS, INVITE_TTL_DAYS } from '../config'
 import type { Timeouts } from '../config'
 import type { CallStatRow } from '../stats/buffer'
@@ -62,6 +62,14 @@ export class GatewayRepo implements GatewayStore {
       maxConnections: r?.maxConnections ?? DEFAULT_LIMITS.maxConnections, stdioAllowed: r?.stdioAllowed ?? false,
       stdioMaxProcs: r?.stdioMaxProcs ?? DEFAULT_LIMITS.stdioMaxProcs, stdioIdleMin: r?.stdioIdleMin ?? DEFAULT_LIMITS.stdioIdleMin,
     }
+  }
+  /** Default true (Zeile fehlt). */
+  async getNotifyStatusMail(userId: string): Promise<boolean> {
+    const [r] = await this.db.select({ v: userPreference.notifyStatusMail }).from(userPreference).where(eq(userPreference.userId, userId))
+    return r?.v ?? true
+  }
+  async setNotifyStatusMail(userId: string, value: boolean) {
+    await this.db.insert(userPreference).values({ userId, notifyStatusMail: value }).onConflictDoUpdate({ target: userPreference.userId, set: { notifyStatusMail: value, updatedAt: new Date() } })
   }
   async syncTools(userId: string, upstreamId: string, names: string[]) {
     const now = new Date()

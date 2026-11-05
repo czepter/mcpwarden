@@ -8,6 +8,8 @@ import type {
   UpstreamDetail, UpstreamSummary, UpstreamTestResult, UpstreamToolList, UserLimits,
 } from '#shared/api-types'
 import { apiError } from '../utils/api'
+import { trySendMail, type Mailer } from '../mail'
+import { inviteMail } from '../mail/templates'
 import { audit, type AuditAction } from '../utils/audit'
 import { isValidSlug } from './upstream/slug'
 import { ACTIVE_WINDOW_MS, DEFAULT_LIMITS, TIMEOUTS, mergeTimeouts, type Timeouts } from './config'
@@ -469,15 +471,22 @@ export async function adminListInvites(rt: Runtime): Promise<{ items: InviteSumm
     })),
   }
 }
-export async function adminCreateInvite(rt: Runtime, admin: Who, baseUrl: URL, email: unknown) {
+export async function adminCreateInvite(rt: Runtime, admin: Who, baseUrl: URL, email: unknown, opts: { sendMail?: unknown, mailer?: Mailer } = {}) {
   let mail: string | null = null
   if (email !== undefined && email !== null && email !== '') {
     if (typeof email !== 'string' || email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw bad('email', 'E-Mail-Adresse ungültig')
     mail = email.toLowerCase()
   }
+  const wantMail = opts.sendMail === true
+  if (opts.sendMail !== undefined && typeof opts.sendMail !== 'boolean') throw bad('sendMail', 'sendMail muss true oder false sein')
+  if (wantMail && !mail) throw bad('sendMail', 'Für den Versand per E-Mail ist eine E-Mail-Adresse nötig')
+  if (wantMail && !opts.mailer?.enabled) throw bad('sendMail', 'E-Mail-Versand ist nicht eingerichtet')
   const { token, row } = await rt.repo.createInvite(admin.id, mail)
   await audit(rt.repo, { userId: null, actor: `admin:${admin.id}`, action: 'invite.create', targetType: 'invite', targetId: row.id })
-  return { id: row.id, email: row.email, createdAt: row.createdAt.toISOString(), expiresAt: row.expiresAt.toISOString(), link: new URL(`/invite/${token}`, baseUrl).toString() }
+  const link = new URL(`/invite/${token}`, baseUrl).toString()
+  // Fire-and-forget: Versandfehler (auch Empfaengerlimit) brechen das Anlegen nie ab; der Admin sieht den Link weiterhin.
+  if (wantMail && mail) void trySendMail(opts.mailer!, inviteMail(mail, link), 'Einladung')
+  return { id: row.id, email: row.email, createdAt: row.createdAt.toISOString(), expiresAt: row.expiresAt.toISOString(), link, mailQueued: wantMail }
 }
 export async function adminRevokeInvite(rt: Runtime, admin: Who, id: string) {
   if (!(await rt.repo.revokeInvite(id))) throw apiError(409, 'invite_not_open', 'Die Einladung ist nicht mehr offen')

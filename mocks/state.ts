@@ -18,6 +18,8 @@ export type MockState = {
   settings: AdminSettings
   audit: AuditItem[]
   stdioDrafts: string[]
+  /** Persoenliche Einstellung (GET/PATCH /api/me/settings); fehlt in aelteren Sitzungsstaenden = an. */
+  notifyStatusMail?: boolean
 }
 
 const KEY = 'mcpwarden.mock.state'
@@ -30,7 +32,7 @@ function fresh(): MockState {
     signedIn: false, upstreams, tools: Object.fromEntries(upstreams.map(u => [u.id, seed.seedTools(u)])),
     users: seed.seedUsers(), invites: seed.seedInvites(), pats: seed.seedPats(), connections: seed.seedConnections(),
     allowlist: seed.seedAllowlist(), oauthClients: seed.seedOAuthClients(), dcrMode: 'open',
-    settings: { 'stdio.enabled': true, 'ssrf.allow': [] }, audit: seed.seedAudit(), stdioDrafts: [],
+    settings: { 'stdio.enabled': true, 'ssrf.allow': [] }, audit: seed.seedAudit(), stdioDrafts: [], notifyStatusMail: true,
   }
 }
 
