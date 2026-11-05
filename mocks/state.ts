@@ -52,6 +52,8 @@ export function resetState() { state = fresh(); volatileInviteTokens.clear(); sa
 export function scenario(): MockScenario { return (store()?.getItem('mockScenario') as MockScenario) || 'default' }
 /** E-Mail-Versand im Mock: localStorage `mockMail` = `off` schaltet ihn ab (Default: an). */
 export function mailEnabled(): boolean { return store()?.getItem('mockMail') !== 'off' }
+/** Registrierung ohne Einladung (Mock): localStorage `mockRegistration` = `open` simuliert eine frische Instanz ohne Nutzer. */
+export function registrationOpen(): boolean { return store()?.getItem('mockRegistration') === 'open' }
 export function role(): MockRole { return (store()?.getItem('mockRole') as MockRole) || 'admin' }
 export function currentUser() {
   const s = getState()

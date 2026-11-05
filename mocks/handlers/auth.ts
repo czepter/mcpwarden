@@ -1,7 +1,7 @@
 import type { AuthSession, InviteInfo, PublicConfig } from '#shared/api-types'
 import { INVITE_INVALID, INVITE_REQUIRED } from '#shared/api-types'
 import { SEED_INVITE_TOKENS } from '../seed'
-import { currentUser, getState, mailEnabled, role, save, volatileInviteTokens } from '../state'
+import { currentUser, getState, mailEnabled, registrationOpen, role, save, volatileInviteTokens } from '../state'
 import { body, err, json, nid, noContent, route } from '../util'
 import { HttpResponse } from 'msw'
 
@@ -67,8 +67,7 @@ export const authHandlers = [
     { id: 'ses_2', token: 'tok-b', userAgent: 'Firefox auf Linux', ipAddress: '192.0.2.44', createdAt: new Date(Date.now() - 86_400_000 * 2).toISOString(), current: false },
   ])),
   route('post', '/api/auth/revoke-session', () => json({ ok: true })),
-  route('get', '/api/auth/registration-state', () => json({ open: false }), { public: true }),
-  route('get', '/api/public-config', () => json<PublicConfig>({ mail: mailEnabled() }), { public: true }),
+  route('get', '/api/public-config', () => json<PublicConfig>({ mail: mailEnabled(), registrationOpen: registrationOpen() }), { public: true }),
   // Wie Better Auth: gleiche Antwort fuer jede Adresse (keine Kontoenumeration); ohne Mail 400 RESET_PASSWORD_DISABLED.
   route('post', '/api/auth/request-password-reset', async ({ request }) => {
     if (!mailEnabled()) return err(400, 'RESET_PASSWORD_DISABLED', 'Reset password isn\'t enabled')

@@ -19,7 +19,6 @@ export const authApi = {
   changePassword: (currentPassword: string, newPassword: string) => post<unknown>('/api/auth/change-password', { currentPassword, newPassword, revokeOtherSessions: false }),
   listSessions: () => get<Array<{ id: string, token: string, userAgent: string | null, ipAddress: string | null, createdAt: string, current: boolean }>>('/api/auth/list-sessions'),
   revokeSession: (token: string) => post<unknown>('/api/auth/revoke-session', { token }),
-  registrationOpen: () => get<{ open: boolean }>('/api/auth/registration-state'),
   // Ohne redirectTo: der Link in der Mail entsteht serverseitig aus BASE_URL. Antwort ist immer gleich (kein Hinweis, ob die Adresse existiert).
   requestPasswordReset: (email: string) => http<{ status: boolean }>('POST', API_PATHS.requestPasswordReset, { body: { email }, skip401: true }),
   resetPassword: (token: string, newPassword: string) => http<{ status: boolean }>('POST', API_PATHS.resetPassword, { body: { token, newPassword }, skip401: true }),
@@ -66,7 +65,7 @@ export const adminApi = {
   invites: () => get<InviteList>('/api/admin/invites'),
   createInvite: (email?: string) => post<InviteCreated>('/api/admin/invites', email ? { email } : {}),
   revokeInvite: (id: string) => del(`/api/admin/invites/${enc(id)}`),
-  settings: () => get<AdminSettings>('/api/admin/settings'),
+  settings: () => get<AdminSettingsResult>('/api/admin/settings'),
   putSettings: (b: Partial<AdminSettings>) => put<AdminSettingsResult>('/api/admin/settings', b),
   policy: () => get<DcrPolicy>('/api/admin/oauth/policy'),
   setPolicy: (mode: DcrMode) => put<DcrPolicy>('/api/admin/oauth/policy', { mode }),

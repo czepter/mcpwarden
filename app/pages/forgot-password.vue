@@ -11,7 +11,7 @@ import { forgotSchema } from '~/lib/zod-schemas'
 
 definePageMeta({ layout: 'auth' })
 useHead({ title: 'Passwort vergessen · mcpwarden', meta: [{ name: 'robots', content: 'noindex' }] })
-const { data: pub, status } = useAsyncData('public-config', () => publicApi.config().catch(() => ({ mail: false })), { server: false })
+const { data: pub, status } = useAsyncData('public-config', () => publicApi.config().catch(() => ({ mail: false, registrationOpen: false })), { server: false })
 const { form, formError, busy, submit } = useZodForm(forgotSchema, { email: '' })
 const [email] = form.defineField('email')
 const sent = ref(false)

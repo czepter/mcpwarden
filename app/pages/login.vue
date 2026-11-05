@@ -24,8 +24,7 @@ const onSubmit = submit(async (v) => {
   const r = typeof route.query.redirect === 'string' && route.query.redirect.startsWith('/') && !route.query.redirect.startsWith('//') ? route.query.redirect : '/'
   await navigateTo(r)
 })
-const { data: pub } = useAsyncData('public-config', () => publicApi.config().catch(() => ({ mail: false })), { server: false })
-const { data: reg } = useAsyncData('reg-open', () => authApi.registrationOpen().catch(() => ({ open: false })), { server: false })
+const { data: pub } = useAsyncData('public-config', () => publicApi.config().catch(() => ({ mail: false, registrationOpen: false })), { server: false })
 </script>
 
 <template>
@@ -44,7 +43,7 @@ const { data: reg } = useAsyncData('reg-open', () => authApi.registrationOpen().
       <NuxtLink v-if="pub?.mail" to="/forgot-password" class="text-[13px] text-primary underline">Passwort vergessen?</NuxtLink>
     </form>
     <p class="mt-4 text-[13px] text-muted-foreground">
-      <template v-if="reg?.open">Noch kein Konto? <NuxtLink to="/register" class="text-primary underline">Registrieren</NuxtLink></template>
+      <template v-if="pub?.registrationOpen">Noch kein Konto? <NuxtLink to="/register" class="text-primary underline">Registrieren</NuxtLink></template>
       <template v-else>Neue Konten gibt es nur mit Einladung. Frag einen Admin nach einem Einladungslink.</template>
     </p>
   </div>
