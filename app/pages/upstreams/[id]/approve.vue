@@ -23,7 +23,7 @@ async function doDiscard() { try { await upstreamApi.remove(id); await navigateT
   <LoadingRows v-else-if="!draft.data.value" />
   <template v-else>
     <PageHeader :title="`${draft.data.value.slug} wartet auf Freigabe`" :crumbs="[{ label: 'Upstreams', to: '/upstreams' }]" />
-    <Alert role="alert" class="border-[#fcd34d] bg-[#fef3c7] text-[#78350f]"><strong>Dieser Upstream startet einen Prozess auf dem Server.</strong> Prüfe Befehl und Umgebung genau, bevor du freigibst.</Alert>
+    <Alert role="alert" class="border-warn-border bg-warn-bg text-warn-fg"><strong>Dieser Upstream startet einen Prozess auf dem Server.</strong> Prüfe Befehl und Umgebung genau, bevor du freigibst.</Alert>
     <section class="flex max-w-[600px] flex-col gap-3 rounded-lg border bg-card p-5" aria-labelledby="h-draft">
       <h2 id="h-draft" class="text-[15px] font-semibold">Entwurf</h2>
       <dl class="grid grid-cols-[140px_minmax(0,1fr)] gap-x-4 gap-y-2 text-sm">
