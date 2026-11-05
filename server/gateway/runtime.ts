@@ -33,7 +33,7 @@ export type Runtime = {
   stdioPolicyFor: (role: 'admin' | 'user', stdioAllowed: boolean) => Promise<{ allowed: true } | { allowed: false, reason: StdioReason }>
 }
 
-const g = globalThis as typeof globalThis & { __mcpwRuntime?: Promise<Runtime>, __mcpwRuntimeStop?: () => Promise<void>, __mcpwStatsDropped?: () => number }
+const g = globalThis as typeof globalThis & { __mcpwRuntime?: Promise<Runtime>, __mcpwRuntimeStop?: () => Promise<void>, __mcpwStatsDropped?: () => number, __mcpwSupervisorPing?: () => Promise<boolean> }
 const SETTINGS_TTL_MS = 10_000
 
 async function create(): Promise<Runtime> {
@@ -122,9 +122,11 @@ async function create(): Promise<Runtime> {
     },
   } satisfies Runtime)
   g.__mcpwStatsDropped = () => gw.stats.dropped
+  g.__mcpwSupervisorPing = supervisor ? () => supervisor.ping() : undefined
   g.__mcpwRuntimeStop = async () => {
     rt.draining = true
     clearInterval(purge)
+    g.__mcpwSupervisorPing = undefined
     sessions.closeAll()
     await gw.shutdown(SHUTDOWN_DRAIN_MS)
   }
@@ -138,6 +140,11 @@ export function getRuntime(): Promise<Runtime> {
 /** Zähler `stats_dropped`: verworfene Messdatensätze seit Start (P0-15); 0 ohne Runtime. */
 export function statsDropped(): number {
   return g.__mcpwStatsDropped?.() ?? 0
+}
+
+/** Ping des Supervisors, wenn stdio aktiv ist (Ziel `full`, STDIO_MODE != off); sonst `undefined` (dann zaehlt er fuer /readyz nicht). */
+export function supervisorPing(): (() => Promise<boolean>) | undefined {
+  return g.__mcpwSupervisorPing
 }
 
 /** Drain läuft (für /readyz); ohne Runtime: false. */
