@@ -50,9 +50,17 @@ WEBPID=$(docker exec "$CID" sh -c "for p in /proc/[0-9]*; do grep -q '.output/se
 [ "$(docker exec "$CID" awk '/^CapEff:/ {print $2}' /proc/"$WEBPID"/status)" = 0000000000000000 ] || fail "Web-App hat Capabilities"
 echo "ok: web uid 10001, CapEff=0, caps SETUID/SETGID/CHOWN, no-new-privileges"
 
-# Fachlicher Durchlauf
-code=$(curl -s -o /dev/null -w '%{http_code}' -H 'content-type: application/json' -H "origin: http://localhost:$PORT" -X POST "http://localhost:$PORT/api/auth/sign-up/email" -d '{"name":"Admin","email":"admin@example.com","password":"admin-passwort-123"}')
-[ "$code" = 200 ] || fail "Erst-Registrierung: $code"
+# Full-Stack-Smoke (tests/smoke/flow.ts) gegen den Container: Erst-Registrierung, Login, Einladung, PAT, OAuth 2.1 (DCR, PKCE,
+# Consent, Refresh), /mcp tools/list + tools/call ueber ein Fake-MCP auf dem Host, Mandantentrennung, Audience, Widerruf.
+# Der Container erreicht das Fake-MCP ueber das Gateway seines Compose-Netzes (Admin gibt es per ssrf.allow frei).
+NET=$(docker inspect -f '{{range $k, $v := .NetworkSettings.Networks}}{{$k}}{{end}}' "$CID")
+GW=$(docker network inspect -f '{{(index .IPAM.Config 0).Gateway}}' "$NET")
+[ -n "$GW" ] || fail "Gateway des Compose-Netzes nicht gefunden"
+SMOKE_BASE_URL="http://localhost:$PORT" SMOKE_FAKE_HOST="$GW" SMOKE_FAKE_LISTEN=0.0.0.0 SMOKE_SSRF_ALLOW="$GW/32" \
+  pnpm exec tsx tests/smoke/run.ts || fail "Full-Stack-Smoke"
+echo "ok: full-stack smoke (register, invite, PAT, OAuth+PKCE, /mcp via fake upstream, isolation, revocation)"
+
+# Fachlicher Durchlauf (der Admin existiert durch den Smoke)
 post POST /api/auth/sign-in/email '{"email":"admin@example.com","password":"admin-passwort-123"}' >/dev/null
 caps=$(post GET /api/me/capabilities '')
 echo "$caps" | grep -q '"role":"admin"' || fail "capabilities: $caps"
