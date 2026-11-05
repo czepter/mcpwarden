@@ -134,3 +134,14 @@ test('Upstream detail: status chip sits next to the heading, actions stay on the
   expect(Math.abs((chip.y + chip.height / 2) - (h1.y + h1.height / 2))).toBeLessThan(16)
   expect(testBtn.x).toBeGreaterThan(chip.x + chip.width)
 })
+
+test('Admin users: "+ Einladung erzeugen" sits in the invitations section, not in the page header', async ({ page }) => {
+  await login(page)
+  await page.goto('/admin/users')
+  const btn = page.getByRole('button', { name: '+ Einladung erzeugen' })
+  await expect(btn).toHaveCount(1)
+  await expect(page.locator('header').filter({ has: page.locator('h1') }).getByRole('button', { name: '+ Einladung erzeugen' })).toHaveCount(0)
+  await expect(page.locator('section').filter({ has: page.getByRole('heading', { name: 'Offene Einladungen' }) }).getByRole('button', { name: '+ Einladung erzeugen' })).toBeVisible()
+  await btn.click()
+  await expect(page.getByRole('dialog')).toBeVisible()
+})

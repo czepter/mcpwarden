@@ -73,9 +73,7 @@ const saveLimits = lim.submit(async (v) => {
 </script>
 
 <template>
-  <PageHeader title="Admin">
-    <Button @click="invDialog = true">+ Einladung erzeugen</Button>
-  </PageHeader>
+  <PageHeader title="Admin" />
   <AdminTabs />
   <OneTimeSecret v-if="link" title="Einladungslink erzeugt (7 Tage gültig)" :value="link" @close="link = null" />
 
@@ -104,6 +102,7 @@ const saveLimits = lim.submit(async (v) => {
   </DataSection>
 
   <DataSection title="Offene Einladungen" min-width="640px">
+    <template #actions><Button @click="invDialog = true">+ Einladung erzeugen</Button></template>
     <LoadingRows v-if="invites.status.value === 'pending' && !invites.data.value" :rows="2" />
     <EmptyState v-else-if="!invites.data.value?.items.length" title="Keine Einladungen" />
     <Table v-else>
