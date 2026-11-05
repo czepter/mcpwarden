@@ -32,6 +32,10 @@ describe('parseConfig', () => {
     const m = errors({})
     for (const n of ['BASE_URL', 'BETTER_AUTH_SECRET', 'MASTER_KEY']) expect(m).toContain(n)
   })
+  it('nicht-kanonisches Base64 (gesetzte Restbits) wird abgelehnt', () => {
+    expect(errors({ ...ok, MASTER_KEY: KEY.replace('NDU=', 'NDV=') })).toContain('MASTER_KEY')
+    expect(errors({ ...ok, MASTER_KEY: KEY.replace('=', '') })).toContain('MASTER_KEY')
+  })
   it('falsche Key-Laenge', () => expect(errors({ ...ok, MASTER_KEY: 'abcd' })).toContain('MASTER_KEY'))
   it('kurzes Secret', () => expect(errors({ ...ok, BETTER_AUTH_SECRET: 'kurz' })).toContain('BETTER_AUTH_SECRET'))
   it('http nicht-localhost abgelehnt, localhost erlaubt', () => {
