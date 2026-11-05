@@ -18,8 +18,13 @@ async function axe(page: Page) {
   const bad = r.violations.filter(v => v.impact === 'serious' || v.impact === 'critical')
   expect(bad.map(v => `${v.id}: ${v.nodes.map(n => n.target.join(' ')).slice(0, 3).join(' | ')}`)).toEqual([])
 }
+// Der echte Build rendert serverseitig: Eingaben vor der Hydration setzt Vue beim Mounten auf den Modellwert (leer) zurück.
+async function hydrated(page: Page) {
+  await page.waitForFunction(() => (window as unknown as { useNuxtApp?: () => { isHydrating: boolean } }).useNuxtApp?.().isHydrating === false)
+}
 async function login(page: Page) {
   await page.goto('/login')
+  await hydrated(page)
   await page.getByLabel('E-Mail').fill(ADMIN.email)
   await page.getByLabel('Passwort').fill(ADMIN.password)
   await page.getByRole('button', { name: 'Anmelden' }).click()
@@ -58,6 +63,7 @@ test('Erst-Registrierung ueber die Oberflaeche macht den Nutzer zum Admin und la
 
 test('danach: Registrierung nur mit Einladung; falsches Passwort zeigt Fehler; Login mit richtigen Daten', async ({ page }) => {
   await page.goto('/login')
+  await hydrated(page)
   await expect(page.getByText('nur mit Einladung')).toBeVisible()
   await expect(page.getByRole('link', { name: 'Registrieren' })).toHaveCount(0)
   await page.getByLabel('E-Mail').fill(ADMIN.email)

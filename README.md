@@ -103,3 +103,5 @@ Frontend gegen echte Routen: Mocks (MSW) gibt es nur in Mock-Builds (`pnpm ui:de
 - `pnpm smoke` (nach `pnpm build`): Full-Stack-Smoke gegen eine frische Instanz (Erst-Admin, Login, Einladung und zweiter Nutzer, PAT, OAuth 2.1 mit DCR, PKCE S256, Consent und Refresh, `/mcp` `tools/list` und `tools/call` über ein Fake-MCP, Mandantentrennung, falsche Audience, sofortiger Widerruf). Als Vitest-Suite: `tests/integration/smoke.test.ts`; im Container: `pnpm test:compose`.
 - `pnpm ui:e2e`: Playwright gegen die Mocks (`ui:e2e:mock`) und gegen das echte Backend ohne MSW (`ui:e2e:real`). Optional `PW_CHROMIUM_PATH`, `E2E_PORT`, `E2E_REAL_PORT`.
 
+
+UI gegen Entwurf: Abweichungen je Seite, Bildpaare (`docs/ui-review/`) und die 11 noch offenen Gestaltungsentscheidungen stehen in [`docs/ui-mockup-review.md`](docs/ui-mockup-review.md); bewusst weggelassene Punkte in [`docs/ui-abgleich.md`](docs/ui-abgleich.md). Die Strukturprüfungen dazu sind `tests/ui/e2e/mockup-parity.spec.ts` (ohne Pixel-Snapshots). Nicht erledigt: die manuelle Abnahme mit Claude Code und Cursor (siehe „Client verbinden“) und ein Review der 11 Entscheidungen durch den Owner.
