@@ -6,6 +6,7 @@ import { trySendMail, type Mailer } from '../mail'
 import { RESET_TTL_MINUTES, resetPasswordMail } from '../mail/templates'
 import { canRegister, type InviteCheck } from './registration'
 import { dcrAfter, dcrBefore, type DcrDeps } from './dcr-hook'
+import { CLIENT_IP_HEADER } from '../utils/client-ip'
 import { isBlockedOverHttp } from './http-guard'
 import { consentGuard, mcpPlugins, mcpResource, oauthRequestRewrite } from './mcp-plugin'
 
@@ -14,6 +15,8 @@ export interface AuthDeps {
   secret: string
   allowedOrigins: string[]
   rateLimitEnabled: boolean
+  /** Anzahl vertrauenswuerdiger Proxy-Hops (TRUST_PROXY), 0 = X-Forwarded-* wird ignoriert. */
+  trustProxy: number
   countUsers: () => Promise<number>
   /** DCR-Policy und Registrierungsprotokoll (DB). Fehlt beim Schema-CLI. */
   dcr?: DcrDeps
@@ -64,6 +67,13 @@ export function buildAuthOptions(d: AuthDeps) {
       enabled: true,
       minPasswordLength: 12,
       ...(d.mailer?.enabled ? passwordReset(d.baseUrl, d.mailer) : {}),
+    },
+    advanced: {
+      // Die Client-IP loest server/utils/client-ip.ts auf (Socket-Adresse oder vertrauter Proxy-Hop) und reicht sie im internen Header durch;
+      // Better Auth liest nie X-Forwarded-For selbst (sonst waere jedes Rate-Limit per erfundenem Header umgehbar).
+      ipAddress: { ipAddressHeaders: [CLIENT_IP_HEADER] },
+      // X-Forwarded-Host/-Proto nur hinter einem vertrauten Proxy (die Basis-URL bleibt BASE_URL)
+      trustedProxyHeaders: d.trustProxy > 0,
     },
     plugins: [admin(), ...mcpPlugins(d.baseUrl)],
     rateLimit: {

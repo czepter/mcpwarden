@@ -10,6 +10,7 @@ export const auth = betterAuth({
     secret: 'cli-dummy-secret-cli-dummy-secret-0000',
     allowedOrigins: ['http://localhost:3000'],
     rateLimitEnabled: false,
+    trustProxy: 0,
     countUsers: async () => 0,
   }),
   database: drizzleAdapter({} as never, { provider: 'pg' }),

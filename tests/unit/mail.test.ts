@@ -121,7 +121,7 @@ describe('trySendMail', () => {
 })
 
 describe('Passwort-Reset-Hook (Better Auth)', () => {
-  const base = { baseUrl: 'https://mcp.example.com', secret: 's'.repeat(40), allowedOrigins: [], rateLimitEnabled: false, countUsers: async () => 1 }
+  const base = { baseUrl: 'https://mcp.example.com', secret: 's'.repeat(40), allowedOrigins: [], rateLimitEnabled: false, trustProxy: 0, countUsers: async () => 1 }
   const hookOf = (o: ReturnType<typeof buildAuthOptions>) => (o.emailAndPassword as { sendResetPassword?: (d: { user: { email: string }, token: string }) => Promise<void> }).sendResetPassword
 
   it('ohne aktiven Mailer ist der Reset nicht eingeschaltet', () => {

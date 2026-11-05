@@ -24,6 +24,11 @@ export interface AppConfig {
   dataDir: string
   allowedOrigins: string[]
   rateLimitEnabled: boolean
+  /**
+   * Anzahl vertrauenswuerdiger Reverse-Proxy-Hops vor der App (TRUST_PROXY). 0 = keiner: X-Forwarded-* wird ignoriert, Client-IP ist die
+   * Socket-Adresse. `true` = 1 (ein Proxy haengt die Client-IP an X-Forwarded-For an); eine Zahl N bei N verketteten Proxies.
+   */
+  trustProxy: number
   /** Optionaler Mailversand (P1 "Mailer"). Ohne SMTP_URL bleibt alles Link-basiert. */
   smtp: SmtpConfig | undefined
   mailFrom: string | undefined
@@ -137,6 +142,14 @@ export function parseConfig(env: Record<string, string | undefined>): AppConfig 
   const rateLimit = get('RATE_LIMIT')
   if (rateLimit && rateLimit !== 'off') problems.push('RATE_LIMIT darf nur "off" oder leer sein')
 
+  let trustProxy = 0
+  const rawTrust = get('TRUST_PROXY')?.toLowerCase()
+  if (rawTrust && rawTrust !== 'false' && rawTrust !== '0') {
+    if (rawTrust === 'true') trustProxy = 1
+    else if (/^[1-9]\d?$/.test(rawTrust)) trustProxy = Number(rawTrust)
+    else problems.push('TRUST_PROXY muss true, false oder die Anzahl der Proxy-Hops (1 bis 99) sein')
+  }
+
   let allowedOrigins: string[] = []
   const rawOrigins = get('ALLOWED_ORIGINS')
   if (rawOrigins) {
@@ -177,6 +190,7 @@ export function parseConfig(env: Record<string, string | undefined>): AppConfig 
     dataDir: get('DATA_DIR') ?? './data',
     allowedOrigins,
     rateLimitEnabled: rateLimit !== 'off',
+    trustProxy,
     smtp,
     mailFrom,
     statusMailWindowMin,

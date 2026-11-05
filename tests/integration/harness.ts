@@ -111,6 +111,8 @@ export async function startServer(inst: TestInstance, opts: StartOptions = {}): 
     DATA_DIR: inst.dataDir,
     MCPW_DUMMY_UPSTREAM: '1', // 0b-Tests nutzen den Dummy-Upstream neben dem echten Gateway
     DATABASE_URL: inst.databaseUrl,
+    // Der Test-Client spielt den Reverse-Proxy: sein X-Forwarded-For (ein Eintrag) gilt als Client-IP. Tests zu TRUST_PROXY ueberschreiben das.
+    TRUST_PROXY: 'true',
     ...(opts.rateLimit ? {} : { RATE_LIMIT: 'off' }),
     ...opts.env,
   }

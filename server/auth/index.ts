@@ -20,6 +20,7 @@ function create() {
         secret: cfg.betterAuthSecret,
         allowedOrigins: cfg.allowedOrigins,
         rateLimitEnabled: cfg.rateLimitEnabled,
+        trustProxy: cfg.trustProxy,
         invites: (() => {
           const repo = new GatewayRepo(db)
           return {

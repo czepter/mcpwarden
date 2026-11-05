@@ -26,6 +26,7 @@ services:
       DATABASE_URL: ${DATABASE_URL:-}
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-}
       STDIO_MODE: ${STDIO_MODE:-auto}
+      TRUST_PROXY: ${TRUST_PROXY:-false}
     volumes:
       - data:/data
     # Beispiel-Grenzen (Containerebene, zusätzlich zu den Grenzen je Worker):

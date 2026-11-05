@@ -18,6 +18,7 @@ Vor dem ersten `dev` einmal `pnpm env:init` (legt `.env` mit Zufallswerten und M
 | `DATABASE_URL` | leer = PGlite in `DATA_DIR/pgdata`, sonst `postgres://…` |
 | `DATA_DIR` | Datenverzeichnis, Default `./data` |
 | `ALLOWED_ORIGINS` | kommagetrennte Origins, Default Origin von `BASE_URL` |
+| `TRUST_PROXY` | optional, Default `false`: `X-Forwarded-For` wird ignoriert, als Client-IP für die Rate-Limits (Anmeldung, `/oauth2/token`, `/oauth2/register`, Einladungsinfo) gilt die Socket-Adresse. Hinter einem Reverse-Proxy `true` setzen (ein Proxy-Hop) oder die Anzahl verketteter Proxys (z. B. `2`): Client-IP ist dann der letzte bzw. N-te Eintrag von rechts, den der Proxy anhängt; links davon stehende Werte stammen vom Client und zählen nie. Ohne `true` teilen sich alle Clients hinter einem Proxy einen Zähler, mit `true` ohne Proxy davor kann ein Client sich per erfundenem Header eigene Zähler bauen: nur setzen, wenn wirklich ein Proxy davor steht, der den Header anhängt. Die Basis-URL kommt immer aus `BASE_URL` (nie aus `X-Forwarded-Host/-Proto`) |
 | `SMTP_URL` | optional: `smtps://user:pass@host:465` oder `smtp://user:pass@host:587` (STARTTLS Pflicht, Klartext nur an localhost). Geheim, URL-kodieren |
 | `MAIL_FROM` | Absender, Pflicht wenn `SMTP_URL` gesetzt ist, z. B. `mcpwarden <noreply@example.com>` |
 | `MAIL_NOTIFY_WINDOW_MIN` | optional: Mindestabstand der Statusmails je Upstream und Zustand in Minuten (1 bis 10080), Default `60` |
@@ -66,7 +67,7 @@ curl http://localhost:3000/healthz  # {"ok":true}
 ```
 
 - `compose.yaml` (Ziel `full`): `cap_drop: [ALL]`, `cap_add: [SETUID, SETGID, CHOWN]`, `no-new-privileges`, `init: true`, `stop_grace_period: 40s`. Der Supervisor läuft als root nur zum Wechseln der UID; die Web-App läuft als UID 10001 ohne Capabilities. Ohne die drei Capabilities startet der Container, stdio ist dann für Nicht-Admins gesperrt (`no_capabilities`).
-- `BASE_URL` muss https sein (außer `localhost`). Reverse-Proxy: für `/mcp` keine Pufferung, lange Timeouts (offene `subscriptions/listen`-Streams), `X-Forwarded-*` setzen.
+- `BASE_URL` muss https sein (außer `localhost`). Reverse-Proxy: für `/mcp` keine Pufferung, lange Timeouts (offene `subscriptions/listen`-Streams), `X-Forwarded-For` anhängen (nicht überschreiben) und `TRUST_PROXY=true` setzen, sonst teilen sich alle Clients die Rate-Limit-Zähler des Proxys.
 - `/healthz` = Prozess lebt, `/readyz` = Migration durch und nicht im Herunterfahren (503 `draining`); Upstream-Ausfälle beeinflussen beide nie. `/readyz` meldet auch `stats_dropped` (verworfene Messdatensätze seit Start).
 - Herunterfahren (SIGTERM): `/readyz` wird sofort 503, laufende Aufrufe laufen bis zu 30 s aus, Pool und Worker werden geschlossen, Messdaten geflusht, dann Exit 0.
 - Altvolumes: Gehört `/data/pgdata` nicht UID 10001, bricht der Supervisor ab und nennt den einmaligen `chown`-Befehl. `/data` selbst muss root gehören und darf nicht gruppen-/welt-beschreibbar sein.

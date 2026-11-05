@@ -1,4 +1,5 @@
 import { getAuth } from '../../auth'
+import { toAuthRequest } from '../../utils/client-ip'
 
 // Discovery im Root (RFC 8414 / RFC 9728). Better Auth haengt am basePath /api/auth (Issuer
 // `<BASE_URL>/api/auth`), beantwortet die Well-known-Pfade aber in `onRequest` unabhaengig davon:
@@ -19,7 +20,7 @@ const ROOT_ALIASES: Record<string, string> = {
 
 export default defineEventHandler(async (event) => {
   if (event.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS })
-  let req = toWebRequest(event)
+  let req = toAuthRequest(event)
   const url = new URL(req.url)
   const alias = ROOT_ALIASES[url.pathname]
   if (alias) req = new Request(new URL(alias, url), req)
