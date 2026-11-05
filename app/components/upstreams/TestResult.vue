@@ -11,14 +11,14 @@ const HINT: Record<string, string> = {
 </script>
 
 <template>
-  <div v-if="result.ok" role="status" class="rounded-lg border border-[#86efac] bg-[#dcfce7] px-4 py-3 text-[#14532d]" data-testid="test-ok">
+  <div v-if="result.ok" role="status" class="rounded-lg border border-ok-border bg-ok-bg px-4 py-3 text-ok-fg" data-testid="test-ok">
     <div class="font-semibold">Verbindung erfolgreich: {{ result.tools.length }} Tools gefunden ({{ formatMs(result.latencyMs) }})</div>
     <ul class="mono mt-1 flex flex-wrap gap-x-3 text-xs">
       <li v-for="t in result.tools.slice(0, 12)" :key="t.name">{{ t.name }}</li>
       <li v-if="result.tools.length > 12">… und {{ result.tools.length - 12 }} weitere</li>
     </ul>
   </div>
-  <div v-else role="alert" class="rounded-lg border border-[#fecaca] bg-[#fee2e2] px-4 py-3 text-[#7f1d1d]" data-testid="test-error">
+  <div v-else role="alert" class="rounded-lg border border-err-border bg-err-bg px-4 py-3 text-err-fg" data-testid="test-error">
     <div class="font-semibold">Verbindung fehlgeschlagen</div>
     <div class="text-[13px]">{{ result.message }}</div>
     <div v-if="HINT[result.errorCode]" class="text-[13px]">{{ HINT[result.errorCode] }}</div>

@@ -62,9 +62,9 @@ const onSubmit = submit(async (v) => {
     <fieldset v-if="!edit" class="flex flex-col gap-2">
       <legend class="mb-1 text-sm font-medium">Typ</legend>
       <RadioGroup v-model="fv.type" class="grid grid-cols-2 gap-2" aria-label="Typ">
-        <label class="flex min-h-11 cursor-pointer items-center gap-2 rounded-sm border px-3 py-2" :class="fv.type === 'http' ? 'border-primary bg-primary-tint' : ''"><RadioGroupItem value="http" />HTTP</label>
-        <label class="flex min-h-11 items-center gap-2 rounded-sm border px-3 py-2" :class="[fv.type === 'stdio' ? 'border-primary bg-primary-tint' : '', stdioBlocked ? 'cursor-not-allowed opacity-70' : 'cursor-pointer']">
-          <RadioGroupItem value="stdio" :disabled="stdioBlocked" />stdio <span class="text-xs text-muted-foreground">braucht Freigabe</span>
+        <label class="flex min-h-14 cursor-pointer items-start gap-2 rounded-sm border px-3 py-2" :class="fv.type === 'http' ? 'border-primary bg-primary-tint' : ''"><RadioGroupItem value="http" class="mt-0.5" /><span class="flex flex-col"><span class="font-semibold">HTTP</span><span class="text-xs text-secondary-foreground">Streamable HTTP, SSE</span></span></label>
+        <label class="flex min-h-14 items-start gap-2 rounded-sm border px-3 py-2" :class="[fv.type === 'stdio' ? 'border-primary bg-primary-tint' : '', stdioBlocked ? 'cursor-not-allowed opacity-70' : 'cursor-pointer']">
+          <RadioGroupItem value="stdio" :disabled="stdioBlocked" class="mt-0.5" /><span class="flex flex-col"><span class="font-semibold">stdio</span><span class="text-xs text-secondary-foreground">Lokaler Befehl, braucht Freigabe</span></span>
         </label>
       </RadioGroup>
       <p v-if="stdioBlocked" class="text-[13px] text-muted-foreground" data-testid="stdio-reason">stdio ist gesperrt: {{ stdioReasonLabel(caps.stdio.reason ?? '') }}</p>
@@ -96,7 +96,7 @@ const onSubmit = submit(async (v) => {
     </div>
 
     <Collapsible v-model:open="advanced">
-      <CollapsibleTrigger as-child><Button type="button" variant="ghost" class="px-0">Erweitert {{ advanced ? '▴' : '▾' }}</Button></CollapsibleTrigger>
+      <CollapsibleTrigger as-child><Button type="button" variant="ghost" class="px-0">Erweitert: Limits und Timeouts {{ advanced ? '▴' : '▾' }}</Button></CollapsibleTrigger>
       <CollapsibleContent class="mt-2 grid grid-cols-2 gap-3">
         <FormRow id="u-rate" label="Aufrufe pro Minute" :error="err('ratePerMin')"><template #default="{ id, invalid, describedby }"><Input :id="id" v-model="fv.ratePerMin" type="number" min="1" :aria-invalid="invalid || undefined" :aria-describedby="describedby" /></template></FormRow>
         <FormRow id="u-par" label="Parallel" :error="err('maxConcurrent')"><template #default="{ id, invalid, describedby }"><Input :id="id" v-model="fv.maxConcurrent" type="number" min="1" :aria-invalid="invalid || undefined" :aria-describedby="describedby" /></template></FormRow>

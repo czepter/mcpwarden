@@ -9,7 +9,7 @@ function set(k: string, v: string) { localStorage.setItem(k, v); location.reload
 </script>
 
 <template>
-  <div v-if="spec" class="flex flex-wrap items-center gap-3 border-b border-[#fcd34d] bg-[#fef3c7] px-4 py-1.5 text-xs text-[#78350f]" data-testid="mock-banner">
+  <div v-if="spec" class="flex flex-wrap items-center gap-3 border-b border-warn-border bg-warn-bg px-4 py-1.5 text-xs text-warn-fg" data-testid="mock-banner">
     <strong>Mock-Modus</strong>
     <span>Domänen: {{ spec }}</span>
     <label class="flex items-center gap-1.5">Rolle

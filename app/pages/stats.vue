@@ -19,6 +19,9 @@ const total = computed(() => data.value?.outcomes.reduce((a, o) => a + o.count, 
 // Y-Achse: Gitterlinien auf runden Werten, Hoehe proportional zum Wert (Abgleich Punkt 27).
 const ticks = computed(() => { const step = Math.pow(10, Math.floor(Math.log10(max.value))); const top = Math.ceil(max.value / step) * step; return [0, top / 2, top] })
 const top = computed(() => ticks.value[2]!)
+// Farben je Ergebnis wie im Entwurf: ok gruen, tool_error gelb, Fehler rot, Begrenzungen grau; der Text traegt die Bedeutung.
+const OUTCOME_BAR: Record<string, string> = { ok: 'bg-st-healthy-bar', tool_error: 'bg-st-degraded-bar', timeout: 'bg-st-open-bar', upstream_error: 'bg-st-open-bar', rate_limited: 'bg-st-disabled-dot', breaker_open: 'bg-st-disabled-dot', denied: 'bg-st-disabled-dot' }
+const windowStart = computed(() => ({ '5m': 'vor 5 min', '1h': 'vor 1 h', '24h': 'vor 24 h', '7d': 'vor 7 Tagen' } as Record<string, string>)[win.value] ?? '')
 </script>
 
 <template>
@@ -28,29 +31,30 @@ const top = computed(() => ticks.value[2]!)
   <template v-else-if="data">
     <section aria-label="Kennzahlen" class="grid grid-cols-[repeat(auto-fit,minmax(min(180px,100%),1fr))] gap-3">
       <KpiCard label="Aufrufe gesamt" :value="formatNumber(data.calls)" />
-      <KpiCard label="Pro Minute" :value="formatNumber(data.callsPerMin, 1)" />
+      <KpiCard label="Aufrufe pro Minute" :value="formatNumber(data.callsPerMin, 1)" />
       <KpiCard label="Erfolgsquote" :value="formatPercent(data.okRate)" />
-      <KpiCard label="Spitze gleichzeitig" :value="String(data.peakConcurrent)" />
+      <KpiCard label="Gleichzeitig, Spitze" :value="String(data.peakConcurrent)" />
       <KpiCard label="Aktive Clients" :value="String(data.activeClients)" />
     </section>
     <DataSection title="Aufrufe pro Stunde">
       <figure class="px-5 pb-4" role="img" :aria-label="`Aufrufe pro Stunde, Spitze ${formatNumber(max)}`">
-        <div class="relative flex h-40 items-end gap-1 border-b border-l pl-1">
+        <div class="relative mt-3 flex h-40 items-end gap-1 border-b border-l pl-1">
           <div v-for="t in ticks" :key="t" class="absolute right-0 left-0 border-t border-dashed border-border text-[10px] text-muted-foreground" :style="{ bottom: `${(t / top) * 100}%` }"><span class="absolute -top-3 left-1 bg-card tnum">{{ formatNumber(t) }}</span></div>
           <div v-for="p in data.perHour" :key="p.t" class="z-10 flex-1 rounded-t-[2px] bg-primary" :style="{ height: `${(p.calls / top) * 100}%` }" :title="`${formatNumber(p.calls)} Aufrufe`" />
         </div>
+        <div class="mt-1 flex justify-between text-xs text-muted-foreground" aria-hidden="true"><span>{{ windowStart }}</span><span>jetzt</span></div>
       </figure>
     </DataSection>
     <DataSection title="Ergebnis der Aufrufe">
       <ul class="flex flex-col gap-2 px-5 pb-4">
         <li v-for="o in data.outcomes" :key="o.outcome" class="grid grid-cols-[130px_1fr_70px] items-center gap-3 text-sm">
           <span :title="o.outcome">{{ outcomeLabel(o.outcome) }}</span>
-          <span class="h-2 rounded-sm bg-muted" aria-hidden="true"><span class="block h-2 rounded-sm" :class="o.outcome === 'ok' ? 'bg-[#16a34a]' : 'bg-[#d97706]'" :style="{ width: `${(o.count / total) * 100}%` }" /></span>
+          <span class="h-2 rounded-sm bg-muted" aria-hidden="true"><span class="block h-2 rounded-sm" :class="OUTCOME_BAR[o.outcome] ?? 'bg-st-disabled-dot'" :style="{ width: `${(o.count / total) * 100}%` }" /></span>
           <span class="tnum text-right">{{ formatNumber(o.count) }}</span>
         </li>
       </ul>
     </DataSection>
-    <DataSection title="Je Upstream" min-width="860px">
+    <DataSection title="Latenz je Upstream" description="Gesamtdauer in Millisekunden. Overhead ist die Zeit im Gateway ohne Upstream." min-width="860px">
       <table class="w-full text-sm">
         <caption class="sr-only">Statistik je Upstream</caption>
         <thead class="bg-table-head text-xs text-muted-foreground"><tr class="border-y"><th scope="col" class="px-5 py-2.5 text-left font-medium">Upstream</th><th v-for="h in ['Aufrufe', 'Erfolg', 'p5', 'p50', 'p75', 'p95', 'p99', 'Overhead p95']" :key="h" scope="col" class="px-3 text-right font-medium">{{ h }}</th></tr></thead>

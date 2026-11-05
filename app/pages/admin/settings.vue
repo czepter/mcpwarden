@@ -50,7 +50,7 @@ const removeEntry = (e: string) => put({ 'ssrf.allow': (data.value?.['ssrf.allow
     <section class="rounded-lg border bg-card p-5" aria-labelledby="h-ssrf">
       <h2 id="h-ssrf" class="text-base font-semibold">SSRF-Ausnahmen</h2>
       <p class="mb-3 text-[13px] text-muted-foreground">Ziele (CIDR oder Hostname), die trotz SSRF-Schutz erreichbar sind.</p>
-      <Alert v-for="w in warnings" :key="w" role="alert" class="mb-2 border-[#fcd34d] bg-[#fef3c7] text-[13px] text-[#78350f]">{{ w }} deckt Metadaten-Adressen ab (169.254.169.254). Das kann Cloud-Zugangsdaten offenlegen.</Alert>
+      <Alert v-for="w in warnings" :key="w" role="alert" class="mb-2 border-warn-border bg-warn-bg text-[13px] text-warn-fg">{{ w }} deckt Metadaten-Adressen ab (169.254.169.254). Das kann Cloud-Zugangsdaten offenlegen.</Alert>
       <ul v-if="data['ssrf.allow'].length" class="mb-3 divide-y rounded-sm border">
         <li v-for="e in data['ssrf.allow']" :key="e" class="flex min-h-11 items-center justify-between px-3"><code class="text-xs">{{ e }}</code><Button variant="ghost" :aria-label="`Ausnahme ${e} entfernen`" @click="removeEntry(e)">Entfernen</Button></li>
       </ul>

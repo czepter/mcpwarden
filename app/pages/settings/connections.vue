@@ -40,7 +40,7 @@ async function doRevoke() {
           <TableCell><RelativeTime :value="c.grantedAt" /></TableCell>
           <TableCell><RelativeTime :value="c.lastUsedAt" empty="nie" /></TableCell>
           <TableCell>{{ c.scopes.filter(s => s.startsWith('mcp')).map(scopeLabel).join(', ') }}</TableCell>
-          <TableCell class="text-right"><Button variant="ghost" class="text-destructive" :aria-label="`${c.name} widerrufen`" @click="revoke = c">Widerrufen</Button></TableCell>
+          <TableCell class="text-right"><Button variant="destructive-outline" :aria-label="`${c.name} widerrufen`" @click="revoke = c">Widerrufen</Button></TableCell>
         </TableRow>
       </TableBody>
     </Table>

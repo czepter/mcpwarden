@@ -37,7 +37,7 @@ const k = computed(() => data.value?.kpis)
 
 <template>
   <PageHeader title="Dashboard"><AutoRefresh v-model="rate" /></PageHeader>
-  <p v-if="adminHint" role="status" class="rounded-sm border border-[#fcd34d] bg-[#fef3c7] px-3 py-2 text-[13px] text-[#78350f]">Dieser Bereich ist nur für Admins.</p>
+  <p v-if="adminHint" role="status" class="rounded-sm border border-warn-border bg-warn-bg px-3 py-2 text-[13px] text-warn-fg">Dieser Bereich ist nur für Admins.</p>
   <LoadingRows v-if="status === 'pending' && !data" />
   <ErrorState v-else-if="error" :error="error" @retry="refresh()" />
   <template v-else-if="data">
@@ -71,7 +71,7 @@ const k = computed(() => data.value?.kpis)
             <td class="px-3"><RelativeTime :value="c.lastActiveAt" empty="nie" /></td>
             <td class="tnum px-3 text-right">{{ formatNumber(c.callsPerMin) }}</td>
             <td class="tnum px-3 text-right">{{ c.contextTokensEstimate == null ? '–' : `ca. ${formatNumber(c.contextTokensEstimate)} Tokens` }}</td>
-            <td class="px-5 text-right"><Button variant="ghost" class="text-destructive" :aria-label="`${c.name} widerrufen`" @click="revoke = c">Widerrufen</Button></td>
+            <td class="px-5 text-right"><Button variant="destructive-outline" :aria-label="`${c.name} widerrufen`" @click="revoke = c">Widerrufen</Button></td>
           </tr>
         </tbody>
       </table>

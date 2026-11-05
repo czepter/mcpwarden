@@ -24,7 +24,7 @@ export function seedUpstreams(): UpstreamDetail[] {
     url: type === 'http' ? `https://${sub}` : null, command: type === 'stdio' ? sub : null,
     enabled: status !== 'disabled', status, statusReason: reason, statusChangedAt: ago(30 + i), lastError: status === 'healthy' ? null : reason, lastOkAt: ago(5),
     setup: 'ready', toolsEnabled: en, toolsTotal: total, nextRetryAt: status === 'open' ? ahead(1) : null, rateLimitHits5m: status === 'degraded' ? 3 : 0,
-    hasSecret: type === 'http' && slug !== 'local', p95Ms: p95, recent: bars(b),
+    hasSecret: slug === 'github' || slug === 'sentry', p95Ms: p95, recent: bars(b),
     transport: 'auto', authType: slug === 'github' ? 'bearer' : slug === 'sentry' ? 'header' : 'none', authHeaderName: slug === 'sentry' ? 'X-Api-Key' : null,
     ratePerMin: 60, maxConcurrent: 5, timeouts: { connectMs: 10_000, listMs: 15_000, callMs: 60_000 },
     args: [], cwd: null, env: {}, secretNames: [], version: 1, createdAt: ago(60 * 24 * 10), updatedAt: ago(60),

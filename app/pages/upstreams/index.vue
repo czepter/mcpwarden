@@ -73,6 +73,7 @@ const sub = (u: UpstreamSummary) => (u.url ?? u.command ?? '').replace(/^https?:
     <KpiCard v-for="c in counts" :key="c.h" :label="healthLabel(c.h)" :value="String(c.n)" unit="Upstreams" :dot="`var(--st-${c.h}-dot)`" :share="items.length ? c.n / items.length : 0" />
   </section>
 
+  <p v-if="items.length" class="text-sm font-semibold">{{ items.length === 1 ? '1 Upstream' : `${items.length} Upstreams` }}</p>
   <DataSection min-width="1040px">
     <LoadingRows v-if="status === 'pending' && !data" />
     <ErrorState v-else-if="error" :error="error" @retry="refresh()" />
@@ -86,22 +87,22 @@ const sub = (u: UpstreamSummary) => (u.url ?? u.command ?? '').replace(/^https?:
         <tr class="border-b">
           <th scope="col" class="px-5 py-2.5 text-left font-medium">Name</th><th scope="col" class="px-3 text-left font-medium">Status</th><th scope="col" class="px-3 text-left font-medium">Typ</th>
           <th scope="col" class="px-3 text-left font-medium">Tools</th><th v-if="hasP95" scope="col" class="px-3 text-left font-medium">p95</th><th v-if="hasRecent" scope="col" class="px-3 text-left font-medium">Letzte 24 Aufrufe</th>
-          <th scope="col" class="px-3 text-left font-medium">Meldung</th><th scope="col" class="px-5 text-right font-medium"><span class="sr-only">Aktionen</span></th>
+          <th scope="col" class="px-3 text-left font-medium">Meldung</th><th scope="col" class="px-3 text-right font-medium"><span class="sr-only">Aktionen</span></th>
         </tr>
       </thead>
       <tbody>
         <tr v-for="u in filtered" :key="u.id" class="border-b border-muted">
-          <td class="px-5 py-2"><NuxtLink :to="`/upstreams/${u.id}`" class="flex items-center gap-3 hover:underline">
+          <td class="px-5 py-2"><NuxtLink :to="`/upstreams/${u.id}`" class="flex min-h-11 items-center gap-3 hover:underline">
             <span class="flex size-9 shrink-0 items-center justify-center rounded-sm border bg-muted font-semibold text-secondary-foreground" aria-hidden="true">{{ u.name[0]?.toUpperCase() }}</span>
-            <span class="min-w-0"><span class="block font-semibold">{{ u.name }}</span><span class="mono block max-w-72 truncate text-xs text-muted-foreground">{{ sub(u) }}</span></span>
+            <span class="min-w-0"><span class="block font-semibold">{{ u.name }}</span><span class="mono block max-w-52 truncate text-xs text-muted-foreground">{{ sub(u) }}</span></span>
           </NuxtLink></td>
           <td class="px-3"><StatusBadge :status="u.status" :setup="u.setup" /></td>
           <td class="px-3 text-secondary-foreground">{{ typeLabel(u.type) }}</td>
           <td class="tnum px-3">{{ u.toolsEnabled }} / {{ u.toolsTotal }}</td>
           <td v-if="hasP95" class="tnum px-3">{{ formatMs(u.p95Ms) }}</td>
           <td v-if="hasRecent" class="px-3"><SparkBars v-if="u.recent" :items="u.recent" /></td>
-          <td class="min-w-56 px-3 text-[13px] text-secondary-foreground">{{ message(u) }}</td>
-          <td class="px-5 text-right whitespace-nowrap">
+          <td class="min-w-44 px-3 text-[13px] text-secondary-foreground">{{ message(u) }}</td>
+          <td class="px-3 text-right whitespace-nowrap">
             <Button variant="ghost" size="icon" :disabled="testing === u.id" :aria-label="`Verbindung testen: ${u.name}`" @click="runTest(u)"><RefreshCw class="size-[18px]" :class="testing === u.id && 'animate-spin'" aria-hidden="true" /></Button>
             <Button as-child variant="ghost" size="icon" :aria-label="`Bearbeiten: ${u.name}`"><NuxtLink :to="`/upstreams/${u.id}/edit`"><Pencil class="size-[18px]" aria-hidden="true" /></NuxtLink></Button>
           </td>

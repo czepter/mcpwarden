@@ -39,7 +39,7 @@ async function doRevoke() {
 </script>
 
 <template>
-  <PageHeader title="Tokens" description="Personal Access Tokens für Clients ohne OAuth.">
+  <PageHeader title="Personal Access Tokens" crumb="Tokens" description="Für Clients ohne OAuth. Ein Token gilt nur für dich.">
     <Button :disabled="full" @click="dialog = true">+ Token erzeugen</Button>
   </PageHeader>
   <OneTimeSecret v-if="created" :title="`Token „${created.name}“ erzeugt`" :value="created.token" @close="created = null" />
@@ -58,7 +58,7 @@ async function doRevoke() {
           <TableCell><RelativeTime :value="p.createdAt" /></TableCell>
           <TableCell><RelativeTime :value="p.lastUsedAt" empty="nie" /></TableCell>
           <TableCell>{{ p.revokedAt ? 'Widerrufen' : 'Aktiv' }}</TableCell>
-          <TableCell class="text-right"><Button v-if="!p.revokedAt" variant="ghost" class="text-destructive" :aria-label="`Token ${p.name} widerrufen`" @click="revoke = p">Widerrufen</Button></TableCell>
+          <TableCell class="text-right"><Button v-if="!p.revokedAt" variant="destructive-outline" :aria-label="`Token ${p.name} widerrufen`" @click="revoke = p">Widerrufen</Button></TableCell>
         </TableRow>
       </TableBody>
     </Table>

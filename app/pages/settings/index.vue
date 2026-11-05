@@ -67,11 +67,12 @@ const collapsedDefault = computed({
         <FormRow id="pw-new" label="Neues Passwort" description="Mindestens 12 Zeichen." :error="pw.form.errors.value.next">
           <template #default="{ id, invalid, describedby }"><SecretField :id="id" v-model="next" :invalid="invalid" :describedby="describedby" /></template>
         </FormRow>
-        <div><Button type="submit" :disabled="pw.busy.value">Passwort ändern</Button></div>
+        <div><Button type="submit" variant="outline" :disabled="pw.busy.value">Passwort ändern</Button></div>
       </form>
     </section>
     <section class="rounded-lg border bg-card p-5" aria-labelledby="h-ses">
-      <h2 id="h-ses" class="mb-3 text-base font-semibold">Web-Sitzungen</h2>
+      <h2 id="h-ses" class="text-base font-semibold">Web-Sitzungen</h2>
+      <p class="mb-3 text-[13px] text-muted-foreground">Browser, in denen du in der Web-UI angemeldet bist. Verbundene Coding-Tools findest du unter <NuxtLink to="/settings/connections" class="font-medium text-primary underline-offset-4 hover:underline">Clients</NuxtLink>.</p>
       <ul class="flex flex-col divide-y">
         <li v-for="s in sessions ?? []" :key="s.id" class="flex min-h-11 items-center justify-between gap-3 py-2">
           <div><div class="font-medium">{{ s.userAgent ?? 'Unbekanntes Gerät' }}<span v-if="s.current" class="text-muted-foreground"> (diese Sitzung)</span></div><div class="text-xs text-muted-foreground">Seit <RelativeTime :value="s.createdAt" /></div></div>
