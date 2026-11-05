@@ -23,6 +23,7 @@ jobs:
           pnpm db:check
           git diff --exit-code
           test -z "$(git status --porcelain server/db)"
+      - run: sh scripts/test-init-env.sh
       - run: pnpm test:unit
       - run: pnpm build
 

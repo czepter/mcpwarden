@@ -2,6 +2,8 @@ import { admin } from 'better-auth/plugins'
 import { APIError, createAuthMiddleware } from 'better-auth/api'
 import type { BetterAuthOptions } from 'better-auth'
 import { canRegister } from './registration'
+import { dcrAfter, dcrBefore, type DcrDeps } from './dcr-hook'
+import { consentGuard, mcpPlugins, mcpResource, oauthRequestRewrite } from './mcp-plugin'
 
 export interface AuthDeps {
   baseUrl: string
@@ -9,16 +11,19 @@ export interface AuthDeps {
   allowedOrigins: string[]
   rateLimitEnabled: boolean
   countUsers: () => Promise<number>
+  /** DCR-Policy und Registrierungsprotokoll (DB). Fehlt beim Schema-CLI. */
+  dcr?: DcrDeps
 }
 
-/** Optionen ohne DB. Weitere Plugins (jwt, mcp) ergaenzt 0b hier. */
+/** Optionen ohne DB. 0b ergaenzt `jwt()` und `mcp()` (Spike-Ergebnisse: server/auth/mcp-plugin.ts). */
 export function buildAuthOptions(d: AuthDeps) {
+  const resource = mcpResource(d.baseUrl)
   return {
     baseURL: d.baseUrl,
     secret: d.secret,
     trustedOrigins: d.allowedOrigins,
     emailAndPassword: { enabled: true, minPasswordLength: 12 },
-    plugins: [admin()],
+    plugins: [admin(), ...mcpPlugins(d.baseUrl)],
     rateLimit: {
       enabled: d.rateLimitEnabled,
       customRules: {
@@ -28,10 +33,17 @@ export function buildAuthOptions(d: AuthDeps) {
     },
     hooks: {
       before: createAuthMiddleware(async (ctx) => {
+        consentGuard(ctx.path, ctx.body)
+        if (d.dcr) await dcrBefore(ctx.path, ctx.body, d.dcr)
+        const oauth = oauthRequestRewrite(ctx.path, ctx.query, ctx.body, resource)
+        if (oauth) return { context: oauth }
         if (ctx.path !== '/sign-up/email') return
         const email = typeof ctx.body?.email === 'string' ? ctx.body.email : ''
         const r = await canRegister({ email }, d.countUsers)
         if (!r.ok) throw new APIError('FORBIDDEN', { message: 'Registrierung geschlossen', code: r.code })
+      }),
+      after: createAuthMiddleware(async (ctx) => {
+        if (d.dcr) await dcrAfter(ctx.path, ctx.body, ctx.context.returned, d.dcr)
       }),
     },
     databaseHooks: {

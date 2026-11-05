@@ -27,3 +27,23 @@ Schema ändern: `pnpm db:schema` (Better-Auth-Schema neu generieren), `pnpm db:g
 Tests: `pnpm build && pnpm test` (Unit und Integration gegen PGlite, das gebaute Artefakt läuft als Kindprozess). `pnpm test:pg` startet zusätzlich einen Postgres-Container (`TEST_PG_PORT` überschreibt Port 54329) und lässt dieselben Tests mit `TEST_BACKEND=postgres` laufen.
 
 Hinweise: Single-Instance (prozessweiter Mutex für die Registrierung, PGlite erlaubt nur einen Prozess pro `DATA_DIR`; Deployment als Recreate, nicht Rolling). Kein automatisches Deployment.
+
+## Client verbinden
+
+Der MCP-Endpunkt ist `<BASE_URL>/mcp` (nur POST, zustandslos).
+
+OAuth (Claude Code, Cursor): Client per Dynamic Client Registration anlegen lassen, im Browser anmelden und die Zustimmung geben.
+
+```sh
+claude mcp add --transport http mcpwarden <BASE_URL>/mcp
+```
+
+Danach in Claude Code `/mcp` aufrufen und den Login im Browser abschliessen.
+
+Personal Access Token: unter den Einstellungen (Tokens) erzeugen; der Klartext wird nur einmal angezeigt. Ein gesetzter `Authorization`-Header unterdrueckt laut Claude-Code-Doku OAuth.
+
+```sh
+claude mcp add --transport http mcpwarden <BASE_URL>/mcp --header "Authorization: Bearer <pat>"
+```
+
+Hinweis: Die manuelle Abnahme mit echten Clients (Claude Code, Cursor) ist noch nicht protokolliert; der automatisierte OAuth-PKCE-Flow-Test ist `tests/integration/oauth/flow.test.ts`.
