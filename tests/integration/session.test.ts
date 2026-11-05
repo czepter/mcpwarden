@@ -1,6 +1,8 @@
 // requireUser/requireAdmin gegen echte Auth-Instanz (in-process, kein Testcode im Produktbundle).
 import { afterAll, beforeAll, expect, it } from 'vitest'
 import type { H3Event } from 'h3'
+import { eq } from 'drizzle-orm'
+import { user } from '../../server/db/schema'
 import { createInstance, type TestInstance } from './harness'
 
 let inst: TestInstance
@@ -48,4 +50,16 @@ it('requireUser/requireAdmin: 401 ohne Session, 403 fuer user, ok fuer admin', a
   const userCookie = await login('b@example.com', 'passwort-12345')
   expect((await session.requireUser(ev(userCookie))).user.id).toBe(created.user.id)
   await expect(session.requireAdmin(ev(userCookie))).rejects.toMatchObject({ statusCode: 403 })
+})
+
+it('requireUser honours banExpires: an active ban refuses, an expired one does not (review L-g)', async () => {
+  const cookie = await login('b@example.com', 'passwort-12345')
+  const id = (await session.requireUser(ev(cookie))).user.id
+  const db = await dbMod.getDb()
+  await db.update(user).set({ banned: true, banExpires: new Date(Date.now() + 3_600_000) }).where(eq(user.id, id))
+  await expect(session.requireUser(ev(cookie))).rejects.toMatchObject({ statusCode: 403 })
+  await db.update(user).set({ banned: true, banExpires: new Date(Date.now() - 1000) }).where(eq(user.id, id))
+  expect((await session.requireUser(ev(cookie))).user.id).toBe(id)
+  await db.update(user).set({ banned: true, banExpires: null }).where(eq(user.id, id))
+  await expect(session.requireUser(ev(cookie))).rejects.toMatchObject({ statusCode: 403 })
 })

@@ -1,5 +1,6 @@
 import type { H3Event } from 'h3'
 import { getAuth } from '../auth'
+import { isBanned } from '../auth/access-guard'
 import { apiError } from './api'
 
 async function load(event: H3Event) {
@@ -12,7 +13,8 @@ async function load(event: H3Event) {
 /** Angemeldeter Nutzer oder 401. */
 export async function requireUser(event: H3Event) {
   const s = await load(event)
-  if (s.user.banned) throw apiError(403, 'forbidden', 'account is banned')
+  // Eine abgelaufene Sperre (banExpires) zaehlt nicht mehr, wie beim /mcp-Zugriffs-Check
+  if (isBanned({ id: s.user.id, role: s.user.role === 'admin' ? 'admin' : 'user', banned: s.user.banned === true, banExpires: s.user.banExpires ? new Date(s.user.banExpires) : null }, new Date())) throw apiError(403, 'forbidden', 'account is banned')
   return s
 }
 
