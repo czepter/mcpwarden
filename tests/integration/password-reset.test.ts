@@ -40,7 +40,7 @@ describe('Passwort-Reset mit SMTP (Fake-Server)', () => {
   it('/api/public-config meldet mail: true (ohne Sitzung)', async () => {
     const r = await api(srv.url).request('/api/public-config')
     expect(r.status).toBe(200)
-    expect(r.json satisfies PublicConfig).toEqual({ mail: true })
+    expect(r.json satisfies PublicConfig).toEqual({ mail: true, registrationOpen: false })
   })
 
   it('Antwort ist fuer bekannte und unbekannte Adressen identisch; nur die bekannte bekommt eine Mail', async () => {
@@ -141,7 +141,7 @@ describe('Passwort-Reset: Fehlerpfade und Abschaltung', () => {
     const srv = await startServer(inst, { env: { SMTP_URL: undefined, MAIL_FROM: undefined } })
     try {
       const cfg = await api(srv.url).request('/api/public-config')
-      expect(cfg.json).toEqual({ mail: false })
+      expect(cfg.json).toEqual({ mail: false, registrationOpen: false })
       const r = await api(srv.url, '203.0.113.41').request('/api/auth/request-password-reset', { body: { email: USER.email } })
       expect(r.status).toBe(400)
       expect(r.json).toMatchObject({ code: 'RESET_PASSWORD_DISABLED' })
