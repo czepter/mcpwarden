@@ -420,10 +420,22 @@ export type AuthAdminApi = {
   removeUser: (o: { userId: string }) => Promise<unknown>
 }
 
-/** Admin-Aktionen mit Rechteverlust laufen nacheinander: sonst sperren sich zwei Admins gleichzeitig gegenseitig aus (Prüfung und Aktion sind sonst getrennt). */
+/**
+ * Admin-Aktionen mit Rechteverlust laufen nacheinander: sonst sperren sich zwei Admins gleichzeitig gegenseitig aus (Prüfung und Aktion sind sonst getrennt).
+ * Dazu gehört auch die Anmeldung des Aufrufers: Sperren widerruft dessen Sitzungen. Wer gleichzeitig angekommen ist, muss deshalb noch als der Admin gelten,
+ * der er bei Ankunft war (und dann `last_admin` bekommen), statt vom Sieger per 401 aus der Sitzung geworfen zu werden. Die Handler melden ihre Anmeldung
+ * mit `admitAdminAction` an, bevor sie etwas anderes awaiten; jede Aktion wartet, bevor sie etwas ändert, auf alle bis dahin angekommenen Anmeldungen.
+ */
 let adminTail: Promise<unknown> = Promise.resolve()
+const admitting = new Set<Promise<unknown>>()
+export function admitAdminAction<T>(auth: Promise<T>): Promise<T> {
+  const settled = auth.then(() => {}, () => {})
+  admitting.add(settled)
+  void settled.then(() => admitting.delete(settled))
+  return auth
+}
 function serialized<T>(fn: () => Promise<T>): Promise<T> {
-  const run = adminTail.then(fn, fn)
+  const run = adminTail.then(() => Promise.all([...admitting])).then(fn)
   adminTail = run.catch(() => {})
   return run
 }

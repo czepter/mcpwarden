@@ -5,7 +5,7 @@ import { requireAdmin } from '../../../../utils/session'
 import { authAdminApi } from '../../../../gateway/auth-admin'
 
 export default defineEventHandler(async (event) => {
-  const { user } = await requireAdmin(event)
+  const { user } = await svc.admitAdminAction(requireAdmin(event))
   const who = { id: user.id, role: (user.role === 'admin' ? 'admin' : 'user') as 'admin' | 'user' }
   const rt = await getRuntime()
   noStore(event)
