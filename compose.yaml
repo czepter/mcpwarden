@@ -1,0 +1,50 @@
+# Beispiel-Compose. Werte kommen aus .env (`pnpm env:init` erzeugt sie) oder `--env-file`.
+# Der Supervisor läuft als root mit genau drei Capabilities (UID-Wechsel für stdio-Worker, Besitzer setzen) und startet die
+# Web-App unter UID 10001 ohne jede Capability. no-new-privileges verhindert Rechtegewinn über exec (setuid() bleibt möglich).
+services:
+  mcpwarden:
+    build:
+      context: .
+      target: full # `slim`: ohne stdio, ohne Capabilities (cap_add entfernen)
+    image: mcpwarden:full
+    init: true
+    restart: unless-stopped
+    stop_grace_period: 40s # 30 s Drain + Reserve
+    cap_drop: [ALL]
+    cap_add: [SETUID, SETGID, CHOWN]
+    security_opt:
+      - no-new-privileges:true
+    ports:
+      - "${PORT:-3000}:3000"
+    environment:
+      BASE_URL: ${BASE_URL:?BASE_URL setzen (https, außer localhost)}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?BETTER_AUTH_SECRET setzen (pnpm env:init)}
+      MASTER_KEY: ${MASTER_KEY:?MASTER_KEY setzen (pnpm env:init)}
+      DATABASE_URL: ${DATABASE_URL:-}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-}
+      STDIO_MODE: ${STDIO_MODE:-auto}
+    volumes:
+      - data:/data
+    # Beispiel-Grenzen (Containerebene, zusätzlich zu den Grenzen je Worker):
+    # pids_limit: 512
+    # mem_limit: 1g
+
+  # Optional: Postgres statt eingebettetem PGlite (`docker compose --profile pg up`, DATABASE_URL entsprechend setzen)
+  postgres:
+    profiles: [pg]
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+      POSTGRES_DB: mcpwarden
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  data:
+  pgdata:

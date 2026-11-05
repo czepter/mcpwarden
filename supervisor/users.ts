@@ -112,13 +112,17 @@ export async function prepareDataDirs(o: { dataDir: string, rootUid: number, web
   }
   await own(o.dataDir, 0o755)
   if (o.stdio) await own(join(o.dataDir, 'stdio'), 0o711)
-  const fh = await open(join(o.dataDir, 'pgdata'), 0o700)
+  const pgdata = join(o.dataDir, 'pgdata')
+  const pst = await fsp.lstat(pgdata).catch(() => null)
+  if (pst && (pst.isSymbolicLink() || !pst.isDirectory())) throw new UnsafeDirectory(`${pgdata} is not a plain directory`)
+  // Web-eigenes pgdata (0700) kann der Supervisor ohne DAC_OVERRIDE nicht öffnen und fasst es nicht an: lstat genügt.
+  if (pst && pst.uid === o.webUid) return
+  if (pst && pst.uid !== o.rootUid) {
+    throw new UnsafeDirectory(`DATA_DIR/pgdata gehört uid ${pst.uid}, erwartet ${o.webUid}. Einmalig: chown -R ${o.webUid}:${o.webGid} <Volume>/pgdata`)
+  }
+  const fh = await open(pgdata, 0o700) // neu oder root-eigen (Einrichtung unterbrochen): über den O_NOFOLLOW-Deskriptor übergeben
   try {
-    const st = await fh.stat()
-    if (st.uid === o.rootUid && o.chown) { await fh.chmod(0o700); await fh.chown(o.webUid, o.webGid) } // frisch angelegt: Web-UID
-    else if (st.uid !== o.webUid && st.uid !== o.rootUid) {
-      throw new UnsafeDirectory(`DATA_DIR/pgdata gehört uid ${st.uid}, erwartet ${o.webUid}. Einmalig: chown -R ${o.webUid}:${o.webGid} <Volume>/pgdata`)
-    }
+    if (o.chown) { await fh.chmod(0o700); await fh.chown(o.webUid, o.webGid) }
   } finally { await fh.close() }
 }
 

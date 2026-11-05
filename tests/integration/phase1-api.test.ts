@@ -363,3 +363,11 @@ describe('admin: users, limits, settings (P0-4)', () => {
     expect(ev.items.some(i => i.action === 'setting.change' && i.scope === 'instance')).toBe(true)
   })
 })
+
+describe('health endpoints', () => {
+  it('/readyz reports stats_dropped; /healthz stays ok', async () => {
+    const ready = await fetch(`${srv.url}/readyz`).then(r => r.json()) as { ready: boolean, stats_dropped: number }
+    expect(ready).toMatchObject({ ready: true, stats_dropped: 0 })
+    expect((await fetch(`${srv.url}/healthz`)).status).toBe(200)
+  })
+})

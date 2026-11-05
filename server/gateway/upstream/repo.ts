@@ -257,6 +257,10 @@ export class GatewayRepo implements GatewayStore {
   // --- Messdaten ---
   async writeStats(rows: CallStatRow[]) {
     if (!rows.length) return
+    // Upstreams, die inzwischen gelöscht wurden: Messwert behalten (Slug steht in der Zeile), Verweis auf null setzen
+    const ids = [...new Set(rows.map(r => r.upstreamId).filter((x): x is string => !!x))]
+    const alive = new Set(ids.length ? (await this.db.select({ id: upstream.id }).from(upstream).where(inArray(upstream.id, ids))).map(r => r.id) : [])
+    rows = rows.map(r => (r.upstreamId && !alive.has(r.upstreamId) ? { ...r, upstreamId: null } : r))
     await this.db.insert(callStat).values(rows.map(r => ({
       ts: r.ts, userId: r.userId, clientId: r.clientId, tokenId: r.tokenId, upstreamId: r.upstreamId, upstreamSlug: r.upstreamSlug, tool: r.tool, kind: r.kind,
       status: r.status, totalMs: r.totalMs, upstreamMs: r.upstreamMs, overheadMs: r.overheadMs, retries: r.retries, reqBytes: r.reqBytes, resBytes: r.resBytes, cacheHit: r.cacheHit,

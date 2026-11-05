@@ -54,6 +54,9 @@ importers:
         specifier: 4.6.7
         version: 4.6.7
     devDependencies:
+      '@electric-sql/pglite-tools':
+        specifier: 0.4.15
+        version: 0.4.15(@electric-sql/pglite@0.5.15)
       '@modelcontextprotocol/node':
         specifier: 2.1.2
         version: 2.1.2(@modelcontextprotocol/server@2.4.0)
@@ -363,6 +366,11 @@ packages:
 
   '@dxup/unimport@0.1.2':
     resolution: {integrity: sha512-/B8YJGPzaYq1NbsQmwgP8EZqg40NpTw4ZB3suuI0TplbxKHeK94jeaawLmVhCv+YwUnOpiWEz9U6SeThku/8JQ==}
+
+  '@electric-sql/pglite-tools@0.4.15':
+    resolution: {integrity: sha512-VqKRGOgCLWUfZrfSxfVXm0OCawGMiUPf7TzPhSNOddEDiNbd9KLYfygvcL141wXSCPdlo/pr9Jsf1DlFozTR7g==}
+    peerDependencies:
+      '@electric-sql/pglite': 0.5.15
 
   '@electric-sql/pglite@0.5.15':
     resolution: {integrity: sha512-ERZWgaRTxueGV4cvL1tfpAOzFCWTXoUtbCBqnf2FhHDVs/so9eAKaanvrwWF9Dntx7BYsmFQujVQ0/B4S8Mmiw==}
@@ -5041,6 +5049,10 @@ snapshots:
       - webpack
 
   '@dxup/unimport@0.1.2': {}
+
+  '@electric-sql/pglite-tools@0.4.15(@electric-sql/pglite@0.5.15)':
+    dependencies:
+      '@electric-sql/pglite': 0.5.15
 
   '@electric-sql/pglite@0.5.15': {}
 

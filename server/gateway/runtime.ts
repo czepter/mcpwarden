@@ -27,7 +27,7 @@ export type Runtime = {
   stdioPolicyFor: (role: 'admin' | 'user', stdioAllowed: boolean) => Promise<{ allowed: true } | { allowed: false, reason: StdioReason }>
 }
 
-const g = globalThis as typeof globalThis & { __mcpwRuntime?: Promise<Runtime>, __mcpwRuntimeStop?: () => Promise<void> }
+const g = globalThis as typeof globalThis & { __mcpwRuntime?: Promise<Runtime>, __mcpwRuntimeStop?: () => Promise<void>, __mcpwStatsDropped?: () => number }
 const SETTINGS_TTL_MS = 10_000
 
 async function create(): Promise<Runtime> {
@@ -95,6 +95,7 @@ async function create(): Promise<Runtime> {
       return stdioPolicy({ imageTarget, instanceEnabled: (await settings()).stdio, role, stdioAllowed, supervisor: caps })
     },
   } satisfies Runtime)
+  g.__mcpwStatsDropped = () => gw.stats.dropped
   g.__mcpwRuntimeStop = async () => {
     rt.draining = true
     clearInterval(purge)
@@ -106,6 +107,11 @@ async function create(): Promise<Runtime> {
 
 export function getRuntime(): Promise<Runtime> {
   return (g.__mcpwRuntime ??= create())
+}
+
+/** Zähler `stats_dropped`: verworfene Messdatensätze seit Start (P0-15); 0 ohne Runtime. */
+export function statsDropped(): number {
+  return g.__mcpwStatsDropped?.() ?? 0
 }
 
 /** Drain läuft (für /readyz); ohne Runtime: false. */

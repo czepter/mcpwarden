@@ -198,7 +198,10 @@ export async function startSupervisor(o: SupervisorOptions) {
   // wenn die Web-App die Werte aus Datei/Docker-Secret liest (MASTER_KEY_FILE) — siehe README.
   const webEnv = { ...process.env }
   for (const k of SECRET_ENV) Reflect.deleteProperty(process.env, k)
-  const web = spawn(o.webCmd[0]!, o.webCmd.slice(1), { stdio: 'inherit', env: webEnv, ...(isRoot ? { uid: o.webUid, gid: o.webGid } : {}) })
+  // Steuerkanal fd 3: Der Supervisor hat kein CAP_KILL und kann die Web-App (andere UID) nicht signalisieren; sie beendet sich
+  // selbst (Signal an den eigenen Prozess), sobald hier 'stop' kommt oder der Kanal schließt.
+  const web = spawn(o.webCmd[0]!, o.webCmd.slice(1), { stdio: ['inherit', 'inherit', 'inherit', 'pipe'], env: { ...webEnv, WEB_CTL_FD: '3' }, ...(isRoot ? { uid: o.webUid, gid: o.webGid } : {}) })
+  ;(web.stdio[3] as import('node:stream').Duplex | null)?.on('error', () => { /* Web-App beendet */ })
   web.on('error', (e) => { log(`cannot start web app: ${e.message}${isRoot ? ' (fehlen SETUID/SETGID im Container? Siehe README)' : ''}`); void shutdown(1) })
   web.on('exit', (code, sig) => { log(`web app exited (${code ?? sig})`); void shutdown(code ?? 1) })
 
@@ -206,8 +209,9 @@ export async function startSupervisor(o: SupervisorOptions) {
     if (shuttingDown) return
     shuttingDown = true
     if (web.exitCode === null) {
-      web.kill('SIGTERM')
-      await new Promise<void>((res) => { const t = setTimeout(() => { web.kill('SIGKILL'); res() }, 35_000); web.once('exit', () => { clearTimeout(t); res() }) })
+      try { (web.stdio[3] as import('node:stream').Writable | null)?.end('stop\n') } catch { /* Kanal schon zu */ }
+      try { web.kill('SIGTERM') } catch { /* ohne CAP_KILL nicht möglich: der Steuerkanal übernimmt */ }
+      await new Promise<void>((res) => { const t = setTimeout(() => { try { web.kill('SIGKILL') } catch { /* EPERM */ } res() }, 35_000); web.once('exit', () => { clearTimeout(t); res() }) })
     }
     await Promise.all([...workers.keys()].map(u => stopWorker(u, false)))
     server.close()
