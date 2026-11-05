@@ -165,7 +165,11 @@ export async function startSupervisor(o: SupervisorOptions) {
     // libuv wechselt das Verzeichnis VOR setuid: root ohne CAP_DAC_OVERRIDE kommt nicht in das 0700-Nutzerverzeichnis.
     // Daher cwd = Supervisor-Verzeichnis und `cd` erst in der Shell (dann schon als Nutzer).
     // bash: dash kennt `ulimit -u` nicht (Debian-Image enthält bash)
-    const proc = spawn(existsSync('/bin/bash') ? '/bin/bash' : '/bin/sh', ['-c', 'cd "$0" || exit 1; ulimit -u 512 2>/dev/null; exec "$@"', dir, process.execPath, o.workerJs], {
+    // RLIMIT_NPROC zählt je UID alle Prozesse und Threads. Nur mit eigener UID begrenzt `ulimit -u` den Worker; ohne UID-Wechsel
+    // teilt er sich die UID mit der Web-App (und beim Host-Lauf mit allem anderen des Nutzers): ein Limit unterhalb der
+    // bereits laufenden Threads ließe jedes fork() des Workers mit EAGAIN scheitern. Dort setzt nur cgroup/pids_limit eine Grenze.
+    const nprocLimit = canSwitchUser ? 'ulimit -u 512 2>/dev/null; ' : ''
+    const proc = spawn(existsSync('/bin/bash') ? '/bin/bash' : '/bin/sh', ['-c', `cd "$0" || exit 1; ${nprocLimit}exec "$@"`, dir, process.execPath, o.workerJs], {
       cwd: join(o.dataDir, 'stdio'), env, detached: true, stdio: ['ignore', 'inherit', 'inherit', conn, 'pipe'],
       ...(canSwitchUser ? { uid, gid: uid } : {}),
     })

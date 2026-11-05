@@ -15,12 +15,13 @@ const ISOLATED = process.env.WORKER_ISOLATED === '1'
 const ROOT = process.cwd() // = DATA_DIR/stdio/<uid>, gesetzt vom Supervisor
 const MAX_CHILDREN = Number(process.env.WORKER_MAX_CHILDREN ?? 5)
 const IDLE_MS = Number(process.env.WORKER_IDLE_MIN ?? 10) * 60_000
-const CHILD_NPROC = Number(process.env.WORKER_CHILD_NPROC ?? 128)
+// ulimit -u gilt je UID (alle Prozesse und Threads): ohne eigene UID (kein ISOLATED) würde es die Web-App/den Host-Nutzer mitbegrenzen
+const CHILD_NPROC = ISOLATED ? Number(process.env.WORKER_CHILD_NPROC ?? 128) : 0
 // Weitere Grenzen je Kindprozess (0 = aus): virtueller Speicher (MB), CPU-Sekunden, größte Datei (MB). Best effort.
 const CHILD_VMEM_MB = Number(process.env.WORKER_CHILD_VMEM_MB ?? 0)
 const CHILD_CPU_S = Number(process.env.WORKER_CHILD_CPU_S ?? 0)
 const CHILD_FSIZE_MB = Number(process.env.WORKER_CHILD_FSIZE_MB ?? 1024)
-const LIMIT_SCRIPT = 'ulimit -u "$0" 2>/dev/null; [ "$1" -gt 0 ] && ulimit -v "$1" 2>/dev/null; [ "$2" -gt 0 ] && ulimit -t "$2" 2>/dev/null; [ "$3" -gt 0 ] && ulimit -f "$3" 2>/dev/null; shift 3; exec "$@"'
+const LIMIT_SCRIPT = '[ "$0" -gt 0 ] && ulimit -u "$0" 2>/dev/null; [ "$1" -gt 0 ] && ulimit -v "$1" 2>/dev/null; [ "$2" -gt 0 ] && ulimit -t "$2" 2>/dev/null; [ "$3" -gt 0 ] && ulimit -f "$3" 2>/dev/null; shift 3; exec "$@"'
 
 const sock = new net.Socket({ fd: 3, readable: true, writable: true })
 const reader = new FrameReader(MAX_DATA_FRAME)

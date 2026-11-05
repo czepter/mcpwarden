@@ -143,6 +143,10 @@ describe('Mailbenachrichtigungen mit SMTP', () => {
       // zurueck auf gesund und wieder an, fuer die folgenden Tests
       fake.requireHeader('authorization', `Bearer ${SECRET}`)
       expect((await test(a, upA.id)).ok).toBe(true)
+      // Die Erholung (auth_expired -> healthy) loest ebenfalls eine Benachrichtigung aus, deren Opt-out-Lookup bewusst erst im
+      // Hintergrund nach der Antwort laeuft (notify.ts). Erst abwarten, bis er mit "widersprochen" entschieden hat; sonst liest er
+      // auf einem langsamen Postgres schon den wieder eingeschalteten Wert und sendet die Mail zu Recht.
+      await sleep(1000)
       await a.request('/api/me/settings', { method: 'PATCH', body: { notifyStatusMail: true } })
       await sleep(300)
       expect(statusMailsTo(smtp, 'anna@example.com')).toHaveLength(0)

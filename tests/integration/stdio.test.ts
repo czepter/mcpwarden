@@ -1,4 +1,4 @@
-import { chmodSync, existsSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdtempSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
@@ -9,7 +9,7 @@ import { SessionCache } from '../../server/gateway/stdio/session-cache'
 import { ToolNotFoundError } from '../../server/gateway/ports'
 import { ctxFor, makeGateway, sig } from '../helpers/gateway'
 import { encryptSecret } from '../../server/gateway/crypto/secrets'
-import { execFileSync } from 'node:child_process'
+import { execFileSync, spawn } from 'node:child_process'
 import net from 'node:net'
 import { encodeFrame, MAX_CONTROL_FRAME } from '../../supervisor/protocol'
 
@@ -225,6 +225,36 @@ describe('stdio upstream through supervisor + worker', () => {
     await h.gw.shutdown(300)
     sessions.closeAll()
   })
+
+  // Regression: `ulimit -u` zaehlt je UID alle Prozesse/Threads. Ohne UID-Wechsel teilt der Worker die UID mit der Web-App (CI-Runner:
+  // eigener Nutzer, viele Vitest-Threads); ein festes Limit (512/128) liess dann jedes fork() mit EAGAIN scheitern. Root ist von
+  // RLIMIT_NPROC ausgenommen, der Fehler zeigt sich nur als normaler Nutzer.
+  it.skipIf(process.getuid!() === 0)('no per-UID process limit without a UID switch: workers and children start although the UID already runs > 600 threads', async () => {
+    const hogJs = join(markDir, 'hog.mjs')
+    writeFileSync(hogJs, "import { Worker, isMainThread } from 'node:worker_threads'\nif (isMainThread) { for (let i = 0; i < 650; i++) new Worker(new URL(import.meta.url)); setInterval(() => {}, 1000) } else setInterval(() => {}, 1000)\n")
+    const hog = spawn(process.execPath, [hogJs], { stdio: 'ignore' })
+    const threads = () => { try { return readdirSync('/proc').filter(d => /^\d+$/.test(d)).reduce((n, pid) => { try { return n + (statSync(`/proc/${pid}`).uid === process.getuid!() ? readdirSync(`/proc/${pid}/task`).length : 0) } catch { return n } }, 0) } catch { return 0 } }
+    const dir4 = mkdtempSync(join(tmpdir(), 'mcpw-data-'))
+    chmodSync(dir4, 0o755)
+    const sup4 = await startSupervisor({ dataDir: dir4, socketPath: join(dir4, 'sup.sock'), webUid: process.getuid!(), webGid: process.getgid!(), stdioMode: 'auto', webCmd: ['sleep', '600'], workerJs: resolve('dist/supervisor/worker.mjs'), log: () => {} })
+    const client4 = new SupervisorClient(join(dir4, 'sup.sock'))
+    try {
+      await expect.poll(threads, { timeout: 20_000, interval: 100 }).toBeGreaterThan(600)
+      const h = makeGateway({
+        stdioTransport: async (up, creds) => {
+          const s = await client4.attach(up.userId, { maxProcs: 3, idleMin: 10 })
+          return new IpcTransport(s, { command: up.command!, args: up.args, env: { ...up.env, ...creds.env }, cwdRel: up.cwd ?? undefined })
+        },
+      })
+      stdioUp(h as never, 'u-nproc')
+      expect(text(await h.gw.toolSource.callTool(ctxFor('u-nproc'), 'fs__echo', { text: 'ok' }, { signal: sig() }))).toBe('ok')
+      await h.gw.shutdown(300)
+    } finally {
+      hog.kill('SIGKILL')
+      sup4.onExit(() => {})
+      await sup4.shutdown(0)
+    }
+  }, 60_000)
 
   it('purge is refused while the worker has not stopped: error reply, user directory kept (review L-f)', async () => {
     const dir3 = mkdtempSync(join(tmpdir(), 'mcpw-data-'))
