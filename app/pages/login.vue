@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { authApi } from '~/api'
+import { authApi, publicApi } from '~/api'
 import FormRow from '~/components/common/FormRow.vue'
 import { Alert, AlertDescription } from '~/components/ui/alert'
 import { Button } from '~/components/ui/button'
@@ -24,12 +24,14 @@ const onSubmit = submit(async (v) => {
   const r = typeof route.query.redirect === 'string' && route.query.redirect.startsWith('/') && !route.query.redirect.startsWith('//') ? route.query.redirect : '/'
   await navigateTo(r)
 })
+const { data: pub } = useAsyncData('public-config', () => publicApi.config().catch(() => ({ mail: false })), { server: false })
 const { data: reg } = useAsyncData('reg-open', () => authApi.registrationOpen().catch(() => ({ open: false })), { server: false })
 </script>
 
 <template>
   <div class="w-full max-w-[480px] rounded-lg border bg-card p-7 shadow-[0_1px_2px_rgba(0,0,0,0.05)]">
     <h1 class="mb-4 text-lg font-semibold">Anmelden</h1>
+    <Alert v-if="route.query.reset" class="mb-4" role="status"><AlertDescription>Dein Passwort wurde geändert. Melde dich jetzt mit dem neuen Passwort an.</AlertDescription></Alert>
     <form class="flex flex-col gap-4" novalidate @submit.prevent="onSubmit">
       <Alert v-if="formError" variant="destructive" role="alert"><AlertDescription>{{ formError }}</AlertDescription></Alert>
       <FormRow id="email" label="E-Mail" :error="form.errors.value.email">
@@ -39,6 +41,7 @@ const { data: reg } = useAsyncData('reg-open', () => authApi.registrationOpen().
         <template #default="{ id, invalid, describedby }"><Input :id="id" v-model="password" type="password" autocomplete="current-password" :aria-invalid="invalid || undefined" :aria-describedby="describedby" /></template>
       </FormRow>
       <Button type="submit" :disabled="busy" :aria-busy="busy"><Spinner v-if="busy" />Anmelden</Button>
+      <NuxtLink v-if="pub?.mail" to="/forgot-password" class="text-[13px] text-primary underline">Passwort vergessen?</NuxtLink>
     </form>
     <p class="mt-4 text-[13px] text-muted-foreground">
       <template v-if="reg?.open">Noch kein Konto? <NuxtLink to="/register" class="text-primary underline">Registrieren</NuxtLink></template>

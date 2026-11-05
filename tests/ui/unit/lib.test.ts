@@ -4,7 +4,7 @@ import { formatCountdown, formatNumber, formatPercent, formatRelative } from '~/
 import { HEALTH_VALUES, OUTCOME_VALUES, SETUP_VALUES, healthLabel, outcomeLabel, scopeLabel, setupLabel, toolKind } from '~/lib/labels'
 import { FEATURES } from '~/lib/features'
 import { navFor } from '~/lib/nav'
-import { SLUG_RE, signUpSchema, upstreamSchema } from '~/lib/zod-schemas'
+import { SLUG_RE, forgotSchema, resetSchema, signUpSchema, upstreamSchema } from '~/lib/zod-schemas'
 
 describe('labels', () => {
   it('jeder Enumwert hat ein Label, unbekannte zeigen den Rohwert', () => {
@@ -55,6 +55,13 @@ describe('zod-schemas', () => {
     expect(r.errors.map(e => e.path)).toEqual(expect.arrayContaining(['password', 'confirm']))
     const ok = await toTypedSchema(signUpSchema as never).parse({ name: 'x', email: 'a@b.de', password: 'langgenugpasswort', confirm: 'langgenugpasswort' })
     expect(ok.errors).toHaveLength(0)
+  })
+  it('Passwort-Reset-Schemas: E-Mail-Form, Mindestlaenge 12, Bestaetigung', () => {
+    expect(forgotSchema.safeParse({ email: 'a@b.de' }).success).toBe(true)
+    expect(forgotSchema.safeParse({ email: 'kaputt' }).success).toBe(false)
+    expect(resetSchema.safeParse({ password: '12345678901', confirm: '12345678901' }).success).toBe(false)
+    expect(resetSchema.safeParse({ password: '123456789012', confirm: '123456789013' }).success).toBe(false)
+    expect(resetSchema.safeParse({ password: '123456789012', confirm: '123456789012' }).success).toBe(true)
   })
   it('Upstream-Schema: http braucht URL, stdio Befehl', () => {
     const base = { type: 'http', name: 'n', slug: 'n', url: '', transport: 'auto', authType: 'none', authHeaderName: '', secret: '', command: '', args: '', cwd: '', ratePerMin: 60, maxConcurrent: 5, connectS: 10, listS: 15, callS: 60 }

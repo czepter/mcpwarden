@@ -11,6 +11,10 @@ const password12 = z.string().min(12, 'Mindestens 12 Zeichen.')
 
 export const loginSchema = z.object({ email, password: z.string().min(1, 'Bitte gib dein Passwort ein.') })
 
+export const forgotSchema = z.object({ email })
+export const resetSchema = z.object({ password: password12, confirm: z.string() })
+  .refine(v => v.password === v.confirm, { path: ['confirm'], message: 'Die Passwörter stimmen nicht überein.' })
+
 export const signUpSchema = z.object({
   name: z.string().trim().min(1, 'Bitte gib deinen Namen ein.'),
   email, password: password12, confirm: z.string(),

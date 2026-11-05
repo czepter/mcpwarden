@@ -1,11 +1,11 @@
 import AxeBuilder from '@axe-core/playwright'
 import { expect, type Page } from '@playwright/test'
 
-export async function prep(page: Page, o: { role?: string, scenario?: string } = {}) {
-  await page.addInitScript(([r, s]) => {
-    if (!sessionStorage.getItem('__init')) { localStorage.setItem('mockRole', r!); localStorage.setItem('mockScenario', s!); sessionStorage.setItem('__init', '1') }
+export async function prep(page: Page, o: { role?: string, scenario?: string, mail?: 'on' | 'off' } = {}) {
+  await page.addInitScript(([r, s, m]) => {
+    if (!sessionStorage.getItem('__init')) { localStorage.setItem('mockRole', r!); localStorage.setItem('mockScenario', s!); localStorage.setItem('mockMail', m!); sessionStorage.setItem('__init', '1') }
     ;(globalThis as { __mockNoDelay?: boolean }).__mockNoDelay = true
-  }, [o.role ?? 'admin', o.scenario ?? 'default'])
+  }, [o.role ?? 'admin', o.scenario ?? 'default', o.mail ?? 'on'])
 }
 export async function login(page: Page, o: { role?: string, scenario?: string } = {}) {
   await prep(page, o)

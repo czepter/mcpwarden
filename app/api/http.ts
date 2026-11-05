@@ -39,8 +39,8 @@ export async function http<T>(method: string, path: string, opts: { body?: unkno
   try { json = text ? JSON.parse(text) : undefined } catch { json = undefined }
   if (!res.ok) {
     if (res.status === 401 && !opts.skip401) onUnauthorized?.()
-    const b = json as Partial<ApiErrorBody> & { message?: string } | undefined
-    throw new ApiError(res.status, b?.data?.code ?? 'unknown', b?.data?.message ?? b?.statusMessage ?? b?.message ?? `Fehler ${res.status}`, b?.data?.field)
+    const b = json as Partial<ApiErrorBody> & { message?: string, code?: string } | undefined
+    throw new ApiError(res.status, b?.data?.code ?? b?.code ?? 'unknown', b?.data?.message ?? b?.statusMessage ?? b?.message ?? `Fehler ${res.status}`, b?.data?.field)
   }
   return json as T
 }
