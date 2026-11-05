@@ -8,7 +8,7 @@ import type {
 } from '#shared/api-types'
 import { INVITE_INVALID, INVITE_REQUIRED } from '#shared/api-types'
 import { startFakeHttp, type FakeHttp } from '../fixtures/fake-upstream/http'
-import { ADMIN, api, createInstance, signUpFirstAdmin, startServer, type ApiClient, type TestInstance, type TestServer } from './harness'
+import { ADMIN, api, createInstance, heldPost, signUpFirstAdmin, startServer, type ApiClient, type TestInstance, type TestServer } from './harness'
 
 let inst: TestInstance
 let srv: TestServer
@@ -320,10 +320,12 @@ describe('admin: users, limits, settings (P0-4)', () => {
     const list = (await admin.request('/api/admin/users')).json as AdminUserList
     const a2 = list.items.find(u => u.email === 'admin2@example.com')!
     expect((await admin.request(`/api/admin/users/${a2.id}/ban`, { body: {} })).status).toBe(204)
-    const [r1, r2] = await Promise.all([
-      admin.request(`/api/admin/users/${id3}/ban`, { body: {} }),
-      a3.request(`/api/admin/users/${adminId}/ban`, { body: {} }),
-    ])
+    // Beide Anfragen sind beim Server angemeldet (Header da, Body zurueckgehalten), bevor eine von ihnen eine Sperre committet; erst dann
+    // werden die Bodys freigegeben. Damit haengt das Ergebnis nicht von Ankunftszeiten ab: keine der beiden darf an einer 401 scheitern.
+    const h1 = heldPost(srv.url, admin, `/api/admin/users/${id3}/ban`, {})
+    const h2 = heldPost(srv.url, a3, `/api/admin/users/${adminId}/ban`, {})
+    await new Promise(r => setTimeout(r, 500))
+    const [r1, r2] = await Promise.all([h1.release(), h2.release()])
     expect([r1.status, r2.status].sort()).toEqual([204, 409])
     const loser = [r1, r2].find(r => r.status === 409)!
     expect(loser.json.data.code).toBe('last_admin')
@@ -332,9 +334,9 @@ describe('admin: users, limits, settings (P0-4)', () => {
     // aufräumen: Zustand für die folgenden Tests wiederherstellen
     await admin.request('/api/auth/sign-in/email', { body: { email: ADMIN.email, password: ADMIN.password } })
     await a3.request('/api/auth/sign-in/email', { body: { email: 'admin3@example.com', password: PW } })
-    const act = r1.status === 204 ? a3 : admin
-    for (const id of [adminId, id3, a2.id]) await act.request(`/api/admin/users/${id}/unban`, { body: {} })
-    await admin.request('/api/auth/sign-in/email', { body: { email: ADMIN.email, password: ADMIN.password } })
+    const act = r1.status === 204 ? admin : a3 // der Sieger ist aktiv und darf entsperren; der Verlierer ist gesperrt
+    for (const id of [adminId, id3, a2.id]) expect((await act.request(`/api/admin/users/${id}/unban`, { body: {} })).status, `unban ${id}`).toBe(204)
+    expect((await admin.request('/api/auth/sign-in/email', { body: { email: ADMIN.email, password: ADMIN.password } })).status).toBe(200)
   })
   it('limits: partial update, validation, normal users are refused', async () => {
     const list = (await admin.request('/api/admin/users')).json as AdminUserList

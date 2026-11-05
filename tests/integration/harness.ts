@@ -4,6 +4,7 @@
 import { spawn, type ChildProcess } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
 import { mkdtemp, rm } from 'node:fs/promises'
+import { request as httpRequest } from 'node:http'
 import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -176,6 +177,36 @@ export function api(baseUrl: string, ip = '203.0.113.7') {
   return { request, jar }
 }
 export type ApiClient = ReturnType<typeof api>
+
+/**
+ * POST, dessen Header sofort gesendet werden, dessen Body aber zurueckgehalten wird, bis `release()` aufgerufen wird.
+ * So lassen sich mehrere Anfragen deterministisch gleichzeitig "in der Luft" halten: der Server hat jeden Aufrufer angemeldet,
+ * bevor irgendeine Aktion committet (Tests auf Gleichzeitigkeit duerfen nicht von Ankunftszeiten abhaengen).
+ */
+export function heldPost(baseUrl: string, client: ApiClient, path: string, body: unknown, ip = '203.0.113.7') {
+  const u = new URL(baseUrl + path)
+  const payload = JSON.stringify(body)
+  const cookie = [...client.jar].map(([k, v]) => `${k}=${v}`).join('; ')
+  const req = httpRequest({
+    host: u.hostname, port: u.port, path: u.pathname, method: 'POST',
+    headers: { 'origin': baseUrl, 'x-forwarded-for': ip, 'content-type': 'application/json', 'content-length': Buffer.byteLength(payload), ...(cookie ? { cookie } : {}) },
+  })
+  const done = new Promise<{ status: number, json: any, text: string }>((resolve, reject) => { // eslint-disable-line @typescript-eslint/no-explicit-any
+    req.on('error', reject)
+    req.on('response', (res) => {
+      const chunks: Buffer[] = []
+      res.on('data', c => chunks.push(c as Buffer))
+      res.on('end', () => {
+        const text = Buffer.concat(chunks).toString('utf8')
+        let json: any // eslint-disable-line @typescript-eslint/no-explicit-any
+        try { json = JSON.parse(text) } catch { json = undefined }
+        resolve({ status: res.statusCode ?? 0, json, text })
+      })
+    })
+  })
+  req.flushHeaders()
+  return { release: () => { req.end(payload); return done } }
+}
 
 export const ADMIN = { name: 'Admin', email: 'admin@example.com', password: 'admin-passwort-123' }
 
