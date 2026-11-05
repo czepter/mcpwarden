@@ -67,7 +67,7 @@ const collapsedDefault = computed({
         <FormRow id="pw-new" label="Neues Passwort" description="Mindestens 12 Zeichen." :error="pw.form.errors.value.next">
           <template #default="{ id, invalid, describedby }"><SecretField :id="id" v-model="next" :invalid="invalid" :describedby="describedby" /></template>
         </FormRow>
-        <div><Button type="submit" :disabled="pw.busy.value">Passwort ändern</Button></div>
+        <div><Button type="submit" variant="outline" :disabled="pw.busy.value">Passwort ändern</Button></div>
       </form>
     </section>
     <section class="rounded-lg border bg-card p-5" aria-labelledby="h-ses">
