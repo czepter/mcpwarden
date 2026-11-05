@@ -28,6 +28,10 @@ export function forbidden(resourceMetadataUrl: string, scope: string = SCOPE_MCP
   return json(403, { 'www-authenticate': challenge }, { error: 'insufficient_scope', error_description: `scope ${scope} required` })
 }
 
+export function payloadTooLarge(): Response {
+  return json(413, {}, { error: 'payload_too_large' })
+}
+
 export function methodNotAllowed(): Response {
   return json(405, { allow: 'POST' }, { error: 'method_not_allowed' })
 }

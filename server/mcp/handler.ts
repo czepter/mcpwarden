@@ -7,7 +7,7 @@
 import { createMcpHandler, Server, type McpHttpHandler } from '@modelcontextprotocol/server'
 import { getAuthContext, toAuthInfo, type AuthContext } from '../auth/auth-context'
 import { checkOrigin } from './discovery'
-import { methodNotAllowed } from './errors'
+import { methodNotAllowed, payloadTooLarge } from './errors'
 import type { ToolSource } from './upstream-port'
 
 export type GatewayDeps = {
@@ -19,6 +19,31 @@ export type GatewayDeps = {
   /** Hoechstlaufzeit eines subscriptions/listen-Streams (Standard = Access-Token-TTL 300 s). */
   streamMaxMs?: number
   maxSubscriptions?: number
+  /** Hoechstgroesse des Request-Bodys in Bytes (Standard 4 MiB); groessere Anfragen bekommen 413, ohne dass sie ganz gelesen werden. */
+  maxBodyBytes?: number
+}
+
+export const MAX_BODY_BYTES = 4 * 1024 * 1024
+
+/** Liest den Body hoechstens bis `max` Bytes (auch ohne Content-Length) und liefert einen neuen, lesbaren Request; sonst 413. */
+async function boundedRequest(request: Request, max: number): Promise<Request | Response> {
+  const declared = Number(request.headers.get('content-length'))
+  if (Number.isFinite(declared) && declared > max) return payloadTooLarge()
+  if (!request.body) return request
+  const reader = request.body.getReader()
+  const chunks: Uint8Array[] = []
+  let total = 0
+  for (;;) {
+    const { done, value } = await reader.read()
+    if (done) break
+    total += value.byteLength
+    if (total > max) { void reader.cancel().catch(() => {}); return payloadTooLarge() }
+    chunks.push(value)
+  }
+  const body = new Uint8Array(total)
+  let at = 0
+  for (const c of chunks) { body.set(c, at); at += c.byteLength }
+  return new Request(request.url, { method: request.method, headers: request.headers, body, signal: request.signal })
 }
 
 type Entry = { handler: McpHttpHandler, lastUsed: number }
@@ -86,8 +111,10 @@ export function createGateway(deps: GatewayDeps) {
       if (request.method !== 'POST') return methodNotAllowed() // (b) Methode
       const auth = await deps.authenticate(request) // (c)+(d) Token und Zusatzpruefung
       if (auth instanceof Response) return auth
-      const listen = await isListen(request) // vor fetch: danach ist der Body verbraucht
-      const res = await handlerFor(auth.ctx.userId).fetch(request, { authInfo: toAuthInfo(auth.ctx, auth.token) }) // (e)
+      const req = await boundedRequest(request, deps.maxBodyBytes ?? MAX_BODY_BYTES) // erst nach dem Token: Unbekannte lassen wir nichts hochladen
+      if (req instanceof Response) return req
+      const listen = await isListen(req) // vor fetch: danach ist der Body verbraucht
+      const res = await handlerFor(auth.ctx.userId).fetch(req, { authInfo: toAuthInfo(auth.ctx, auth.token) }) // (e)
       return listen ? limitStream(res, deps.streamMaxMs ?? 300_000) : res
     },
     /** Meldet `tools/list_changed` an die offenen Listen-Streams genau dieses Nutzers. */

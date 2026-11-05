@@ -40,6 +40,33 @@ afterAll(async () => {
   await inst.cleanup()
 })
 
+describe('request body limit (review L-d)', () => {
+  const big = (n: number) => JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'dummy__echo', arguments: { text: 'x'.repeat(n) } } })
+  const post = (body: BodyInit, extra: Record<string, string> = {}, init: Record<string, unknown> = {}) =>
+    fetch(mcpUrl, { method: 'POST', headers: { 'content-type': 'application/json', 'accept': 'application/json, text/event-stream', ...hdr(patA.token), ...extra }, body, ...init } as RequestInit)
+
+  it('a declared body over the limit gets 413 without being processed', async () => {
+    const r = await post(big(5 * 1024 * 1024))
+    expect(r.status).toBe(413)
+    expect(await r.json()).toEqual({ error: 'payload_too_large' })
+  })
+  it('a chunked body without Content-Length is cut off at the limit as well', async () => {
+    const chunk = new TextEncoder().encode('x'.repeat(256 * 1024))
+    let sent = 0
+    const stream = new ReadableStream<Uint8Array>({ pull(c) { if (sent >= 6 * 1024 * 1024) c.close(); else { sent += chunk.length; c.enqueue(chunk) } } })
+    const r = await post(stream as never, {}, { duplex: 'half' })
+    expect(r.status).toBe(413)
+  })
+  it('unauthenticated oversized requests are refused by the token check first (401)', async () => {
+    const r = await fetch(mcpUrl, { method: 'POST', headers: { 'content-type': 'application/json' }, body: big(5 * 1024 * 1024) })
+    expect(r.status).toBe(401)
+  })
+  it('a normal request below the limit still works', async () => {
+    const r = await post(big(1000))
+    expect(r.status).toBe(200)
+  })
+})
+
 describe('PAT routes (task 5)', () => {
   it('creates with plaintext only in the POST response; list has prefix and limit', async () => {
     const r = await admin.request('/api/me/pats', { body: { name: '  second  ' } })
