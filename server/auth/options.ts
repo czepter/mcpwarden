@@ -2,6 +2,8 @@ import { admin } from 'better-auth/plugins'
 import { APIError, createAuthMiddleware } from 'better-auth/api'
 import type { BetterAuthOptions } from 'better-auth'
 import { INVITE_INVALID } from '../../shared/api-types'
+import { trySendMail, type Mailer } from '../mail'
+import { RESET_TTL_MINUTES, resetPasswordMail } from '../mail/templates'
 import { canRegister, type InviteCheck } from './registration'
 import { dcrAfter, dcrBefore, type DcrDeps } from './dcr-hook'
 import { consentGuard, mcpPlugins, mcpResource, oauthRequestRewrite } from './mcp-plugin'
@@ -20,6 +22,23 @@ export interface AuthDeps {
     claim: (token: string, email: string) => Promise<string | null>
     bind: (inviteId: string, userId: string) => Promise<void>
   }
+  /** Optional. Nur ein aktivierter Mailer schaltet Passwort-Reset per Mail ein. */
+  mailer?: Mailer
+}
+
+/**
+ * Passwort-Reset per Mail (nur mit aktivem Mailer). Antwort ist fuer bekannte und unbekannte Adressen gleich
+ * (Better Auth); der Versand wird nicht abgewartet, damit SMTP-Latenz nicht verraet, ob die Adresse existiert.
+ * Der Link kommt aus BASE_URL, nicht aus `url`/`redirectTo` der Anfrage. Das Token wird nie geloggt.
+ */
+function passwordReset(baseUrl: string, mailer: Mailer) {
+  return {
+    resetPasswordTokenExpiresIn: RESET_TTL_MINUTES * 60,
+    revokeSessionsOnPasswordReset: true,
+    sendResetPassword: async ({ user, token }: { user: { email: string }, token: string }) => {
+      void trySendMail(mailer, resetPasswordMail(user.email, baseUrl, token), 'Passwort-Reset')
+    },
+  }
 }
 
 /** Token je E-Mail zwischen Before-Hook und Anlegen; Sign-ups laufen seriell (Mutex in api/auth/[...all].ts). */
@@ -35,7 +54,11 @@ export function buildAuthOptions(d: AuthDeps) {
     baseURL: d.baseUrl,
     secret: d.secret,
     trustedOrigins: d.allowedOrigins,
-    emailAndPassword: { enabled: true, minPasswordLength: 12 },
+    emailAndPassword: {
+      enabled: true,
+      minPasswordLength: 12,
+      ...(d.mailer?.enabled ? passwordReset(d.baseUrl, d.mailer) : {}),
+    },
     plugins: [admin(), ...mcpPlugins(d.baseUrl)],
     rateLimit: {
       enabled: d.rateLimitEnabled,

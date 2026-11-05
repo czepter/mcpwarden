@@ -1,7 +1,7 @@
-import type { AuthSession, InviteInfo } from '#shared/api-types'
+import type { AuthSession, InviteInfo, PublicConfig } from '#shared/api-types'
 import { INVITE_INVALID, INVITE_REQUIRED } from '#shared/api-types'
 import { SEED_INVITE_TOKENS } from '../seed'
-import { currentUser, getState, role, save, volatileInviteTokens } from '../state'
+import { currentUser, getState, mailEnabled, role, save, volatileInviteTokens } from '../state'
 import { body, err, json, nid, noContent, route } from '../util'
 import { HttpResponse } from 'msw'
 
@@ -68,6 +68,21 @@ export const authHandlers = [
   ])),
   route('post', '/api/auth/revoke-session', () => json({ ok: true })),
   route('get', '/api/auth/registration-state', () => json({ open: false }), { public: true }),
+  route('get', '/api/public-config', () => json<PublicConfig>({ mail: mailEnabled() }), { public: true }),
+  // Wie Better Auth: gleiche Antwort fuer jede Adresse (keine Kontoenumeration); ohne Mail 400 RESET_PASSWORD_DISABLED.
+  route('post', '/api/auth/request-password-reset', async ({ request }) => {
+    if (!mailEnabled()) return err(400, 'RESET_PASSWORD_DISABLED', 'Reset password isn\'t enabled')
+    const b = await body<{ email?: string }>(request)
+    if (!b.email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(b.email)) return err(400, 'VALIDATION_ERROR', 'Invalid email')
+    return json({ status: true, message: 'If this email exists in our system, check your email for the reset link' })
+  }, { public: true }),
+  // Mock: nur das Token `abgelaufen` ist ungueltig; er merkt sich keine Tokens.
+  route('post', '/api/auth/reset-password', async ({ request }) => {
+    const b = await body<{ token?: string, newPassword?: string }>(request)
+    if (!b.token || b.token === 'abgelaufen') return err(400, 'INVALID_TOKEN', 'Invalid token')
+    if ((b.newPassword ?? '').length < 12) return err(400, 'PASSWORD_TOO_SHORT', 'Password too short', 'password')
+    return json({ status: true })
+  }, { public: true }),
   route('get', '/api/invites/:token', ({ params }) => json(inviteState(String(params.token))), { public: true }),
 ]
 export { nid, noContent }

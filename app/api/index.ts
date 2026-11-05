@@ -1,6 +1,6 @@
 import type {
   AdminUserLimitsInput, AdminSettings, AdminSettingsResult, AdminUserList, AllowlistEntry, AllowlistInput, AllowlistList,
-  AuditList, AuthSession, Capabilities, ConnectionList, ConsentInfo, Dashboard, DcrMode, DcrPolicy, InviteInfo, InviteCreated,
+  AuditList, AuthSession, Capabilities, PublicConfig, ConnectionList, ConsentInfo, Dashboard, DcrMode, DcrPolicy, InviteInfo, InviteCreated,
   InviteList, LinkInfo, LinkTestResult, OAuthClientAdminList, PatCreated, PatList, SecretInput, SecretResult,
   StatsSummary, StatsWindow, StdioDraft, UpstreamTestResult, UpstreamToolList, UpstreamDetail, UpstreamInput, UpstreamList, UpstreamPatch, UpstreamToolItem, AdminUser,
 } from '#shared/api-types'
@@ -20,7 +20,12 @@ export const authApi = {
   listSessions: () => get<Array<{ id: string, token: string, userAgent: string | null, ipAddress: string | null, createdAt: string, current: boolean }>>('/api/auth/list-sessions'),
   revokeSession: (token: string) => post<unknown>('/api/auth/revoke-session', { token }),
   registrationOpen: () => get<{ open: boolean }>('/api/auth/registration-state'),
+  // Ohne redirectTo: der Link in der Mail entsteht serverseitig aus BASE_URL. Antwort ist immer gleich (kein Hinweis, ob die Adresse existiert).
+  requestPasswordReset: (email: string) => http<{ status: boolean }>('POST', API_PATHS.requestPasswordReset, { body: { email }, skip401: true }),
+  resetPassword: (token: string, newPassword: string) => http<{ status: boolean }>('POST', API_PATHS.resetPassword, { body: { token, newPassword }, skip401: true }),
 }
+
+export const publicApi = { config: () => http<PublicConfig>('GET', API_PATHS.publicConfig, { skip401: true }) }
 
 export const oauthApi = {
   consentInfo: (query: string) => get<ConsentInfo>(`/api/oauth/consent-info${query}`),

@@ -2,6 +2,7 @@ import { drizzleAdapter } from '@better-auth/drizzle-adapter'
 import { betterAuth } from 'better-auth'
 import { count } from 'drizzle-orm'
 import { getDb } from '../db'
+import { getMailer } from '../mail'
 import { user } from '../db/schema'
 import { getConfig } from '../utils/config'
 import { GatewayRepo } from '../gateway/upstream/repo'
@@ -32,6 +33,7 @@ function create() {
             },
           }
         })(),
+        mailer: getMailer(),
         countUsers: async () => (await db.select({ n: count() }).from(user))[0]?.n ?? 0,
         dcr: {
           getPolicy: () => getRegistrationPolicy(db),

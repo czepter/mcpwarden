@@ -10,7 +10,7 @@ Entscheidungen im Überblick (Nummern = Fragen im Abgleich, Abschnitt 6):
 |---|---|---|
 | 1 | Das Frontend übernimmt alle `app/**`-Dateien (Seiten, Layouts, Komponenten); die Backend-Phasen liefern API, Tests und Vertragsbeiträge | Abschnitt 4, A3, Aufgaben 7 bis 11 |
 | 2 | Einladung als Token-Link `/invite/<token>`, 7 Tage gültig, optional an eine E-Mail gebunden | Routenkarte, Abschnitt 9, Aufgaben 7 und 11 |
-| 3 | E-Mail-Änderung, Benachrichtigungsmails und Konto-Selbstlöschung entfallen (aus Plan und Entwurfs-Umsetzung gestrichen) | Aufgabe 8, Abschnitt 9 |
+| 3 | E-Mail-Änderung, Benachrichtigungsmails und Konto-Selbstlöschung entfallen (aus Plan und Entwurfs-Umsetzung gestrichen). Stand 2026-11-05: Mailversand ist optional (Spec P1 „Mailer“); gebaut ist nur der Passwort-Reset (`/forgot-password`, `/reset-password`, Link auf `/login` nur bei `mail: true`), alles andere bleibt gestrichen | Aufgabe 8, Abschnitt 9 |
 | 4 | Dashboard (Clients, Aufmerksamkeit) und Audit-Lesen laufen schon nach Phase 1 (Routen `/api/dashboard` ohne KPIs, `/api/audit`) | Routenkarte, Abschnitt 15, Aufgabe 13 |
 | 5 | Consent mit zwei Schaltern (`mcp:tools` immer, `mcpwarden:admin` abwählbar); der Admin-Scope-Schalter bleibt bis Phase 2 ausgeblendet | Aufgabe 7, Abschnitt 11 |
 | 6 | Audit: Nutzer sehen eigene Einträge, Admins zusätzlich Instanzereignisse | Abschnitt 11, Aufgabe 13 |

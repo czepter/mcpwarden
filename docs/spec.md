@@ -1,6 +1,8 @@
-# mcpwarden — MCP Gateway & Proxy (PRD v0.5)
+# mcpwarden — MCP Gateway & Proxy (PRD v0.6)
 
-Stand: 2026-11-04 · Status: Entwurf · Autor: Christian
+Stand: 2026-11-05 · Status: Entwurf · Autor: Christian
+Änderungen ggü. v0.5 (Entscheidung 2026-11-05):
+- **Mailversand ist optional und nicht mehr Nicht-Ziel.** Ohne `SMTP_URL` ändert sich nichts: keine Mails, Einladungen bleiben Links, die Mailfunktionen sind in der UI ausgeblendet, der Betrieb braucht keinen Mailserver. Mit `SMTP_URL` und `MAIL_FROM` schaltet sich der Mailer ein (neu P1 „Mailer“). Gebaut: Passwort-Reset („Passwort vergessen?“). Direkt nach dem Merge von Phase 1 geplant: Einladungsmails und Statuswechsel-Benachrichtigungen mit Opt-out je Nutzer. E-Mail-Änderung per Link und Konto-Selbstlöschung bleiben P2.
 Änderungen ggü. v0.4 (auf Grundlage von `docs/ui-abgleich.md`, Entscheidungen vom 2026-11-04):
 - Zuständigkeit: Das Frontend übernimmt alle `app/**`-Dateien; Backend-Phasen liefern nur API, Tests und Beiträge zu `shared/api-types.ts` (Technische Rahmenbedingungen).
 - Einladungen sind Token-Links (`/invite/<token>`, 7 Tage gültig, optional an eine E-Mail gebunden), keine reine E-Mail-Allowlist (P0-4).
@@ -50,7 +52,6 @@ Zielnutzer: zunächst ich selbst (mehrere Geräte), später ein kleiner Kreis vo
 - **Upstream-OAuth ohne Dynamic Client Registration** (eigene OAuth-App je Dienst, feste Redirect-URIs) — out of scope, bis es jemand braucht.
 - **Kommerzieller Betrieb/Abrechnung** — persönliches Tool; eigener Code, kein Code des Vorbilds (siehe Umgang mit dem Vorbild).
 - **Managed Serverless** — stdio braucht langlebige Prozesse.
-- **Mailversand** — es gibt keinen SMTP-Zugang. Daher entfallen vorerst E-Mail-Änderung per Link, Benachrichtigungsmails und Konto-Selbstlöschung (P2, sobald Mailversand existiert); Einladungen laufen als Link, nicht per Mail.
 - **Tags für Upstreams und Gerätenamen für Clients** — DCR und PAT liefern keinen Gerätenamen; angezeigt werden nur Client-Name, Redirect-Host und Zeiten.
 
 ## User Stories
@@ -119,11 +120,11 @@ Das Gateway ist OAuth-Provider; der Endnutzer loggt sich bei Better Auth ein und
 - [ ] Gelten genau für den erzeugenden Nutzer.
 
 **P0-4 Nutzer & Login**
-- [ ] Better Auth, E-Mail/Passwort (Mindestlänge 12 Zeichen, serverseitig erzwungen; die UI zeigt nur, was der Server prüft); erster Nutzer wird Admin; weitere Registrierung nur per **Einladungslink**: ein Token-Link `/invite/<token>`, einmalig verwendbar, 7 Tage gültig, optional an eine E-Mail-Adresse gebunden (dann nur mit dieser registrierbar). Es gibt keine reine E-Mail-Allowlist ohne Token und keinen Mailversand. Die Sperre ist **atomar**: Registrierungen werden serialisiert (prozessweiter Mutex genügt in der Single-Instance), damit zwei gleichzeitige Erstregistrierungen nicht zwei Admins ergeben.
+- [ ] Better Auth, E-Mail/Passwort (Mindestlänge 12 Zeichen, serverseitig erzwungen; die UI zeigt nur, was der Server prüft); erster Nutzer wird Admin; weitere Registrierung nur per **Einladungslink**: ein Token-Link `/invite/<token>`, einmalig verwendbar, 7 Tage gültig, optional an eine E-Mail-Adresse gebunden (dann nur mit dieser registrierbar). Es gibt keine reine E-Mail-Allowlist ohne Token; der Link wird vom Admin weitergegeben (Mailversand der Einladung ist optional, siehe P1 „Mailer“). Die Sperre ist **atomar**: Registrierungen werden serialisiert (prozessweiter Mutex genügt in der Single-Instance), damit zwei gleichzeitige Erstregistrierungen nicht zwei Admins ergeben.
 - [ ] Rolle und Sperre (`role`, `banned`) kommen aus dem Better-Auth-`admin()`-Plugin und sind ab der ersten Migration im Schema (Phase 0a); Einladungen (Token-Link) und Nutzerverwaltung folgen in Phase 1, Meilenstein 1.1.
 - [ ] Alle Tabellen mit `user_id`; jede Query nutzerbezogen (Test: Nutzer B sieht/ruft nie Upstreams von A).
 - [ ] Rate-Limit auf Login- und Token-Endpunkte.
-- [ ] Admin-Seite: Einladungen erzeugen (Link `/invite/<token>`, einmalig, 7 Tage gültig, optional E-Mail-gebunden; Link nur beim Erzeugen sichtbar; Liste offener Einladungen mit Widerruf), Nutzer auflisten, sperren und entsperren (Sperre beendet sofort alle Sessions, OAuth-Tokens und PATs des Nutzers), löschen (entfernt auch dessen Upstreams und Secrets; der letzte Admin ist geschützt). Das Löschen des eigenen Kontos durch den Nutzer entfällt (siehe Nicht-Ziele).
+- [ ] Admin-Seite: Einladungen erzeugen (Link `/invite/<token>`, einmalig, 7 Tage gültig, optional E-Mail-gebunden; Link nur beim Erzeugen sichtbar; Liste offener Einladungen mit Widerruf), Nutzer auflisten, sperren und entsperren (Sperre beendet sofort alle Sessions, OAuth-Tokens und PATs des Nutzers), löschen (entfernt auch dessen Upstreams und Secrets; der letzte Admin ist geschützt). Das Löschen des eigenen Kontos durch den Nutzer entfällt vorerst (P2, siehe „Mailer“).
 - [ ] Limits je Nutzer sind in der Admin-Seite einsehbar und änderbar (Upstreams, Aufrufe/min, Verbindungen, stdio-Prozesse, stdio-Idle); Standardwerte kommen aus der API, nicht aus dem UI-Code.
 - [ ] Admin sieht nur Metadaten (Anzahl Upstreams, letzte Aktivität), nie Secrets oder Aufrufinhalte anderer Nutzer.
 - [ ] Pro Nutzer Obergrenzen: Anzahl Upstreams (Standard 50), gleichzeitige Verbindungen, Aufrufe pro Minute (Nutzerlimit, unabhängig vom Upstream-Limit aus P0-5); stdio nur nach Admin-Freigabe (P0-5). Grenzen per Admin änderbar.
@@ -223,7 +224,7 @@ Ergänzt den knappen Circuit-Breaker-Punkt in P0-5; hier steht das vollständige
   - Status in der UI und via `get_upstream_status`: `healthy` / `degraded` / `open` (Breaker offen) / `auth_expired` / `disabled` / `unknown` (noch kein Ergebnis, z. B. frisch angelegt), jeweils mit Zeitpunkt, Latenz-Perzentilen (alle fünf, p5/p50/p75/p95/p99, siehe P0-15; die Detailansicht zeigt alle fünf Werte, ein Chart darf drei Linien zeigen) und letzter Fehlermeldung. Daneben führt jeder Upstream den **Einrichtungszustand** `setup`: `ready` / `awaiting_auth` / `awaiting_approval` (Spec P0-12: „wartet auf Auth“ bzw. „wartet auf Freigabe“). So bleibt der Health-Enum klein. API-Werte bleiben englisch, die Anzeige läuft über eine Label-Tabelle (deutsch: „In Ordnung“, „Eingeschränkt“, „Breaker offen“, „Auth abgelaufen“, „Deaktiviert“, „Unbekannt“).
   - **`degraded`** heißt: der Upstream antwortet, aber eingeschränkt. In Phase 1: 1–4 aufeinanderfolgende Fehler (unterhalb der Breaker-Schwelle); ab Phase 2 zusätzlich p95 über 3× der 7-Tage-Basislinie. Das Backend liefert den konkreten Grund als `statusReason` (Text); die UI zeigt ihn nur an und kodiert keine Schwellen fest.
   - Statusfarben tragen immer auch ein Textlabel; Darstellungen, die nur über Farbe unterscheiden (z. B. eine Verlaufs-Heatmap), brauchen Muster oder eine Tabellenalternative.
-  - Statuswechsel nach `open` oder `auth_expired` erzeugen einen Eintrag im Audit-Log; Benachrichtigung per E-Mail erst mit Mailversand (P2).
+  - Statuswechsel nach `open` oder `auth_expired` erzeugen einen Eintrag im Audit-Log; Benachrichtigung per E-Mail über den optionalen Mailer (P1, nach Phase 1; ohne `SMTP_URL` nur Audit-Eintrag).
   - Verfügbarkeit in Prozent und eine Status-Historie (Heatmap) gibt es nur, wenn Phase 2 den Verlauf speichert und über `health-history` liefert; bis dahin speichert das Datenmodell den Status nur beim Wechsel.
   - Tools eines `open`-Upstreams bleiben in `tools/list` sichtbar (kein Flackern der Tool-Liste im Client), liefern aber den Fehler; konfigurierbar, sie auszublenden.
 - [ ] **Gateway-Health:** `/healthz` (Prozess lebt, DB erreichbar) und `/readyz` (Migrationen durch, Supervisor erreichbar, falls aktiviert). Ein ausgefallener Upstream macht das Gateway weder „unhealthy" noch „not ready".
@@ -251,6 +252,12 @@ Die Daten (`last_used_at`, Status, Messdatensätze, Audit-Schreibpfad) liegen na
 - [ ] **Sichtbarkeit:** Jeder Nutzer sieht nur eigene Einträge; der Admin sieht zusätzlich Instanzereignisse (Nutzer gesperrt, Einstellung geändert), nie Aufrufinhalte oder Secrets anderer Nutzer.
 
 ### P1 — schnell danach
+
+- **Mailer (optional, SMTP).** Aktiv nur mit `SMTP_URL` (`smtps://user:pass@host:465` oder `smtp://host:587` mit Pflicht-STARTTLS, Klartext nur an localhost) und `MAIL_FROM`; beides wird beim Start geprüft (ungültig oder `MAIL_FROM` fehlt = Startfehler, Meldungen nennen nie Zugangsdaten). Ohne `SMTP_URL` ist der Mailer ein No-op, `GET /api/public-config` liefert `mail: false`, und alle Mailfunktionen sind unsichtbar. Die Anwendung kennt nur den Port `Mailer.sendMail({to, subject, text, html?})` (Adapter: SMTP, No-op, In-Memory für Tests).
+  - Härtung: CR/LF in Empfänger, Betreff und Absender werden abgelehnt (Header-Injection), nur Klartext und einfaches, escaptes HTML aus festen Vorlagen, Links ausschließlich aus `BASE_URL`, Timeouts (Verbinden, Gruß, Socket, Senden), höchstens 2 Wiederholungen bei vorübergehenden Fehlern (nicht bei Auth- oder 5xx-Fehlern), Limit je Empfänger (3 pro Stunde), Versandfehler brechen nie eine Anfrage ab und werden ohne Adresse, Token und Zugangsdaten geloggt.
+  - [x] **Passwort-Reset:** „Passwort vergessen?“ (nur sichtbar, wenn `mail` aktiv ist), `/forgot-password` und `/reset-password`. Die Antwort ist für bekannte und unbekannte Adressen gleich (auch zeitlich: der Versand wird nicht abgewartet), Token 15 Minuten gültig und einmalig, im Link als Fragment (kein Access-Log), Mindestlänge 12, danach enden alle Sitzungen des Nutzers.
+  - [ ] Einladungsmails (der Link `/invite/<token>` zusätzlich per Mail an die gebundene Adresse; Admin sieht den Link weiter) und [ ] Statuswechsel-Benachrichtigungen (`open`, `auth_expired`) mit Opt-out je Nutzer: direkt nach dem Merge von Phase 1.
+  - P2 danach: E-Mail-Änderung per Link und Konto-Selbstlöschung (Konflikt mit dem Schutz des letzten Admins vorher klären).
 
 - **Intelligentes Routing (Ziel 4), Meta-Tool-Modus** pro Nutzer/Profil: statt aller Tools nur `find_tools(intent)`, `describe_tool`, `invoke_tool` (+ Verwaltungs-Tools). Zweistufig:
   1. **Vorfilter ohne LLM:** Volltext/BM25 über Tool-Name, Beschreibung, Schema, Upstream-Beschreibung; liefert Top-N (Standard 30).
@@ -283,7 +290,7 @@ Die Daten (`last_used_at`, Status, Messdatensätze, Audit-Schreibpfad) liegen na
 - Horizontale Skalierung auf echtem Postgres (MCP-Sessions, Link-Einmaligkeit und Rate-Limit-Zähler aus dem Speicher in die DB verlagern). Ein externer Cache wie Valkey ist **nicht** geplant; falls er je nötig wird, wird er hinter der bestehenden Cache-Funktion `get/set/del` mit TTL nachgerüstet. stdio-Prozesse bleiben pro Instanz, Routing dorthin braucht Sticky Sessions.
 - Sampling/Elicitation/Progress-Passthrough (in der Revision 2026-07-28 über MRTR-Zwischenantworten, `InputRequiredResult`).
 - Per-Nutzer-Identität an Multitenant-Upstreams (Token-Exchange statt gespeichertem Langzeit-Secret).
-- Mailversand (SMTP) mit den davon abhängigen Funktionen: E-Mail-Änderung per Link, Benachrichtigungsmails (Statuswechsel, neuer Client), Konto-Selbstlöschung (Konflikt mit dem Schutz des letzten Admins vorher klären).
+- Auf dem optionalen Mailer (P1) aufbauend: E-Mail-Änderung per Link und Konto-Selbstlöschung (Konflikt mit dem Schutz des letzten Admins vorher klären); weitere Benachrichtigungen (z. B. neuer Client).
 - Geteilte Upstreams/Teams; verteilte Rate-Limits (über mehrere Instanzen); Freigabe vor Tool-Aufruf (Approval).
 - Stärkere stdio-Isolation über den Worker-pro-Nutzer (P0-5) hinaus: eigener Container oder Sandbox je Nutzer, Netzwerk-Egress-Regeln. Nötig, sobald Nutzer dem Betreiber nicht mehr vertraut sind.
 
@@ -331,6 +338,7 @@ Die Daten (`last_used_at`, Status, Messdatensätze, Audit-Schreibpfad) liegen na
 9. ~~Sollen neu entdeckte Upstream-Tools standardmäßig aktiv sein?~~ **Entschieden (2026-11-04): ja, bis die Tool-Poisoning-Prüfung (P1) existiert.** Ursprüngliche Frage: Sollen neu entdeckte Upstream-Tools standardmäßig aktiv sein? Die Spec schweigt (P0-7); der Review empfiehlt „ja“, bis die Tool-Poisoning-Prüfung (P1) existiert. — *Christian*
 10. ~~Phase-1-Defaults~~ **Entschieden (2026-11-04): übernommen.** Vorschlag aus dem Review: Phase-1-Defaults für stdio übernehmen (Frage 6: Idle 10 min, max. 5 Kindprozesse). — *Christian*
 11. ~~UI-Abgleich (acht Fragen)~~ **Entschieden (2026-11-04):** Frontend besitzt `app/**`; Token-Link-Einladung; keine Mailfunktionen und keine Selbstlöschung; Dashboard und Audit-Lesen ab Phase 1; Admin-Scope im Consent abwählbar; Audit nach Nutzer, Admin zusätzlich Instanzereignisse; Tags/Gerätenamen gestrichen, „Alle testen“ später, Heatmap nur mit `health-history`; Dunkelmodus nach Phase 2. Einarbeitung siehe „Änderungen ggü. v0.4“.
+12. ~~Mailversand~~ **Entschieden (2026-11-05): optional statt Nicht-Ziel.** Ohne `SMTP_URL` bleibt alles wie bisher (Link-Einladungen, kein Mailserver nötig). Reihenfolge: Passwort-Reset (gebaut) → Einladungs- und Statusmails mit Opt-out (nach Phase 1) → E-Mail-Änderung und Selbstlöschung (P2). Ersetzt die Teilentscheidung „keine Mailfunktionen“ aus Frage 11.
 
 ## Phasen
 

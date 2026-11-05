@@ -18,6 +18,8 @@ Vor dem ersten `dev` einmal `pnpm env:init` (legt `.env` mit Zufallswerten und M
 | `DATABASE_URL` | leer = PGlite in `DATA_DIR/pgdata`, sonst `postgres://…` |
 | `DATA_DIR` | Datenverzeichnis, Default `./data` |
 | `ALLOWED_ORIGINS` | kommagetrennte Origins, Default Origin von `BASE_URL` |
+| `SMTP_URL` | optional: `smtps://user:pass@host:465` oder `smtp://user:pass@host:587` (STARTTLS Pflicht, Klartext nur an localhost). Geheim, URL-kodieren |
+| `MAIL_FROM` | Absender, Pflicht wenn `SMTP_URL` gesetzt ist, z. B. `mcpwarden <noreply@example.com>` |
 | `RATE_LIMIT` | nur Tests: `off` schaltet das Better-Auth-Rate-Limit ab |
 
 Der Start bricht mit Exit-Code 1 ab, wenn eine Pflichtvariable fehlt oder ungültig ist (Meldung nennt nur Namen, nie Werte).
@@ -27,6 +29,10 @@ Schema ändern: `pnpm db:schema` (Better-Auth-Schema neu generieren), `pnpm db:g
 Tests: `pnpm build && pnpm test` (Unit und Integration gegen PGlite, das gebaute Artefakt läuft als Kindprozess). `pnpm test:pg` startet zusätzlich einen Postgres-Container (`TEST_PG_PORT` überschreibt Port 54329) und lässt dieselben Tests mit `TEST_BACKEND=postgres` laufen.
 
 Hinweise: Single-Instance (prozessweiter Mutex für die Registrierung, PGlite erlaubt nur einen Prozess pro `DATA_DIR`; Deployment als Recreate, nicht Rolling). Kein automatisches Deployment.
+
+## Sendet mcpwarden E-Mails?
+
+Optional. Ohne `SMTP_URL` nicht: Es wird kein Mailserver gebraucht, Einladungen bleiben Links, und alle Mailfunktionen sind ausgeblendet. Mit `SMTP_URL` und `MAIL_FROM` (siehe Tabelle) schaltet sich der Mailversand ein; heute ist das „Passwort vergessen“ (Link 15 Minuten gültig, einmal verwendbar). Der Versand ist begrenzt (je Empfänger 3 pro Stunde), ein Fehler beim Versand bricht nie eine Anfrage ab, und weder Zugangsdaten noch Tokens landen im Log. Der Start bricht ab, wenn `SMTP_URL` ungültig ist oder `MAIL_FROM` fehlt.
 
 ## Client verbinden
 

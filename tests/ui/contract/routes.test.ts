@@ -2,7 +2,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { z } from 'zod'
 import type {
   AdminSettings, AdminUserList, AllowlistList, AuditList, AuthSession, ConnectionList, ConsentInfo, DcrPolicy, InviteInfo, InviteList,
-  LinkInfo, OAuthClientAdminList, PatList, StatsSummary, StdioDraft, UpstreamTestResult, UpstreamToolList, UpstreamDetail, UpstreamList,
+  LinkInfo, OAuthClientAdminList, PatList, PublicConfig, StatsSummary, StdioDraft, UpstreamTestResult, UpstreamToolList, UpstreamDetail, UpstreamList,
 } from '#shared/api-types'
 import { makeServer } from '../../../mocks/node'
 import { getState, resetState } from '../../../mocks/state'
@@ -74,6 +74,7 @@ const schemas = {
     z.strictObject({ state: z.literal('open'), kind: z.enum(['token', 'header', 'oauth']), upstream: z.strictObject({ slug: str(), url: str() }), headerName: str().optional(), expiresAt: str() }),
     z.strictObject({ state: z.enum(['expired', 'used', 'forbidden']) }),
   ]) satisfies z.ZodType<LinkInfo>,
+  publicConfig: z.strictObject({ mail: bool() }) satisfies z.ZodType<PublicConfig>,
   audit: z.strictObject({
     items: z.array(z.strictObject({
       id: num(), ts: str(), actorKind: z.enum(['user', 'admin', 'system']), actorIsSelf: bool(), clientId: nstr, clientName: nstr, action: str(), category: z.enum(['management', 'auth', 'status', 'denied']),
@@ -114,6 +115,7 @@ describe('alle GET-Routen: strikte Vertrags-Schemas', () => {
     ['Link offen', '/api/links/abc', 'link'],
     ['Link abgelaufen', '/api/links/abgelaufen', 'link'],
     ['Audit', '/api/audit', 'audit'],
+    ['Public-Config', '/api/public-config', 'publicConfig'],
   ]
   for (const [name, path, key] of cases) {
     it(name, async () => {

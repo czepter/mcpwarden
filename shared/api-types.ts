@@ -289,6 +289,9 @@ export const API_PATHS = {
   signOut: '/api/auth/sign-out',
   upstreams: '/api/upstreams',
   capabilities: '/api/me/capabilities',
+  publicConfig: '/api/public-config',
+  requestPasswordReset: '/api/auth/request-password-reset',
+  resetPassword: '/api/auth/reset-password',
   pats: '/api/me/pats',
   connections: '/api/me/connections',
   audit: '/api/audit',
@@ -297,6 +300,9 @@ export const API_PATHS = {
 
 export type CallOutcome = 'ok' | 'tool_error' | 'timeout' | 'upstream_error' | 'rate_limited' | 'breaker_open' | 'denied'
 export type ToolMode = 'direct' | 'meta' // Phase 3
+
+/** `GET /api/public-config`, ohne Sitzung. `mail`: SMTP_URL ist gesetzt (Passwort-Reset per Mail verfuegbar). */
+export type PublicConfig = { mail: boolean }
 
 // Statistik (Phase 2, Vorschlag)
 export type StatsWindow = '5m' | '1h' | '24h' | '7d'
