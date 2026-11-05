@@ -6,6 +6,16 @@ export class ConfigError extends Error {
   }
 }
 
+/** SMTP-Zugang aus SMTP_URL. `pass` ist nicht aufzaehlbar: taucht in JSON/Logs/console.log nie auf. */
+export interface SmtpConfig {
+  host: string
+  port: number
+  /** true = implizites TLS (smtps), false = STARTTLS (smtp; Klartext nur an Loopback). */
+  secure: boolean
+  user: string | undefined
+  readonly pass: string | undefined
+}
+
 export interface AppConfig {
   baseUrl: URL
   betterAuthSecret: string
@@ -14,6 +24,9 @@ export interface AppConfig {
   dataDir: string
   allowedOrigins: string[]
   rateLimitEnabled: boolean
+  /** Optionaler Mailversand (P1 "Mailer"). Ohne SMTP_URL bleibt alles Link-basiert. */
+  smtp: SmtpConfig | undefined
+  mailFrom: string | undefined
 }
 
 const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]'])
@@ -26,6 +39,60 @@ function parseMasterKey(raw: string): Buffer | undefined {
     if (buf.length === 32 && buf.toString('base64') === raw) return buf
   }
   return undefined
+}
+
+// Einfache Absenderadresse: `a@b.c` oder `Name <a@b.c>`. Kein CR/LF, keine Steuerzeichen, keine weiteren Klammern.
+const ADDR = '[^\\s@<>",;:()\\[\\]\\\\]+@[^\\s@<>",;:()\\[\\]\\\\]+\\.[^\\s@<>",;:()\\[\\]\\\\]+'
+const MAIL_FROM_RE = new RegExp(`^(?:${ADDR}|[^<>"\\r\\n\\p{Cc}]{1,64}<${ADDR}>)$`, 'u')
+export const isMailFrom = (v: string) => v.length <= 254 && MAIL_FROM_RE.test(v)
+
+/** Meldet nur Variablennamen, nie Teile der URL. */
+function parseSmtp(raw: string, problems: string[]): SmtpConfig | undefined {
+  let u: URL
+  try {
+    u = new URL(raw)
+  } catch {
+    problems.push('SMTP_URL ist keine gueltige URL')
+    return undefined
+  }
+  if (u.protocol !== 'smtp:' && u.protocol !== 'smtps:') {
+    problems.push('SMTP_URL muss mit smtp:// oder smtps:// beginnen')
+    return undefined
+  }
+  if (!u.hostname) {
+    problems.push('SMTP_URL enthaelt keinen Host')
+    return undefined
+  }
+  const secure = u.protocol === 'smtps:'
+  const port = u.port ? Number(u.port) : secure ? 465 : 587
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    problems.push('SMTP_URL enthaelt einen ungueltigen Port')
+    return undefined
+  }
+  if (u.pathname.replace(/\//g, '') || u.search || u.hash) {
+    problems.push('SMTP_URL darf keinen Pfad, keine Query und kein Fragment enthalten')
+    return undefined
+  }
+  let user: string | undefined
+  let pass: string | undefined
+  try {
+    user = u.username ? decodeURIComponent(u.username) : undefined
+    pass = u.password ? decodeURIComponent(u.password) : undefined
+  } catch {
+    problems.push('SMTP_URL enthaelt ungueltig kodierte Zugangsdaten')
+    return undefined
+  }
+  if (pass && !user) {
+    problems.push('SMTP_URL enthaelt ein Passwort ohne Benutzer')
+    return undefined
+  }
+  if ([user, pass].some(v => v && /[\r\n]/.test(v))) {
+    problems.push('SMTP_URL enthaelt Zeilenumbrueche in den Zugangsdaten')
+    return undefined
+  }
+  const cfg = { host: u.hostname.replace(/^\[|\]$/g, ''), port, secure, user } as SmtpConfig
+  Object.defineProperty(cfg, 'pass', { value: pass, enumerable: false })
+  return cfg
 }
 
 export function parseConfig(env: Record<string, string | undefined>): AppConfig {
@@ -80,6 +147,16 @@ export function parseConfig(env: Record<string, string | undefined>): AppConfig 
     }
   } else if (baseUrl) allowedOrigins = [baseUrl.origin]
 
+  let smtp: SmtpConfig | undefined
+  let mailFrom: string | undefined
+  const rawSmtp = get('SMTP_URL')
+  if (rawSmtp) {
+    smtp = parseSmtp(rawSmtp, problems)
+    mailFrom = get('MAIL_FROM')
+    if (!mailFrom) problems.push('MAIL_FROM fehlt (Pflicht, wenn SMTP_URL gesetzt ist)')
+    else if (!isMailFrom(mailFrom)) problems.push('MAIL_FROM ist keine gueltige Absenderadresse')
+  }
+
   if (problems.length || !baseUrl || !betterAuthSecret || !masterKey) throw new ConfigError(problems)
 
   return Object.freeze({
@@ -90,6 +167,8 @@ export function parseConfig(env: Record<string, string | undefined>): AppConfig 
     dataDir: get('DATA_DIR') ?? './data',
     allowedOrigins,
     rateLimitEnabled: rateLimit !== 'off',
+    smtp,
+    mailFrom,
   })
 }
 
