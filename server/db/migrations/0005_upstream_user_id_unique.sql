@@ -1,0 +1,1 @@
+ALTER TABLE "upstream" ADD CONSTRAINT "upstream_user_id_id_uq" UNIQUE("user_id","id");

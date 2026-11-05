@@ -1,0 +1,14 @@
+{
+  // Self-contained (the supervisor is not Nuxt code), so that Vite/oxc does not resolve a tsconfig from a parent directory.
+  "compilerOptions": {
+    "target": "ES2023",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "strict": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "types": ["node"],
+    "paths": {}
+  },
+  "include": ["./**/*"]
+}

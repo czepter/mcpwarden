@@ -1,344 +1,355 @@
-# mcpwarden — MCP Gateway & Proxy (PRD v0.5)
+# mcpwarden — MCP Gateway & Proxy (PRD v0.6)
 
-Stand: 2026-11-04 · Status: Entwurf · Autor: Christian
-Änderungen ggü. v0.4 (auf Grundlage von `docs/ui-abgleich.md`, Entscheidungen vom 2026-11-04):
-- Zuständigkeit: Das Frontend übernimmt alle `app/**`-Dateien; Backend-Phasen liefern nur API, Tests und Beiträge zu `shared/api-types.ts` (Technische Rahmenbedingungen).
-- Einladungen sind Token-Links (`/invite/<token>`, 7 Tage gültig, optional an eine E-Mail gebunden), keine reine E-Mail-Allowlist (P0-4).
-- Ohne Mailversand entfallen E-Mail-Änderung per Link, Benachrichtigungsmails und Konto-Selbstlöschung (Nicht-Ziele; Benachrichtigung und Mailfunktionen P2). Passwort-Mindestlänge 12 (P0-4).
-- Dashboard (Clients-Tabelle, Aufmerksamkeitskarte) und Audit-Lesen schon in Phase 1 (neu P0-16, `/api/dashboard` ohne KPIs, `/api/audit`); KPIs und Statistik bleiben Phase 2. Audit-Sichtbarkeit: Nutzer sehen eigene Einträge, der Admin zusätzlich Instanzereignisse.
-- Consent: `mcpwarden:admin` ist beim Zustimmen separat abwählbar (zwei Schalter); der Consent-Screen blendet den Admin-Scope bis Phase 2 aus (P0-2, P0-12).
-- Zustandsloses Gateway: Statuswort „Aktiv“ = Aufruf in den letzten 5 Minuten statt „Online / verbunden seit“ (P0-1, User Stories).
-- Statusmenge: `unknown` ergänzt; Einrichtungszustand (`ready` / `awaiting_auth` / `awaiting_approval`) als zweiter Wert neben dem Health-Status; `degraded` einheitlich definiert, Backend liefert `statusReason` (P0-12, P0-14).
-- Limits 60/min und 5 parallel gelten je Upstream; Nutzer- und Token-Limits getrennt (P0-4, P0-5, P1). Kurzname (Slug) im Formular sichtbar mit Regex (P0-1, P0-5).
-- SSRF-Ausnahme als Admin-Liste (CIDR/Hostname), nicht als Schalter (P0-9).
-- Nicht gebaut: Tags und Gerätenamen (Nicht-Ziele). „Alle testen“ später mit Bestätigung und Rate-Hinweis; Verfügbarkeit/Heatmap nur, wenn Phase 2 `health-history` liefert. Dunkelmodus erst nach Phase 2 (Darstellung bis dahin ohne „System“/„Dunkel“).
-Änderungen ggü. v0.3 (auf Grundlage von `docs/plans/review.md`):
-- SDK-Linie `@modelcontextprotocol/server`/`client` v2; Spec-Revision 2026-07-28 neben 2025-11-25.
-- Zustandsloses Gateway (keine Session-ID); `tools/list_changed` über `subscriptions/listen` mit Bus pro Nutzer; Abbruch über HTTP = Stream schließen.
-- Upstream-Secrets werden in der Web-App entschlüsselt; der Supervisor bekommt nur die fertige Env eines Kindprozesses (kein `MASTER_KEY`, kein DB-Zugriff).
-- Härtungen: Supervisor leitet die UID aus `user_id` ab und ignoriert gelieferte UIDs, getrennte Verzeichnisbäume mit `lchown`, SSRF-Prüfung auch für IP-Literale, Token-Widerruf wirkt sofort (DB-Prüfung pro Request), Registrierungssperre atomar.
-- Phasenzuordnung: Admin-Funktionen (P0-4), Minimum von P0-14/P0-15 und Umstiegstest PGlite→Postgres (P0-11) eingeordnet.
-- Erweiterte ENV-Liste (`STDIO_MODE`, `TRUST_PROXY`, Test-Schalter); Hinweis auf MRTR (Sampling/Elicitation) der Revision 2026-07-28.
-- Zweiter Pflichtclient der OAuth-Abnahme: Cursor; Scope `mcp:tools`; Slug-Limit 32 Zeichen für Upstream-Namen.
-Änderungen ggü. v0.2: LLM-gestütztes Routing ist jetzt Ziel (kein Nicht-Ziel mehr); Upstreams lassen sich per MCP selbst anlegen, Secrets und OAuth laufen über einen Link in die Web-UI (nie durch den Chat); Upstream-OAuth deshalb P0.
-Änderungen ggü. v0.1: Remote-Hosting in Docker, Gateway als OAuth-2.1-Provider (Better Auth) für Endnutzer, nutzerbezogene Daten, Meta-Tool-Modus, Sicherheitsmodell für öffentliche Erreichbarkeit.
+As of: 2026-11-05 · Status: draft · Author: Christian
+Language: repository text is English; the product UI is German (by decision), as are the user-facing texts it displays. German status labels and UI strings are quoted in this document ("Aktiv", "Inaktiv", …). API values stay English.
+Changes vs. v0.5 (decision 2026-11-05):
+- **Mail sending is optional and no longer a non-goal.** Without `SMTP_URL` nothing changes: no mails, invitations stay links, the mail features are hidden in the UI, operation needs no mail server. With `SMTP_URL` and `MAIL_FROM` the mailer switches on (new P1 "Mailer"). Built: password reset ("Passwort vergessen?"), invitation mails and status-change notifications with per-user opt-out. Email change by link and account self-deletion remain P2.
+Changes vs. v0.4 (based on `docs/ui-comparison.md`, decisions of 2026-11-04):
+- Responsibility: the frontend owns all `app/**` files; backend phases deliver only API, tests and contributions to `shared/api-types.ts` (technical constraints).
+- Invitations are token links (`/invite/<token>`, valid 7 days, optionally bound to an email), not a pure email allowlist (P0-4).
+- Without mail sending, email change by link, notification mails and account self-deletion are dropped (non-goals; notification and mail features P2). Minimum password length 12 (P0-4).
+- Dashboard (clients table, attention card) and audit reading already in phase 1 (new P0-16, `/api/dashboard` without KPIs, `/api/audit`); KPIs and statistics stay phase 2. Audit visibility: users see their own entries, the admin additionally instance events.
+- Consent: `mcpwarden:admin` can be deselected separately when consenting (two switches); the consent screen hides the admin scope until phase 2 (P0-2, P0-12).
+- Stateless gateway: status word "Aktiv" = call within the last 5 minutes instead of "Online / connected since" (P0-1, user stories).
+- Status set: `unknown` added; setup state (`ready` / `awaiting_auth` / `awaiting_approval`) as a second value next to the health status; `degraded` defined uniformly, backend delivers `statusReason` (P0-12, P0-14).
+- Limits 60/min and 5 parallel apply per upstream; user and token limits separate (P0-4, P0-5, P1). Short name (slug) visible in the form with regex (P0-1, P0-5).
+- SSRF exception as an admin list (CIDR/hostname), not as a switch (P0-9).
+- Not built: tags and device names (non-goals). "Test all" later with confirmation and rate hint; availability/heatmap only if phase 2 delivers `health-history`. Dark mode only after phase 2 (appearance without "System"/"Dunkel" until then).
+Changes vs. v0.3 (based on `docs/plans/review.md`):
+- SDK line `@modelcontextprotocol/server`/`client` v2; spec revision 2026-07-28 alongside 2025-11-25.
+- Stateless gateway (no session ID); `tools/list_changed` via `subscriptions/listen` with a bus per user; abort over HTTP = close stream.
+- Upstream secrets are decrypted in the web app; the supervisor receives only the finished env of a child process (no `MASTER_KEY`, no DB access).
+- Hardening: the supervisor derives the UID from `user_id` and ignores delivered UIDs, separate directory trees with `lchown`, SSRF check also for IP literals, token revocation takes effect immediately (DB check per request), registration lock atomic.
+- Phase assignment: admin functions (P0-4), minimum of P0-14/P0-15 and PGlite→Postgres switch test (P0-11) slotted in.
+- Extended ENV list (`STDIO_MODE`, `TRUST_PROXY`, test switches); note on MRTR (sampling/elicitation) of revision 2026-07-28.
+- Second mandatory client of the OAuth acceptance: Cursor; scope `mcp:tools`; slug limit 32 characters for upstream names.
+Changes vs. v0.2: LLM-assisted routing is now a goal (no longer a non-goal); upstreams can be created via MCP itself, secrets and OAuth go through a link into the web UI (never through the chat); upstream OAuth is therefore P0.
+Changes vs. v0.1: remote hosting in Docker, gateway as an OAuth 2.1 provider (Better Auth) for end users, user-scoped data, meta-tool mode, security model for public reachability.
 
-## Problemstellung
+## Problem statement
 
-Jedes Coding-Tool (Claude Code, Cursor, Claude Desktop/Web, …) pflegt eine eigene Liste von MCP-Servern mit eigener Auth (stdio-Env-Secrets, Bearer, OAuth). Neuer Server oder rotiertes Token heißt: überall nachpflegen. Secrets liegen verstreut in Klartext-Configs. Viele aktive Tools blähen den Kontext jedes Clients auf. Lokale stdio-Server gibt es nur auf dem jeweiligen Rechner, nicht auf allen Geräten.
+Every coding tool (Claude Code, Cursor, Claude Desktop/Web, …) maintains its own list of MCP servers with its own auth (stdio env secrets, Bearer, OAuth). A new server or a rotated token means updating everywhere. Secrets are scattered in plaintext configs. Many active tools bloat the context of every client. Local stdio servers exist only on the respective machine, not on all devices.
 
-**mcpwarden** ist ein remote gehosteter Gateway im Docker-Container. Clients verbinden sich mit **einer** URL und melden sich per OAuth an; dahinter hängen beliebig viele Upstreams (stdio, HTTP, REST). Konzeptionell inspiriert von `MikkoParkkola/mcp-gateway` (Meta-Tool-Oberfläche, Import bestehender Client-Configs, REST-Capabilities, Tool-Poisoning-Prüfung), aber als Web-App mit UI und Login statt CLI + YAML, und ohne Rust-Binary.
+**mcpwarden** is a remotely hosted gateway in a Docker container. Clients connect to **one** URL and sign in via OAuth; any number of upstreams (stdio, HTTP, REST) hang behind it. Conceptually inspired by `MikkoParkkola/mcp-gateway` (meta-tool surface, import of existing client configs, REST capabilities, tool-poisoning check), but as a web app with UI and login instead of CLI + YAML, and without a Rust binary.
 
-Zielnutzer: zunächst ich selbst (mehrere Geräte), später ein kleiner Kreis von Freunden/Team. Jeder Nutzer hat eigene Upstreams, Secrets und Tokens; die Nutzer vertrauen sich nur begrenzt, daher gilt von Anfang an harte Mandantentrennung. Geteilte Upstreams für ein Team sind bewusst erst P2.
+Target users: initially myself (several devices), later a small circle of friends/team. Every user has their own upstreams, secrets and tokens; the users trust each other only to a limited degree, hence hard tenant isolation applies from the start. Shared upstreams for a team are deliberately P2.
 
-## Ziele
+## Goals
 
-1. **Eine Verbindung pro Client:** URL eintragen, im Browser per OAuth einloggen, fertig. Unabhängig von Zahl der Upstreams und vom Gerät.
-2. **Alle gängigen Upstream-Typen:** stdio, Streamable HTTP (+ Legacy-SSE), REST; Auth none / Bearer / Header / OAuth.
-3. **Secrets zentral und verschlüsselt,** keine in Client-Configs.
-4. **Kontext schlank durch intelligentes Routing:** Der Client sieht nur wenige Meta-Tools. Für eine Absicht („suche Issues zu X") liefert das Gateway per Keyword-Suche Kandidaten aus dem gesamten Katalog, und das Modell des Clients wählt daraus, per MCP-Sampling oder über den Tool-Dialog; das Gateway betreibt kein eigenes LLM. Der Aufrufer gilt dabei als nicht vertrauenswürdig: Berechtigungen prüft immer der Server. Tools bleiben zusätzlich einzeln schaltbar.
-5. **Verwaltung per MCP:** Neue Upstreams legt der Nutzer im Gespräch mit seinem Coding-Tool an. Alles Geheimnisvolle (Token, OAuth-Zustimmung) läuft über einen Link in die Web-UI, nie über den Chat.
-6. **Sicher öffentlich erreichbar:** Standard-Deployment ist ein Docker-Container hinter TLS, ohne dass ein offener Endpoint Code ausführen oder interne Netze erreichen kann.
-7. **Setup eines Upstreams ≤ 2 min** inkl. Verbindungstest.
+1. **One connection per client:** enter the URL, log in via OAuth in the browser, done. Independent of the number of upstreams and of the device.
+2. **All common upstream types:** stdio, Streamable HTTP (+ legacy SSE), REST; auth none / Bearer / header / OAuth.
+3. **Secrets central and encrypted,** none in client configs.
+4. **Lean context through intelligent routing:** the client sees only a few meta tools. For an intent ("search issues about X") the gateway returns candidates from the whole catalog via keyword search, and the client's model chooses from them, via MCP sampling or through the tool dialog; the gateway runs no LLM of its own. The caller is treated as untrusted: the server always checks permissions. Tools can additionally be switched individually.
+5. **Management via MCP:** the user creates new upstreams in conversation with their coding tool. Everything secret (token, OAuth consent) goes through a link into the web UI, never through the chat.
+6. **Safely publicly reachable:** the standard deployment is a Docker container behind TLS, without an open endpoint being able to execute code or reach internal networks.
+7. **Setting up an upstream ≤ 2 min** including connection test.
 
-## Nicht-Ziele
+## Non-goals
 
-- **Teams, geteilte Upstreams, Rollenmodell** — v1 kennt nur „Admin" und „Nutzer"; jeder Nutzer sieht nur seine eigenen Upstreams.
-- **Marketplace** — nur eine kleine, statische Vorlagenliste gängiger Server (P1).
-- **Code-Sandbox für eigene Tools** (JS/Python) — Aufwand und Risiko; REST-Tools genügen.
-- **Eigenes LLM im Gateway** (Key, Anbieter, Kosten) — Routing nutzt das Modell des Clients; das Gateway führt nichts autonom aus und plant keine Mehrschrittabläufe.
-- **Upstream-OAuth ohne Dynamic Client Registration** (eigene OAuth-App je Dienst, feste Redirect-URIs) — out of scope, bis es jemand braucht.
-- **Kommerzieller Betrieb/Abrechnung** — persönliches Tool; eigener Code, kein Code des Vorbilds (siehe Umgang mit dem Vorbild).
-- **Managed Serverless** — stdio braucht langlebige Prozesse.
-- **Mailversand** — es gibt keinen SMTP-Zugang. Daher entfallen vorerst E-Mail-Änderung per Link, Benachrichtigungsmails und Konto-Selbstlöschung (P2, sobald Mailversand existiert); Einladungen laufen als Link, nicht per Mail.
-- **Tags für Upstreams und Gerätenamen für Clients** — DCR und PAT liefern keinen Gerätenamen; angezeigt werden nur Client-Name, Redirect-Host und Zeiten.
+- **Teams, shared upstreams, role model** — v1 knows only "Admin" and "User"; every user sees only their own upstreams.
+- **Marketplace** — only a small, static template list of common servers (P1).
+- **Code sandbox for custom tools** (JS/Python) — effort and risk; REST tools suffice.
+- **Own LLM in the gateway** (key, provider, costs) — routing uses the client's model; the gateway executes nothing autonomously and plans no multi-step flows.
+- **Upstream OAuth without Dynamic Client Registration** (own OAuth app per service, fixed redirect URIs) — out of scope until someone needs it.
+- **Commercial operation/billing** — personal tool; own code, no code of the model project (see handling of the model project).
+- **Managed serverless** — stdio needs long-lived processes.
+- **Tags for upstreams and device names for clients** — DCR and PAT deliver no device name; only client name, redirect host and times are displayed.
 
-## User Stories
+## User stories
 
-**Endnutzer mit Coding-Tools**
-- Ich trage `https://<host>/mcp` in Claude Code/Cursor/Claude Desktop ein und werde per OAuth durch den Login geführt, damit kein Token manuell kopiert werden muss.
-- Ich kann für Clients ohne OAuth-Unterstützung ein Personal Access Token erzeugen und widerrufen, damit auch einfache Tools funktionieren.
-- Ich sehe pro Client, wann er zuletzt aktiv war („Aktiv“ = Aufruf in den letzten 5 Minuten, sonst „Inaktiv“; das Gateway ist zustandslos, es gibt keine Verbindung oder Sitzung), und kann einzelne Clients und Tokens widerrufen, damit ein verlorenes Gerät nichts offenlässt.
-- Ich sehe auf dem Dashboard, welche Clients aktiv sind und welche Upstreams Aufmerksamkeit brauchen, und kann im Audit-Log nachlesen, was mit meinem Konto geschehen ist.
-- Ich schalte Tools einzeln aus oder wähle den Meta-Tool-Modus, damit der Kontext klein bleibt.
+**End user with coding tools**
+- I enter `https://<host>/mcp` in Claude Code/Cursor/Claude Desktop and am guided through the login via OAuth, so that no token has to be copied manually.
+- For clients without OAuth support I can create and revoke a personal access token, so that simple tools work too.
+- I see per client when it was last active ("Aktiv" = call within the last 5 minutes, otherwise "Inaktiv"; the gateway is stateless, there is no connection or session), and I can revoke individual clients and tokens, so that a lost device leaves nothing open.
+- On the dashboard I see which clients are active and which upstreams need attention, and in the audit log I can read what happened to my account.
+- I switch tools off individually or choose the meta-tool mode, so that the context stays small.
 
-**Verwaltung per MCP (aus dem Coding-Tool heraus)**
-- Ich sage meinem Coding-Tool „füge den Sentry-MCP hinzu" und das Gateway legt den Upstream an, damit ich dafür keine UI öffnen muss.
-- Braucht der Upstream einen Token, erhalte ich einen Link auf die Eingabeseite in der Web-UI, damit das Secret nie in Chat, Modellkontext oder Client-Logs landet.
-- Verlangt der Upstream OAuth, erhalte ich einen Link, der direkt zur Zustimmungsseite des jeweiligen Dienstes führt und danach zum Gateway zurück, damit ich nach dem Klick sofort loslegen kann.
-- Ich frage „ist Sentry fertig eingerichtet?“ und bekomme Status (wartet auf Auth / wartet auf Freigabe / bereit sowie der Health-Status, siehe P0-14) mit erneutem Link, falls abgelaufen.
-- Ich lasse mir Tools suchen („was kann ich zu Issues tun?") und aufrufen, ohne alle Tool-Definitionen im Kontext zu haben.
+**Management via MCP (from within the coding tool)**
+- I tell my coding tool "add the Sentry MCP" and the gateway creates the upstream, so that I do not have to open a UI for it.
+- If the upstream needs a token, I receive a link to the input page in the web UI, so that the secret never ends up in the chat, model context or client logs.
+- If the upstream requires OAuth, I receive a link that leads directly to the consent page of the respective service and afterwards back to the gateway, so that I can get started immediately after the click.
+- I ask "is Sentry fully set up?" and get the status (waiting for auth / waiting for approval / ready plus the health status, see P0-14) with a fresh link if expired.
+- I have tools searched ("what can I do with issues?") and called without having all tool definitions in the context.
 
-**Nutzer als Verwalter seiner Upstreams**
-- Ich lege Upstreams per Formular an (Transport + Auth) oder importiere eine `mcpServers`-JSON, damit die Migration schnell geht.
-- Ich autorisiere OAuth-geschützte HTTP-Upstreams einmal im Browser; Refresh läuft automatisch.
-- Ich sehe Status je Upstream (verbunden / Fehler / Auth abgelaufen) mit letzter Fehlermeldung.
-- Ich definiere REST-Tools (Methode, URL-Template, Parameter-Schema), damit eine HTTP-API ohne eigenen Server als Tool dient.
+**User as manager of their upstreams**
+- I create upstreams via a form (transport + auth) or import an `mcpServers` JSON, so that migration is quick.
+- I authorize OAuth-protected HTTP upstreams once in the browser; refresh runs automatically.
+- I see the status per upstream (connected / error / auth expired) with the last error message.
+- I define REST tools (method, URL template, parameter schema), so that an HTTP API serves as a tool without a server of its own.
 
 **Admin**
-- Ich steuere, wer sich registrieren darf (Einladungslink, optional an eine E-Mail gebunden) und ob stdio-Upstreams erlaubt sind, damit ein öffentlicher Endpoint keine Fremden Prozesse starten lässt.
-- Ich sehe im Audit-Log zusätzlich Instanzereignisse (Nutzer gesperrt, Einstellung geändert).
+- I control who may register (invitation link, optionally bound to an email) and whether stdio upstreams are allowed, so that a public endpoint does not let strangers start processes.
+- In the audit log I additionally see instance events (user banned, setting changed).
 
-**Randfälle**
-- Upstream down → andere Upstreams und Gateway unberührt; Fehler klar an den Client.
-- Namenskollisionen → Präfix `<upstream>__<tool>`.
-- Token/Session widerrufen → wirkt **sofort**: der nächste Request wird mit 401 beendet, auch bei noch gültigem JWT-Access-Token und bei widerrufenem Refresh-Token (Prüfung gegen die DB bei jedem Request, siehe P0-2).
+**Edge cases**
+- Upstream down → other upstreams and gateway unaffected; clear error to the client.
+- Name collisions → prefix `<upstream>__<tool>`.
+- Token/session revoked → takes effect **immediately**: the next request is ended with 401, even with a still-valid JWT access token and with a revoked refresh token (check against the DB on every request, see P0-2).
 
-## Anforderungen
+## Requirements
 
-### P0 — ohne geht es nicht
+### P0 — cannot do without
 
-**P0-1 Gateway-Endpoint (Streamable HTTP)**
-`/mcp` (später `/mcp/:profile`), **zustandslos** nach MCP-Spec-Revision 2026-07-28: keine Session-ID, kein GET-Stream. Unterstützt werden 2026-07-28 und 2025-11-25; ältere (2025er-)Clients werden zustandslos ohne Session bedient (kein `Mcp-Session-Id`).
-- [ ] `initialize`, `tools/list`, `tools/call` aus Claude Code funktionieren mit einem Eintrag.
-- [ ] Tool-Namen `<upstream>__<tool>`; Upstream-Slugs eindeutig je Nutzer und auf `^[a-z0-9][a-z0-9-]{0,31}$` begrenzt (max. 32 Zeichen), damit der Tool-Name die Längenlimits der Clients einhält. Der Slug ist als „Kurzname“ im Formular sichtbar (Live-Vorschau `<slug>__tool`, Zähler x/32, Fehler bei Kollision) und nach dem Anlegen nicht änderbar, weil er Teil der Tool-Namen ist.
-- [ ] **Kein Sitzungsbegriff:** Da das Gateway zustandslos ist, gibt es kein „online“ oder „verbunden seit“. Ein Client gilt als **Aktiv**, wenn sein letzter Aufruf (Client-/Token-`last_used`) höchstens 5 Minuten zurückliegt, sonst als **Inaktiv**; angezeigt wird „Zuletzt aktiv“. Offene `subscriptions/listen`-Streams fließen nicht in die Anzeige ein.
-- [ ] **`tools/list_changed`:** Clients der Revision 2026-07-28 erhalten es über `subscriptions/listen` (`notify` des Handlers). Mandantentrennung: Benachrichtigungen gehen nur an Streams des betroffenen Nutzers (Handler oder Bus pro Nutzer, nie ein gemeinsamer Bus ohne Filter nach `user_id`). 2025er-Clients bekommen keinen Push (best effort); sie sehen die Änderung beim nächsten `tools/list`.
-- [ ] `tools/call` reicht Ergebnis, Fehler und Content-Typen (text, image, resource) 1:1 durch.
-- [ ] `Origin`-Header wird gegen Allowlist geprüft (DNS-Rebinding laut MCP-Spec).
-- [ ] Ohne gültige Auth: 401 mit `WWW-Authenticate` und Verweis auf Protected-Resource-Metadata; kein Tool-Leak.
+**P0-1 Gateway endpoint (Streamable HTTP)**
+`/mcp` (later `/mcp/:profile`), **stateless** per MCP spec revision 2026-07-28: no session ID, no GET stream. 2026-07-28 and 2025-11-25 are supported; older (2025) clients are served statelessly without a session (no `Mcp-Session-Id`).
+- [ ] `initialize`, `tools/list`, `tools/call` from Claude Code work with one entry.
+- [ ] Tool names `<upstream>__<tool>`; upstream slugs unique per user and limited to `^[a-z0-9][a-z0-9-]{0,31}$` (max. 32 characters), so that the tool name stays within the length limits of the clients. The slug is visible as "Kurzname" (short name) in the form (live preview `<slug>__tool`, counter x/32, error on collision) and cannot be changed after creation because it is part of the tool names.
+- [ ] **No session concept:** since the gateway is stateless, there is no "online" or "connected since". A client counts as **Aktiv** if its last call (client/token `last_used`) was at most 5 minutes ago, otherwise as **Inaktiv**; "Zuletzt aktiv" (last active) is displayed. Open `subscriptions/listen` streams do not feed into the display.
+- [ ] **`tools/list_changed`:** clients of revision 2026-07-28 receive it via `subscriptions/listen` (`notify` of the handler). Tenant isolation: notifications go only to streams of the affected user (handler or bus per user, never a shared bus without a filter by `user_id`). 2025 clients get no push (best effort); they see the change on the next `tools/list`.
+- [ ] `tools/call` passes result, error and content types (text, image, resource) through 1:1.
+- [ ] The `Origin` header is checked against an allowlist (DNS rebinding per MCP spec).
+- [ ] Without valid auth: 401 with `WWW-Authenticate` and a pointer to protected-resource metadata; no tool leak.
 
-**P0-2 OAuth 2.1 Authorization Server für Clients (Better Auth)**
-Das Gateway ist OAuth-Provider; der Endnutzer loggt sich bei Better Auth ein und erteilt Zugriff.
-- [ ] Authorization Code + PKCE, Consent-Screen, Refresh-Tokens, Widerruf.
-- [ ] Dynamic Client Registration (RFC 7591), damit Claude Desktop/Web/Code/Cursor sich ohne vorab geteilte Client-ID verbinden.
-- [ ] Discovery: `/.well-known/oauth-protected-resource` und `/.well-known/oauth-authorization-server`.
-- [ ] **DCR-Policy (Admin-Einstellung):** Modus `aus` / `nur Allowlist` / `offen mit Warnung`. Standard: `offen mit Warnung`.
-  - Allowlist gängiger Clients vorbelegt (Claude Code, Claude Desktop/Web, Cursor, VS Code, Windsurf, Zed, Codex; Abgleich über Client-Name plus erlaubte Redirect-URI-Muster wie `http://localhost:*`, `http://127.0.0.1:*`, `cursor://`, `vscode://`), Admin kann Einträge ergänzen/entfernen.
-  - Bei `nur Allowlist` werden nicht gelistete Registrierungen abgelehnt. Bei `offen mit Warnung` zeigt der Consent-Screen für unbekannte Clients eine deutliche Warnung (Name, Redirect-URI, „nicht in der Allowlist"), und der Nutzer muss aktiv bestätigen.
-  - Registrierte Clients sind in der Admin-Seite sichtbar (Name, Redirect-URIs, erstellt, zuletzt genutzt, Nutzeranzahl) und widerrufbar; nie genutzte Registrierungen verfallen nach 30 Tagen.
-  - DCR-Endpoint hat Rate-Limit; Redirect-URIs nur `https` oder Loopback/registrierte App-Schemes, keine Wildcards außerhalb der Allowlist-Muster.
-- [ ] Access-Token an Audience (= Gateway-URL) gebunden; Token anderer Resources werden abgelehnt.
-- [ ] Scope-Name einheitlich `mcp:tools` (daneben `openid`, `offline_access`); `mcpwarden:admin` bleibt für die Verwaltungs-Tools reserviert (P0-12) und wird erst ab Phase 2 vergeben.
-- [ ] **Consent-Screen:** Anzeige-Titel je Scope mit dem Roh-Namen klein in Monospace; `openid`/`offline_access` erscheinen nicht als eigene Zeilen, sondern als Hinweis „bleibt angemeldet“. Der Redirect-Host ist immer prominent sichtbar, bei Loopback-Adressen (`localhost`, `127.0.0.1`) gibt es eine Zusatzwarnung. Bekannte Clients (Allowlist) zeigen keine Warnung und brauchen keine Pflicht-Checkbox. Der Nutzer kann `mcpwarden:admin` beim Zustimmen **separat abwählen** (zwei Schalter: `mcp:tools` und `mcpwarden:admin`); bis Phase 2 blendet der Consent-Screen den Admin-Scope aus.
-- [ ] **Widerruf wirkt sofort:** Bei jedem Request an `/mcp` prüft das Gateway zusätzlich zur Token-Signatur gegen die DB: Nutzer nicht gesperrt, Client nicht deaktiviert, Consent vorhanden und für (Nutzer, Client) existiert noch ein gültiger Refresh-Token. Damit greifen Sperre, Client-Widerruf und Einzel-Token-Widerruf auch bei noch gültigem JWT (TTL 5 min) sofort; Kosten: eine Query pro Request.
-- [ ] Verifikation: realer Verbindungsaufbau aus Claude Code und **Cursor** als zweitem Pflichtclient (lokal, ohne Tunnel; Fallback MCP Inspector). Claude Desktop/Web werden bei der ersten öffentlichen Instanz (Phase 1) nachgezogen. (Better Auth als OAuth-Provider für MCP-Clients ist mit mehreren Tools bereits praktisch getestet; das Ergebnis dient als Referenz für die Abnahme.)
+**P0-2 OAuth 2.1 authorization server for clients (Better Auth)**
+The gateway is an OAuth provider; the end user logs in at Better Auth and grants access.
+- [ ] Authorization code + PKCE, consent screen, refresh tokens, revocation.
+- [ ] Dynamic Client Registration (RFC 7591), so that Claude Desktop/Web/Code/Cursor connect without a pre-shared client ID.
+- [ ] Discovery: `/.well-known/oauth-protected-resource` and `/.well-known/oauth-authorization-server`.
+- [ ] **DCR policy (admin setting):** mode `off` / `allowlist only` / `open with warning`. Default: `open with warning`.
+  - Allowlist of common clients preconfigured (Claude Code, Claude Desktop/Web, Cursor, VS Code, Windsurf, Zed, Codex; matched via client name plus allowed redirect URI patterns such as `http://localhost:*`, `http://127.0.0.1:*`, `cursor://`, `vscode://`), the admin can add/remove entries.
+  - With `allowlist only`, unlisted registrations are rejected. With `open with warning`, the consent screen shows a clear warning for unknown clients (name, redirect URI, "not in the allowlist"), and the user must actively confirm.
+  - Registered clients are visible on the admin page (name, redirect URIs, created, last used, user count) and revocable; never-used registrations expire after 30 days.
+  - The DCR endpoint has a rate limit; redirect URIs only `https` or loopback/registered app schemes, no wildcards outside the allowlist patterns.
+- [ ] Access token bound to the audience (= gateway URL); tokens of other resources are rejected.
+- [ ] Scope name uniformly `mcp:tools` (besides `openid`, `offline_access`); `mcpwarden:admin` stays reserved for the management tools (P0-12) and is granted only from phase 2.
+- [ ] **Consent screen:** display title per scope with the raw name small in monospace; `openid`/`offline_access` do not appear as their own rows but as a hint "bleibt angemeldet" (stays signed in). The redirect host is always prominently visible, for loopback addresses (`localhost`, `127.0.0.1`) there is an additional warning. Known clients (allowlist) show no warning and need no mandatory checkbox. The user can **separately deselect** `mcpwarden:admin` when consenting (two switches: `mcp:tools` and `mcpwarden:admin`); until phase 2 the consent screen hides the admin scope.
+- [ ] **Revocation takes effect immediately:** on every request to `/mcp` the gateway checks against the DB in addition to the token signature: user not banned, client not disabled, consent present and a valid refresh token still exists for (user, client). Thus ban, client revocation and single-token revocation take effect immediately even with a still-valid JWT (TTL 5 min); cost: one query per request.
+- [ ] Verification: real connection setup from Claude Code and **Cursor** as the second mandatory client (local, without tunnel; fallback MCP Inspector). Claude Desktop/Web follow with the first public instance (phase 1). (Better Auth as an OAuth provider for MCP clients has already been tested in practice with several tools; the result serves as a reference for the acceptance.)
 
-**P0-3 Personal Access Tokens (Fallback)**
-- [ ] Erzeugen, benennen, widerrufen; nur Hash gespeichert, Klartext einmalig sichtbar; „zuletzt benutzt".
-- [ ] Gelten genau für den erzeugenden Nutzer.
+**P0-3 Personal access tokens (fallback)**
+- [ ] Create, name, revoke; only the hash is stored, plaintext visible once; "last used".
+- [ ] Valid exactly for the creating user.
 
-**P0-4 Nutzer & Login**
-- [ ] Better Auth, E-Mail/Passwort (Mindestlänge 12 Zeichen, serverseitig erzwungen; die UI zeigt nur, was der Server prüft); erster Nutzer wird Admin; weitere Registrierung nur per **Einladungslink**: ein Token-Link `/invite/<token>`, einmalig verwendbar, 7 Tage gültig, optional an eine E-Mail-Adresse gebunden (dann nur mit dieser registrierbar). Es gibt keine reine E-Mail-Allowlist ohne Token und keinen Mailversand. Die Sperre ist **atomar**: Registrierungen werden serialisiert (prozessweiter Mutex genügt in der Single-Instance), damit zwei gleichzeitige Erstregistrierungen nicht zwei Admins ergeben.
-- [ ] Rolle und Sperre (`role`, `banned`) kommen aus dem Better-Auth-`admin()`-Plugin und sind ab der ersten Migration im Schema (Phase 0a); Einladungen (Token-Link) und Nutzerverwaltung folgen in Phase 1, Meilenstein 1.1.
-- [ ] Alle Tabellen mit `user_id`; jede Query nutzerbezogen (Test: Nutzer B sieht/ruft nie Upstreams von A).
-- [ ] Rate-Limit auf Login- und Token-Endpunkte.
-- [ ] Admin-Seite: Einladungen erzeugen (Link `/invite/<token>`, einmalig, 7 Tage gültig, optional E-Mail-gebunden; Link nur beim Erzeugen sichtbar; Liste offener Einladungen mit Widerruf), Nutzer auflisten, sperren und entsperren (Sperre beendet sofort alle Sessions, OAuth-Tokens und PATs des Nutzers), löschen (entfernt auch dessen Upstreams und Secrets; der letzte Admin ist geschützt). Das Löschen des eigenen Kontos durch den Nutzer entfällt (siehe Nicht-Ziele).
-- [ ] Limits je Nutzer sind in der Admin-Seite einsehbar und änderbar (Upstreams, Aufrufe/min, Verbindungen, stdio-Prozesse, stdio-Idle); Standardwerte kommen aus der API, nicht aus dem UI-Code.
-- [ ] Admin sieht nur Metadaten (Anzahl Upstreams, letzte Aktivität), nie Secrets oder Aufrufinhalte anderer Nutzer.
-- [ ] Pro Nutzer Obergrenzen: Anzahl Upstreams (Standard 50), gleichzeitige Verbindungen, Aufrufe pro Minute (Nutzerlimit, unabhängig vom Upstream-Limit aus P0-5); stdio nur nach Admin-Freigabe (P0-5). Grenzen per Admin änderbar.
-- [ ] Jeder Nutzer erhält einen eigenen Verschlüsselungsschlüssel (aus dem Master-Key abgeleitet), damit ein Fehler in einer Abfrage nicht fremde Secrets entschlüsselbar macht.
+**P0-4 Users & login**
+- [ ] Better Auth, email/password (minimum length 12 characters, enforced server-side; the UI shows only what the server checks); the first user becomes admin; further registration only via **invitation link**: a token link `/invite/<token>`, usable once, valid 7 days, optionally bound to an email address (then registrable only with that one). There is no pure email allowlist without a token; the link is passed on by the admin (mail sending of the invitation is optional, see P1 "Mailer"). The lock is **atomic**: registrations are serialized (a process-wide mutex suffices in the single instance) so that two simultaneous first registrations do not yield two admins.
+- [ ] Role and ban (`role`, `banned`) come from the Better Auth `admin()` plugin and are in the schema from the first migration (phase 0a); invitations (token link) and user management follow in phase 1, milestone 1.1.
+- [ ] All tables carry `user_id`; every query is user-scoped (test: user B never sees/calls upstreams of A).
+- [ ] Rate limit on login and token endpoints.
+- [ ] Admin page: create invitations (link `/invite/<token>`, single use, valid 7 days, optionally email-bound; link visible only on creation; list of open invitations with revocation), list users, ban and unban (a ban immediately ends all sessions, OAuth tokens and PATs of the user), delete (also removes their upstreams and secrets; the last admin is protected). Deleting one's own account by the user is dropped for now (P2, see "Mailer").
+- [ ] Per-user limits are viewable and changeable on the admin page (upstreams, calls/min, connections, stdio processes, stdio idle); default values come from the API, not from UI code.
+- [ ] The admin sees only metadata (number of upstreams, last activity), never secrets or call contents of other users.
+- [ ] Per-user caps: number of upstreams (default 50), simultaneous connections, calls per minute (user limit, independent of the upstream limit from P0-5); stdio only after admin approval (P0-5). Limits changeable by the admin.
+- [ ] Every user gets their own encryption key (derived from the master key), so that a bug in a query does not make foreign secrets decryptable.
 
-**P0-5 Upstream-Verwaltung**
-Typen: `stdio` (command, args, env, cwd), `http` (Streamable HTTP, Fallback SSE).
-- [ ] CRUD in UI; „Verbindung testen“ zeigt Tool-Liste oder konkrete Fehlermeldung. Das Anlegen-Formular kennt die Felder Typ, Name, Kurzname (Slug, siehe P0-1), Auth-Art (Standard „Keine“; „OAuth“ erst ab Phase 2) und die Timeouts (Verbinden, `tools/list`, `tools/call`, siehe P0-14). Der Zustand „wartet auf Auth“ bzw. „wartet auf Freigabe“ erscheint auch in der Upstream-Liste.
-- [ ] „Alle testen“ (alle Upstreams einer Liste in einem Zug prüfen) ist nicht Teil von Phase 1; später nur mit Bestätigung und Hinweis auf Rate-Limit und Breaker, die mitzählen. Tags für Upstreams gibt es nicht.
-- [ ] stdio: lazy Start, Idle-Timeout, Neustart mit Backoff, Ressourcenlimit (Speicher/Prozessanzahl pro Nutzer), Prozess läuft nicht als root.
-- [ ] stdio nur erlaubt, wenn Admin es global und für den Nutzer freigeschaltet hat (Default: nur Admin).
-- [ ] **Ein Node-Worker pro Nutzer („stdio-Host"):** Alle stdio-Upstreams eines Nutzers laufen als Kindprozesse in genau einem eigenen Node-Prozess, den der Hauptprozess (Supervisor) startet. Das Gateway spricht mit dem Worker über IPC (Unix-Socket oder stdio-Pipe, nur Hauptprozess darf verbinden) und reicht MCP-Nachrichten durch.
-  - Worker startet lazy beim ersten stdio-Aufruf und beendet sich nach Idle-Timeout samt aller Kinder.
-  - Worker bekommt eine **saubere Umgebung**: kein `MASTER_KEY`, kein `BETTER_AUTH_SECRET`, keine `DATABASE_URL`, kein Zugriff auf die DB. Die Secrets eines Upstreams werden **in der Web-App** entschlüsselt (sie hält den Schlüssel ohnehin); der Supervisor erhält nur die fertige Env für genau einen Kindprozess und braucht weder `MASTER_KEY` noch DB-Zugriff. Begründung: Der privilegierte Prozess bleibt frei von Schlüsselmaterial und Datenbank, seine Angriffsfläche schrumpft.
-  - Eigenes Arbeitsverzeichnis je Nutzer (`DATA_DIR/stdio/<uid>`), `cwd` der Kinder darauf beschränkt; Worker und Kinder laufen unter einer eigenen unprivilegierten UID/GID je Nutzer (Supervisor startet sie mit `uid/gid`), sodass Dateien anderer Nutzer und die DB-Dateien nicht lesbar sind. Läuft der Container ohne die dafür nötigen Rechte, ist stdio für Nicht-Admins gesperrt und die UI sagt warum.
-  - **Supervisor vertraut der Web-App nicht bei der UID:** Er ignoriert vom Web-Prozess gelieferte UIDs. Die UID wird aus `user_id` abgeleitet bzw. geprüft (fester Bereich, nie 0, nie die UID der Web-App, `gid = uid`), `cwd` nur unterhalb des eigenen stdio-Baums. Ein gefälschter Befehl (z. B. `uid: 0`) wird abgelehnt.
-  - **Getrennte Verzeichnisbäume:** `DATA_DIR` gehört root, die Datenbank (`DATA_DIR/app`) der Web-UID, `DATA_DIR/stdio` root (0711). Nutzerverzeichnisse legt der Supervisor exklusiv an und setzt Besitzer per `lchown` mit Symlink-Prüfung; die Web-App kann den stdio-Baum weder umbenennen noch durch Symlinks ersetzen (Schutz vor Symlink-Angriffen auf `CAP_CHOWN`).
-  - Limits je Worker: maximale Zahl Kindprozesse, Speicher (Node `--max-old-space-size` für den Worker, cgroup/`ulimit` für Kinder soweit verfügbar), CPU-Zeit, Laufzeit pro Aufruf. Überschreitung beendet nur diesen Worker; andere Nutzer und das Gateway laufen weiter.
-  - Absturz des Workers: Supervisor startet ihn mit Backoff neu, offene Aufrufe liefern einen klaren Fehler.
-  - Egress: Kindprozesse dürfen ausgehend frei verbinden (npx/uvx brauchen Netz); SSRF-Schutz aus P0-9 gilt hier **nicht**. Das ist ein bekanntes Restrisiko und der Grund, warum stdio für Nicht-Admins eine bewusste Freigabe bleibt.
-  - **Grenze der Isolation:** Ein Prozess pro Nutzer mit eigener UID trennt Dateien, Speicher und Absturzverhalten, teilt aber Kernel und Netzwerk mit dem Container. Es ist keine Sandbox gegen böswillige Nutzer. Härtung (Container pro Nutzer, Netzwerkrichtlinien) bleibt P2.
-- [ ] Circuit Breaker, Timeouts, Retry und Health-Check pro Upstream: siehe P0-14.
-- [ ] **Rate-Limit pro Upstream:** Aufrufe pro Minute und gleichzeitige Aufrufe, **je Upstream** (nicht je Client) einstellbar (Standard 60/min, 5 parallel; Vorlage: strengere Werte für bekannte Dienste mit eigenen API-Limits). Schützt Upstream-Quotas, API-Kosten und das Gateway vor Schleifen eines fehlgesteuerten Modells.
-  - Überschreitung liefert sofort einen Tool-Fehler mit `retry_after` statt Warten oder stillem Verwerfen; Antwort-Header `429`-Äquivalent der Upstreams (`Retry-After`) wird übernommen und senkt das Limit vorübergehend.
-  - Zähler je (Nutzer, Upstream), In-Memory (Token-Bucket); Limit-Treffer erscheinen im Upstream-Status der UI und im Aufruf-Log.
-  - Zusätzlich globales Limit pro Nutzer (P0-4) und pro Client-Token, damit ein Upstream-Limit nicht durch viele Upstreams umgangen wird.
-- [ ] Upstream deaktivieren entfernt dessen Tools sofort; Clients bekommen `tools/list_changed` (Zustellung und Grenzen siehe P0-1).
+**P0-5 Upstream management**
+Types: `stdio` (command, args, env, cwd), `http` (Streamable HTTP, fallback SSE).
+- [ ] CRUD in the UI; "Verbindung testen" (test connection) shows the tool list or a concrete error message. The create form has the fields type, name, short name (slug, see P0-1), auth kind (default "Keine"; "OAuth" only from phase 2) and the timeouts (connect, `tools/list`, `tools/call`, see P0-14). The state "waiting for auth" or "waiting for approval" also appears in the upstream list.
+- [ ] "Alle testen" (test all: check all upstreams of a list in one go) is not part of phase 1; later only with confirmation and a hint about rate limit and breaker, which count too. There are no tags for upstreams.
+- [ ] stdio: lazy start, idle timeout, restart with backoff, resource limit (memory/process count per user), the process does not run as root.
+- [ ] stdio allowed only if the admin has enabled it globally and for the user (default: admin only).
+- [ ] **One Node worker per user ("stdio host"):** all stdio upstreams of a user run as child processes in exactly one Node process of their own, which the main process (supervisor) starts. The gateway talks to the worker via IPC (Unix socket or stdio pipe, only the main process may connect) and passes MCP messages through.
+  - The worker starts lazily on the first stdio call and ends after an idle timeout together with all children.
+  - The worker gets a **clean environment**: no `MASTER_KEY`, no `BETTER_AUTH_SECRET`, no `DATABASE_URL`, no access to the DB. The secrets of an upstream are decrypted **in the web app** (it holds the key anyway); the supervisor receives only the finished env for exactly one child process and needs neither `MASTER_KEY` nor DB access. Rationale: the privileged process stays free of key material and database, its attack surface shrinks.
+  - Own working directory per user (`DATA_DIR/stdio/<uid>`), `cwd` of the children restricted to it; worker and children run under an own unprivileged UID/GID per user (the supervisor starts them with `uid/gid`), so that files of other users and the DB files are not readable. If the container runs without the required rights, stdio is blocked for non-admins and the UI says why.
+  - **The supervisor does not trust the web app with the UID:** it ignores UIDs delivered by the web process. The UID is derived from or checked against `user_id` (fixed range, never 0, never the UID of the web app, `gid = uid`), `cwd` only below the own stdio tree. A forged command (e.g. `uid: 0`) is rejected.
+  - **Separate directory trees:** `DATA_DIR` belongs to root, the database (`DATA_DIR/app`) to the web UID, `DATA_DIR/stdio` to root (0711). User directories are created exclusively by the supervisor, with owner set via `lchown` with a symlink check; the web app can neither rename the stdio tree nor replace it with symlinks (protection against symlink attacks on `CAP_CHOWN`).
+  - Limits per worker: maximum number of child processes, memory (Node `--max-old-space-size` for the worker, cgroup/`ulimit` for children where available), CPU time, run time per call. Exceeding ends only this worker; other users and the gateway keep running.
+  - Worker crash: the supervisor restarts it with backoff, open calls return a clear error.
+  - Egress: child processes may connect outbound freely (npx/uvx need network); the SSRF protection from P0-9 does **not** apply here. This is a known residual risk and the reason why stdio remains a deliberate approval for non-admins.
+  - **Limit of the isolation:** one process per user with its own UID separates files, memory and crash behavior, but shares kernel and network with the container. It is no sandbox against malicious users. Hardening (container per user, network policies) remains P2.
+- [ ] Circuit breaker, timeouts, retry and health check per upstream: see P0-14.
+- [ ] **Rate limit per upstream:** calls per minute and simultaneous calls, adjustable **per upstream** (not per client) (default 60/min, 5 parallel; template: stricter values for known services with their own API limits). Protects upstream quotas, API costs and the gateway from loops of a misdirected model.
+  - Exceeding immediately returns a tool error with `retry_after` instead of waiting or silently dropping; the `429` equivalent of the upstreams (`Retry-After` header) is adopted and temporarily lowers the limit.
+  - Counters per (user, upstream), in memory (token bucket); limit hits appear in the upstream status in the UI and in the call log.
+  - Additionally a global limit per user (P0-4) and per client token, so that an upstream limit is not circumvented through many upstreams.
+- [ ] Disabling an upstream removes its tools immediately; clients get `tools/list_changed` (delivery and limits see P0-1).
 
-**P0-6 Upstream-Auth & Secrets**
-- [ ] none, Bearer, Custom-Header, Env-Secrets für stdio.
-- [ ] AES-GCM-Verschlüsselung, Master-Key aus ENV/Docker-Secret; App startet ohne Key nicht.
-- [ ] Entschlüsselung ausschließlich in der Web-App; der Nutzerschlüssel wird aus dem Auth-Kontext abgeleitet, nie aus der Datenzeile (siehe P0-5).
-- [ ] Secrets nie im Klartext in UI/Logs; nur „ersetzen".
+**P0-6 Upstream auth & secrets**
+- [ ] none, Bearer, custom header, env secrets for stdio.
+- [ ] AES-GCM encryption, master key from ENV/Docker secret; the app does not start without a key.
+- [ ] Decryption exclusively in the web app; the user key is derived from the auth context, never from the data row (see P0-5).
+- [ ] Secrets never in plaintext in UI/logs; only "ersetzen" (replace).
 
-**P0-7 Tool-Filter**
-- [ ] Tool je Upstream ein/aus; Änderung ohne Neustart.
+**P0-7 Tool filter**
+- [ ] Tool on/off per upstream; change without restart.
 
-**P0-8 Eigene REST-Tools**
-- [ ] Name, Beschreibung, Methode, URL-Template `{param}`, Header/Query/Body-Template, JSON-Schema der Eingabe, Secret-Referenz, Timeout, Antwort-Größenlimit.
-- [ ] Erscheinen als Upstream „local" mit denselben Filtern.
+**P0-8 Own REST tools**
+- [ ] Name, description, method, URL template `{param}`, header/query/body template, JSON schema of the input, secret reference, timeout, response size limit.
+- [ ] Appear as upstream "local" with the same filters.
 
-**P0-9 SSRF-Schutz**
-- [ ] Ausgehende Requests (HTTP-Upstreams, REST-Tools, OAuth-Discovery) blocken Loopback, Link-Local, private Netze und Cloud-Metadaten-IPs; DNS wird vor dem Request aufgelöst und die IP geprüft (Rebinding). Die Prüfung gilt auch für **IP-Literale** in der URL (nach URL-Normalisierung, die Dezimal-/Hex-/Oktalschreibweisen auflöst), nicht nur für DNS-Namen; eingebettete IPv4-Adressen (z. B. 6to4) und Dokumentations-/Testnetze werden mitgeprüft. Weiterleitungen werden nicht automatisch gefolgt. Pro Instanz für bewusst interne Ziele aufweichbar, und zwar als **Admin-Liste** (Einträge als CIDR oder Hostname, Setting `ssrf.allow`), nicht als globaler Schalter, weil ein Schalter auch Metadaten-IPs (169.254.169.254) öffnen würde; die UI weist beim Eintragen darauf hin. Eine geblockte Anfrage meldet verständlich „Ziel nicht erlaubt (SSRF-Schutz)“.
+**P0-9 SSRF protection**
+- [ ] Outbound requests (HTTP upstreams, REST tools, OAuth discovery) block loopback, link-local, private networks and cloud metadata IPs; DNS is resolved before the request and the IP is checked (rebinding). The check also applies to **IP literals** in the URL (after URL normalization, which resolves decimal/hex/octal notations), not only to DNS names; embedded IPv4 addresses (e.g. 6to4) and documentation/test networks are checked too. Redirects are not followed automatically. Can be relaxed per instance for deliberately internal targets, namely as an **admin list** (entries as CIDR or hostname, setting `ssrf.allow`), not as a global switch, because a switch would also open metadata IPs (169.254.169.254); the UI points this out when entering. A blocked request reports comprehensibly "Ziel nicht erlaubt (SSRF-Schutz)" (target not allowed, SSRF protection).
 
-**P0-10 Docker-Deployment**
-- [ ] Multi-Stage-`Dockerfile`, Node-Preset, Non-Root-User für die Web-App, `HEALTHCHECK` auf `/healthz`.
-- [ ] Beispiel-`compose.yaml` setzt `cap_drop: [ALL]`, `cap_add: [SETUID, SETGID, CHOWN]` und `security_opt: [no-new-privileges:true]`; ein separater Supervisor-Prozess im Container hält die Capabilities (siehe P0-5), die Web-App nicht.
-- [ ] Zwei Image-Varianten: `slim` (nur HTTP/REST-Upstreams; stdio ist hier fest abgeschaltet, kein Supervisor-Bundle) und `full` (mit Node/npx und `uv`/`uvx` für stdio-Server).
-- [ ] Konfiguration nur per ENV: `BASE_URL`, `BETTER_AUTH_SECRET`, `MASTER_KEY`, `DATABASE_URL` (leer = eingebettetes PGlite im Datenverzeichnis, sonst `postgres://…`), `DATA_DIR`, `ALLOWED_ORIGINS` sowie
-  - `STDIO_MODE` (`off` / `auto`; Standard `off` im Image `slim`, `auto` im Image `full`),
-  - `TRUST_PROXY` (`X-Forwarded-*` nur auswerten, wenn `true`; sonst gilt `BASE_URL`),
-  - ein Test-Schalter für das Better-Auth-Rate-Limit (z. B. `RATE_LIMIT=off`, nur für Testläufe; endgültiger Name im Plan).
-  Socket-Pfad des Supervisors und Web-UID/GID sind feste Werte im Image, keine ENV. Daten in einem Volume (PGlite).
-- [ ] Läuft hinter TLS-terminierendem Reverse-Proxy (korrekte `X-Forwarded-*`-Behandlung); `BASE_URL` muss HTTPS sein außer bei `localhost`.
-- [ ] Migrationen laufen beim Start; `docker compose up` mit Beispiel-`compose.yaml` genügt für lokale Tests.
-- [ ] Kein automatisches Deployment in CI vorgesehen; Rollout manuell.
+**P0-10 Docker deployment**
+- [ ] Multi-stage `Dockerfile`, Node preset, non-root user for the web app, `HEALTHCHECK` on `/healthz`.
+- [ ] Example `compose.yaml` sets `cap_drop: [ALL]`, `cap_add: [SETUID, SETGID, CHOWN]` and `security_opt: [no-new-privileges:true]`; a separate supervisor process in the container holds the capabilities (see P0-5), the web app does not.
+- [ ] Two image variants: `slim` (HTTP/REST upstreams only; stdio is fixed off here, no supervisor bundle) and `full` (with Node/npx and `uv`/`uvx` for stdio servers).
+- [ ] Configuration only via ENV: `BASE_URL`, `BETTER_AUTH_SECRET`, `MASTER_KEY`, `DATABASE_URL` (empty = embedded PGlite in the data directory, otherwise `postgres://…`), `DATA_DIR`, `ALLOWED_ORIGINS` as well as
+  - `STDIO_MODE` (`off` / `auto`; default `off` in the `slim` image, `auto` in the `full` image),
+  - `TRUST_PROXY` (evaluate `X-Forwarded-*` only if `true`; otherwise `BASE_URL` applies),
+  - a test switch for the Better Auth rate limit (e.g. `RATE_LIMIT=off`, for test runs only; final name in the plan).
+  The supervisor's socket path and web UID/GID are fixed values in the image, not ENV. Data in a volume (PGlite).
+- [ ] Runs behind a TLS-terminating reverse proxy (correct `X-Forwarded-*` handling); `BASE_URL` must be HTTPS except for `localhost`.
+- [ ] Migrations run at startup; `docker compose up` with the example `compose.yaml` suffices for local tests.
+- [ ] No automatic deployment in CI planned; rollout manual.
 
-**P0-11 Persistenz (Voraussetzung für P0-2, P0-3, P0-4; wird als Erstes gebaut)**
-- [ ] Drizzle mit Postgres-Dialekt (`pg-core`). Standard ist **PGlite** (eingebettetes Postgres, Daten im Volume), Umstieg auf echtes Postgres nur durch Setzen von `DATABASE_URL`, ohne Schema- oder Codeänderung. Beide laufen über denselben Schema- und Migrationssatz.
-- [ ] Nur Postgres-kompatibles SQL; keine PGlite-Sonderfunktionen und keine Erweiterungen, die es auf echtem Postgres nicht gibt.
-- [ ] Umstieg dokumentiert und getestet: Dump aus PGlite (`pgDump`), Import in Postgres, App startet mit neuer `DATABASE_URL`, Login und Upstreams sind vorhanden (CI-Job). Dieser Umstiegstest gehört zu **Phase 1**, nicht zur Abnahme von Phase 0a; Phase 0a prüft nur, dass derselbe Testsatz gegen beide Backends grün ist.
-- [ ] Backup PGlite = Volume kopieren bei gestoppter App oder per Dump-Endpoint/CLI (im README).
-- [ ] Better-Auth-Tabellen (user, session, account, verification, OAuth-Client/Code/Token) liegen im selben Drizzle-Schema; Schema wird aus Better Auth generiert, nicht von Hand gepflegt, und Migrationen sind versioniert eingecheckt.
-- [ ] Migrationen laufen beim Start idempotent. PGlite ist single-connection: alle Zugriffe laufen über einen gemeinsamen Client im selben Prozess, lange Transaktionen werden vermieden.
-- [ ] Eigene Tabellen (Upstreams, Tools, Tokens, Audit) tragen `user_id` mit Fremdschlüssel auf die Better-Auth-Nutzertabelle.
+**P0-11 Persistence (prerequisite for P0-2, P0-3, P0-4; built first)**
+- [ ] Drizzle with the Postgres dialect (`pg-core`). The default is **PGlite** (embedded Postgres, data in the volume), switching to real Postgres only by setting `DATABASE_URL`, without schema or code change. Both run on the same schema and migration set.
+- [ ] Postgres-compatible SQL only; no PGlite special functions and no extensions that do not exist on real Postgres.
+- [ ] Switch documented and tested: dump from PGlite (`pgDump`), import into Postgres, the app starts with the new `DATABASE_URL`, login and upstreams are present (CI job). This switch test belongs to **phase 1**, not to the acceptance of phase 0a; phase 0a only checks that the same test set is green against both backends.
+- [ ] Backup PGlite = copy the volume with the app stopped or via dump endpoint/CLI (in the README).
+- [ ] Better Auth tables (user, session, account, verification, OAuth client/code/token) live in the same Drizzle schema; the schema is generated from Better Auth, not maintained by hand, and migrations are checked in versioned.
+- [ ] Migrations run idempotently at startup. PGlite is single-connection: all accesses go through a shared client in the same process, long transactions are avoided.
+- [ ] Own tables (upstreams, tools, tokens, audit) carry `user_id` with a foreign key to the Better Auth user table.
 
-**P0-12 Verwaltungs-Tools per MCP**
-Eigener Upstream „mcpwarden" im Gateway mit Tools: `list_upstreams`, `add_upstream` (Typ http/stdio/rest, Name, URL bzw. Befehl, Auth-Art), `update_upstream`, `remove_upstream`, `test_upstream`, `get_upstream_status`, `get_auth_link`, `set_tool_enabled`. Sichtbar nur mit OAuth-Scope `mcpwarden:admin` (im Consent-Screen als eigener Schalter abwählbar, siehe P0-2; Vergabe ab Phase 2). `get_upstream_status` liefert den Health-Status (P0-14) und daneben den Einrichtungszustand `setup` (`ready` / `awaiting_auth` / `awaiting_approval`) samt `statusReason`.
-- [ ] `add_upstream` nimmt **nie** Secrets entgegen (Schema hat kein Token-Feld). Fehlt Auth, ist der Upstream angelegt, aber „wartet auf Auth", und die Antwort enthält `auth_link`.
-- [ ] Auth-Art `token`/`header` → Link auf Web-Seite mit Eingabefeld (Maskierung, Speichern, Verbindungstest, Rückmeldung „fertig, zurück ins Tool").
-- [ ] Auth-Art `oauth` → Link startet den Flow serverseitig (Discovery, DCR, PKCE) und leitet direkt auf die Zustimmungsseite des Dienstes; Callback landet im Gateway und zeigt „verbunden".
-- [ ] Links sind signiert, einmal verwendbar, an Nutzer und Upstream gebunden, laufen nach 15 min ab und verlangen Gateway-Login (fremder Nutzer mit Link: 403).
-- [ ] Wenn der Client URL-Elicitation (MCP-Spec 2025-11-25) unterstützt, wird der Link darüber geöffnet; sonst als Text/Markdown-Link in der Tool-Antwort. In der Revision 2026-07-28 laufen Elicitation und Sampling über das MRTR-Muster (`InputRequiredResult`: der Server sendet keine eigenen Requests mehr, sondern antwortet mit einer Eingabeaufforderung und erhält die Antwort mit dem erneuten Aufruf); beide Wege werden unterstützt, wo der Client sie bietet.
-- [ ] Anlegen eines **stdio-Upstreams per MCP** erzeugt nur einen Entwurf „wartet auf Freigabe" und läuft erst nach Bestätigung in der Web-UI (Schutz vor Prompt-Injection → Codeausführung). HTTP/REST-Upstreams dürfen ohne Bestätigung angelegt werden, werden aber erst nach erfolgreichem Test aktiv.
-- [ ] Jede Verwaltungsaktion per MCP landet im Audit-Log (Nutzer, Client, Aktion, Ziel).
-- [ ] Verwaltungs-Tools sind im Meta-Tool-Modus immer direkt sichtbar (nicht hinter der Suche).
+**P0-12 Management tools via MCP**
+Own upstream "mcpwarden" in the gateway with tools: `list_upstreams`, `add_upstream` (type http/stdio/rest, name, URL or command, auth kind), `update_upstream`, `remove_upstream`, `test_upstream`, `get_upstream_status`, `get_auth_link`, `set_tool_enabled`. Visible only with OAuth scope `mcpwarden:admin` (deselectable as its own switch in the consent screen, see P0-2; granted from phase 2). `get_upstream_status` returns the health status (P0-14) and alongside it the setup state `setup` (`ready` / `awaiting_auth` / `awaiting_approval`) including `statusReason`.
+- [ ] `add_upstream` **never** accepts secrets (the schema has no token field). If auth is missing, the upstream is created but "waiting for auth", and the response contains `auth_link`.
+- [ ] Auth kind `token`/`header` → link to a web page with an input field (masking, saving, connection test, feedback "done, back to the tool").
+- [ ] Auth kind `oauth` → the link starts the flow server-side (discovery, DCR, PKCE) and redirects directly to the consent page of the service; the callback lands in the gateway and shows "connected".
+- [ ] Links are signed, single-use, bound to user and upstream, expire after 15 min and require a gateway login (foreign user with the link: 403).
+- [ ] If the client supports URL elicitation (MCP spec 2025-11-25), the link is opened through it; otherwise as a text/markdown link in the tool response. In revision 2026-07-28, elicitation and sampling run via the MRTR pattern (`InputRequiredResult`: the server no longer sends requests of its own but answers with an input prompt and receives the answer with the repeated call); both ways are supported where the client offers them.
+- [ ] Creating a **stdio upstream via MCP** produces only a draft "waiting for approval" and runs only after confirmation in the web UI (protection against prompt injection → code execution). HTTP/REST upstreams may be created without confirmation but become active only after a successful test.
+- [ ] Every management action via MCP lands in the audit log (user, client, action, target).
+- [ ] Management tools are always directly visible in meta-tool mode (not behind the search).
 
-**P0-13 Upstream-OAuth**
-Voraussetzung für P0-12 mit OAuth-Diensten.
-- [ ] Authorization Code + PKCE, Discovery (RFC 9728/8414), Dynamic Client Registration; Upstreams ohne DCR sind out of scope (meldet klar „nicht unterstützt").
-- [ ] Refresh-Tokens verschlüsselt gespeichert, automatische Erneuerung vor Ablauf; bei dauerhaftem Fehler Status „Auth abgelaufen" plus neuer Link per `get_auth_link`.
-- [ ] Scopes sichtbar, `state` und PKCE-Verifier an Sitzung gebunden, Redirect-URI fest auf `BASE_URL`.
+**P0-13 Upstream OAuth**
+Prerequisite for P0-12 with OAuth services.
+- [ ] Authorization code + PKCE, discovery (RFC 9728/8414), Dynamic Client Registration; upstreams without DCR are out of scope (reports clearly "not supported").
+- [ ] Refresh tokens stored encrypted, automatic renewal before expiry; on a permanent error status "auth expired" plus a new link via `get_auth_link`.
+- [ ] Scopes visible, `state` and PKCE verifier bound to the session, redirect URI fixed to `BASE_URL`.
 
-**P0-14 Resilienz je Upstream (Timeout, Retry, Circuit Breaker, Health-Check)**
-*Phase 1 (Minimum):* Timeouts, einfacher Circuit Breaker, Status, `/healthz`, `/readyz`, Graceful Shutdown. *Phase 2 (Rest):* aktiver Ping/Health-Check, Idempotent-Retry für `tools/call`, Latenz-Perzentile im Status.
-Ergänzt den knappen Circuit-Breaker-Punkt in P0-5; hier steht das vollständige Verhalten.
-- [ ] **Timeouts:** Verbindungsaufbau 10 s, `tools/list` 15 s, `tools/call` 60 s Standard; je Upstream und je Tool überschreibbar. Bei Überschreitung wird der Aufruf abgebrochen und der Client erhält einen klaren Fehler mit Ursache „Timeout".
-- [ ] **Abbruch je Transport:** Über HTTP (Revision 2026-07-28) bedeutet Abbruch, den Antwort-Stream zu schließen; `notifications/cancelled` wird nur dort gesendet, wo es zutrifft (stdio sowie Legacy-Upstreams der Revision 2025-11-25). Gilt auch, wenn der Client seine Anfrage abbricht.
-- [ ] **Retry mit Augenmaß:**
-  - Automatisch wiederholt werden nur Verbindungsaufbau, Initialisierung und `tools/list` (3 Versuche, exponentielles Backoff mit Jitter, Start 500 ms, Deckel 10 s).
-  - `tools/call` wird **nicht** blind wiederholt, weil Tools schreiben können. Ausnahme: nur wenn der Upstream das Tool mit `readOnlyHint`/`idempotentHint` markiert oder der Admin es als idempotent freigibt, dann 1 Wiederholung bei Verbindungsfehler oder 5xx. Fehler des Tools selbst (`isError`) werden nie wiederholt.
-  - Sitzungsverlust beim Upstream (z. B. HTTP 404 auf Session-ID) führt zu einer neuen Initialisierung und genau einem erneuten Versuch, auch bei nicht-idempotenten Tools, solange die Anfrage nachweislich nicht verarbeitet wurde.
-- [ ] **Circuit Breaker** mit drei Zuständen: *geschlossen* → nach 5 aufeinanderfolgenden Fehlern oder > 50 % Fehlerquote in 30 s → *offen* (Aufrufe scheitern sofort mit „Upstream vorübergehend gesperrt", Dauer 30 s, wachsend bis 5 min) → *halboffen* (ein Probeaufruf; Erfolg schließt, Fehler öffnet erneut). Zählt Verbindungsfehler, Timeouts und 5xx, nicht Fehler durch ungültige Argumente oder `isError` des Tools.
-- [ ] **Health-Check je Upstream:**
-  - Aktiv: HTTP-Upstreams alle 60 s per `ping` (MCP) bzw. leichtem `tools/list`-Check; stdio-Prozesse über Prozess-Lebenszeichen und `ping`, **nur wenn der Prozess ohnehin läuft** (kein Start nur für den Check).
-  - Passiv: Ergebnis echter Aufrufe fließt in den Status ein.
-  - Status in der UI und via `get_upstream_status`: `healthy` / `degraded` / `open` (Breaker offen) / `auth_expired` / `disabled` / `unknown` (noch kein Ergebnis, z. B. frisch angelegt), jeweils mit Zeitpunkt, Latenz-Perzentilen (alle fünf, p5/p50/p75/p95/p99, siehe P0-15; die Detailansicht zeigt alle fünf Werte, ein Chart darf drei Linien zeigen) und letzter Fehlermeldung. Daneben führt jeder Upstream den **Einrichtungszustand** `setup`: `ready` / `awaiting_auth` / `awaiting_approval` (Spec P0-12: „wartet auf Auth“ bzw. „wartet auf Freigabe“). So bleibt der Health-Enum klein. API-Werte bleiben englisch, die Anzeige läuft über eine Label-Tabelle (deutsch: „In Ordnung“, „Eingeschränkt“, „Breaker offen“, „Auth abgelaufen“, „Deaktiviert“, „Unbekannt“).
-  - **`degraded`** heißt: der Upstream antwortet, aber eingeschränkt. In Phase 1: 1–4 aufeinanderfolgende Fehler (unterhalb der Breaker-Schwelle); ab Phase 2 zusätzlich p95 über 3× der 7-Tage-Basislinie. Das Backend liefert den konkreten Grund als `statusReason` (Text); die UI zeigt ihn nur an und kodiert keine Schwellen fest.
-  - Statusfarben tragen immer auch ein Textlabel; Darstellungen, die nur über Farbe unterscheiden (z. B. eine Verlaufs-Heatmap), brauchen Muster oder eine Tabellenalternative.
-  - Statuswechsel nach `open` oder `auth_expired` erzeugen einen Eintrag im Audit-Log; Benachrichtigung per E-Mail erst mit Mailversand (P2).
-  - Verfügbarkeit in Prozent und eine Status-Historie (Heatmap) gibt es nur, wenn Phase 2 den Verlauf speichert und über `health-history` liefert; bis dahin speichert das Datenmodell den Status nur beim Wechsel.
-  - Tools eines `open`-Upstreams bleiben in `tools/list` sichtbar (kein Flackern der Tool-Liste im Client), liefern aber den Fehler; konfigurierbar, sie auszublenden.
-- [ ] **Gateway-Health:** `/healthz` (Prozess lebt, DB erreichbar) und `/readyz` (Migrationen durch, Supervisor erreichbar, falls aktiviert). Ein ausgefallener Upstream macht das Gateway weder „unhealthy" noch „not ready".
-- [ ] **Bulkhead:** Ein langsamer oder hängender Upstream darf keine Verbindungen/Worker der anderen belegen (eigene Concurrency-Limits aus dem Rate-Limit, getrennte Pools je Upstream).
-- [ ] **Graceful Shutdown:** Bei `SIGTERM` keine neuen Aufrufe, laufende bis 30 s zu Ende, danach Abbruch; stdio-Worker werden beendet, SSE/Streamable-Sitzungen erhalten ein sauberes Ende.
-- [ ] Test: Fake-Upstream mit steuerbarem Verhalten (hängt, wirft 500, verliert Session, antwortet langsam) prüft Timeout, Retry-Grenzen (kein Doppelaufruf bei nicht-idempotentem Tool), Breaker-Zustandswechsel und Status.
+**P0-14 Resilience per upstream (timeout, retry, circuit breaker, health check)**
+*Phase 1 (minimum):* timeouts, simple circuit breaker, status, `/healthz`, `/readyz`, graceful shutdown. *Phase 2 (rest):* active ping/health check, idempotent retry for `tools/call`, latency percentiles in the status.
+Supplements the short circuit-breaker item in P0-5; the complete behavior is stated here.
+- [ ] **Timeouts:** connection setup 10 s, `tools/list` 15 s, `tools/call` 60 s default; overridable per upstream and per tool. On exceeding, the call is aborted and the client receives a clear error with the cause "Timeout".
+- [ ] **Abort per transport:** over HTTP (revision 2026-07-28) abort means closing the response stream; `notifications/cancelled` is sent only where it applies (stdio as well as legacy upstreams of revision 2025-11-25). Also applies when the client aborts its request.
+- [ ] **Retry with a sense of proportion:**
+  - Only connection setup, initialization and `tools/list` are retried automatically (3 attempts, exponential backoff with jitter, start 500 ms, cap 10 s).
+  - `tools/call` is **not** retried blindly, because tools may write. Exception: only if the upstream marks the tool with `readOnlyHint`/`idempotentHint` or the admin releases it as idempotent, then 1 retry on connection error or 5xx. Errors of the tool itself (`isError`) are never retried.
+  - Session loss at the upstream (e.g. HTTP 404 on a session ID) leads to a new initialization and exactly one new attempt, also for non-idempotent tools, as long as the request demonstrably was not processed.
+- [ ] **Circuit breaker** with three states: *closed* → after 5 consecutive errors or > 50 % error rate in 30 s → *open* (calls fail immediately with "Upstream vorübergehend gesperrt" (upstream temporarily blocked), duration 30 s, growing up to 5 min) → *half-open* (one probe call; success closes, failure opens again). Counts connection errors, timeouts and 5xx, not errors from invalid arguments or `isError` of the tool.
+- [ ] **Health check per upstream:**
+  - Active: HTTP upstreams every 60 s via `ping` (MCP) or a light `tools/list` check; stdio processes via process liveness and `ping`, **only if the process is running anyway** (no start just for the check).
+  - Passive: the result of real calls feeds into the status.
+  - Status in the UI and via `get_upstream_status`: `healthy` / `degraded` / `open` (breaker open) / `auth_expired` / `disabled` / `unknown` (no result yet, e.g. freshly created), each with timestamp, latency percentiles (all five, p5/p50/p75/p95/p99, see P0-15; the detail view shows all five values, a chart may show three lines) and last error message. In addition, every upstream carries the **setup state** `setup`: `ready` / `awaiting_auth` / `awaiting_approval` (spec P0-12: "waiting for auth" or "waiting for approval"). This keeps the health enum small. API values stay English, the display runs through a label table (German: "In Ordnung", "Eingeschränkt", "Breaker offen", "Auth abgelaufen", "Deaktiviert", "Unbekannt").
+  - **`degraded`** means: the upstream answers, but in a restricted way. In phase 1: 1–4 consecutive errors (below the breaker threshold); from phase 2 additionally p95 above 3× the 7-day baseline. The backend delivers the concrete reason as `statusReason` (text); the UI only displays it and hard-codes no thresholds.
+  - Status colors always also carry a text label; displays that distinguish only by color (e.g. a history heatmap) need patterns or a table alternative.
+  - Status changes to `open` or `auth_expired` produce an entry in the audit log; notification by email to the owner via the optional mailer (see P1 "Mailer"; without `SMTP_URL` only an audit entry).
+  - Availability in percent and a status history (heatmap) exist only if phase 2 stores the history and delivers it via `health-history`; until then the data model stores the status only on change.
+  - Tools of an `open` upstream stay visible in `tools/list` (no flicker of the tool list in the client) but return the error; hiding them is configurable.
+- [ ] **Gateway health:** `/healthz` (process alive, DB reachable) and `/readyz` (migrations done, supervisor reachable if enabled). A failed upstream makes the gateway neither "unhealthy" nor "not ready".
+- [ ] **Bulkhead:** a slow or hanging upstream must not occupy connections/workers of the others (own concurrency limits from the rate limit, separate pools per upstream).
+- [ ] **Graceful shutdown:** on `SIGTERM` no new calls, running ones finish for up to 30 s, then abort; stdio workers are ended, SSE/Streamable sessions get a clean end.
+- [ ] Test: a fake upstream with controllable behavior (hangs, throws 500, loses session, answers slowly) checks timeout, retry limits (no double call for a non-idempotent tool), breaker state changes and status.
 
-**P0-15 Basis-Statistiken pro Aufruf**
-*Phase 1 (Minimum):* Schreibpfad der Messdaten (Puffer, Felder, Aufbewahrung). *Phase 2 (Rest):* Perzentile, Rollups, Statistik-Seite, `get_stats`, Routing-Statistik.
-Jeder Aufruf (`tools/call`, `tools/list`, Verwaltungs-Tools, Routing-Schritte) schreibt einen schlanken Messdatensatz. Nur Metadaten, nie Argumente oder Ergebnisse (Inhalte speichert erst der optionale Aufruf-Log, P1).
-- [ ] **Felder je Aufruf:** Zeitpunkt, Nutzer, Client/Token-ID, Upstream, Tool, Aufrufart, Status (`ok` / `tool_error` / `timeout` / `upstream_error` / `rate_limited` / `breaker_open` / `denied`), Gesamtdauer, **Upstream-Dauer**, **Gateway-Overhead** (Gesamt minus Upstream), Retry-Anzahl, Größe von Anfrage und Antwort in Bytes, Cache-Treffer (ja/nein).
-- [ ] **Perzentile:** p5, p50, p75, p95, p99 der Gesamtdauer sowie Upstream-Dauer und Gateway-Overhead, je Upstream und je Tool, über wählbare Fenster (letzte 5 min, 1 h, 24 h, 7 d). Berechnung mit `percentile_cont` direkt in Postgres/PGlite (gleiche SQL-Funktion in beiden Backends) auf den Rohdaten; Rollups werden als Histogramm-Buckets gespeichert, damit Perzentile auch nach dem Löschen der Rohdaten ungefähr rekonstruierbar bleiben (Abweichung dokumentiert, Ziel ≤ 5 %).
-- [ ] **Weitere Basiszahlen:** Aufrufe gesamt, Aufrufe pro Minute, Erfolgsquote, Fehlerquote je Status, Anteil Timeouts/Rate-Limit-Treffer/Breaker-Sperren, gleichzeitige Aufrufe (Spitze), Durchschnitts- und Maximaldauer, Anzahl aktiver Clients, `tools/list`-Größe in Tokens (grob, Zeichen/4) je Client.
-- [ ] **Schreibpfad bremst nie den Aufruf:** Datensätze werden in einem Puffer im Speicher gesammelt und gebündelt geschrieben (alle 5 s oder 500 Einträge); Pufferüberlauf verwirft die ältesten Einträge und zählt die Verluste (`stats_dropped`). Ausfall der Statistik darf nie einen Aufruf fehlschlagen lassen.
-- [ ] **Aufbewahrung:** Rohdaten 14 Tage, Stunden-Rollups (Zähler + Histogramm) 13 Monate; konfigurierbar. Tägliche Aufräum-Aufgabe.
-- [ ] **Sichtbarkeit:** Statistik-Seite in der UI (je Upstream und je Tool: Tabelle der Perzentile, Fehlerquote, Verlauf als Zeitreihe), und MCP-Tool `get_stats(upstream?, tool?, window)` für den eigenen Nutzer. Jeder Nutzer sieht nur eigene Zahlen; Admin sieht aggregierte Instanzzahlen ohne Inhalte.
-- [ ] **Routing-Statistik** (sobald Routing existiert): Anzahl `find_tools`, Kandidatenzahl, gewählte vs. angebotene Tools, Anteil Sampling vs. Tool-Dialog, Anteil verworfener (ungültiger) Auswahlen.
-- [ ] Die Perzentile fließen ab Phase 2 in den Health-Status (P0-14, `degraded`, wenn p95 über 3× der 7-Tage-Basislinie liegt) und in das Erfolgskriterium „Gateway-Overhead p95 ≤ 50 ms".
-- [ ] Test: Lastskript mit bekannter Verteilung (z. B. 10 000 Aufrufe mit Dauern 10–1000 ms) – berechnete p5/p50/p75/p95/p99 weichen um ≤ 2 % vom Erwartungswert ab, Overhead-Berechnung stimmt, Pufferüberlauf zählt Verluste statt zu blockieren.
+**P0-15 Basic statistics per call**
+*Phase 1 (minimum):* write path of the measurement data (buffer, fields, retention). *Phase 2 (rest):* percentiles, rollups, statistics page, `get_stats`, routing statistics.
+Every call (`tools/call`, `tools/list`, management tools, routing steps) writes a lean measurement record. Metadata only, never arguments or results (contents are stored only by the optional call log, P1).
+- [ ] **Fields per call:** timestamp, user, client/token ID, upstream, tool, call kind, status (`ok` / `tool_error` / `timeout` / `upstream_error` / `rate_limited` / `breaker_open` / `denied`), total duration, **upstream duration**, **gateway overhead** (total minus upstream), retry count, size of request and response in bytes, cache hit (yes/no).
+- [ ] **Percentiles:** p5, p50, p75, p95, p99 of the total duration as well as upstream duration and gateway overhead, per upstream and per tool, over selectable windows (last 5 min, 1 h, 24 h, 7 d). Computed with `percentile_cont` directly in Postgres/PGlite (same SQL function in both backends) on the raw data; rollups are stored as histogram buckets so that percentiles remain approximately reconstructible even after the raw data is deleted (deviation documented, target ≤ 5 %).
+- [ ] **Further basic figures:** total calls, calls per minute, success rate, error rate per status, share of timeouts/rate-limit hits/breaker blocks, simultaneous calls (peak), average and maximum duration, number of active clients, `tools/list` size in tokens (rough, characters/4) per client.
+- [ ] **The write path never slows down the call:** records are collected in an in-memory buffer and written in bundles (every 5 s or 500 entries); a buffer overflow drops the oldest entries and counts the losses (`stats_dropped`). A failure of the statistics must never make a call fail.
+- [ ] **Retention:** raw data 14 days, hourly rollups (counter + histogram) 13 months; configurable. Daily cleanup task.
+- [ ] **Visibility:** statistics page in the UI (per upstream and per tool: table of percentiles, error rate, history as a time series), and MCP tool `get_stats(upstream?, tool?, window)` for the own user. Every user sees only their own figures; the admin sees aggregated instance figures without contents.
+- [ ] **Routing statistics** (once routing exists): number of `find_tools`, candidate count, chosen vs. offered tools, share of sampling vs. tool dialog, share of discarded (invalid) selections.
+- [ ] From phase 2 the percentiles feed into the health status (P0-14, `degraded` if p95 is above 3× the 7-day baseline) and into the success criterion "gateway overhead p95 ≤ 50 ms".
+- [ ] Test: load script with a known distribution (e.g. 10,000 calls with durations 10–1000 ms) – computed p5/p50/p75/p95/p99 deviate by ≤ 2 % from the expected value, the overhead computation is correct, buffer overflow counts losses instead of blocking.
 
-**P0-16 Dashboard und Audit-Lesen (Phase 1)**
-Die Daten (`last_used_at`, Status, Messdatensätze, Audit-Schreibpfad) liegen nach Phase 1 vor; darum laufen Clients-Tabelle, Aufmerksamkeitskarte und Audit-Ansicht schon dort. KPIs, Statistik-Seite und Diagramme bleiben Phase 2.
-- [ ] `GET /api/dashboard` (ohne KPIs): Clients (OAuth und PAT, je Name, Anmeldeart, Allowlist-Status, „Zuletzt aktiv“, Aktiv/Inaktiv nach P0-1) und Aufmerksamkeitsliste (Upstreams mit `degraded`, `open`, `auth_expired`, `awaiting_auth`, `awaiting_approval`, jeweils mit `statusReason`). Ohne Gerätenamen. Leerzustand (neue Instanz) zeigt die MCP-URL `https://<host>/mcp`, einen Kopierknopf, den Einrichtungsbefehl und die PAT-Variante.
-- [ ] `GET /api/audit?category&cursor&limit`: Verwaltungsaktionen und Statuswechsel mit Zeit, Akteur, Client, Aktion, Ziel und Ergebnis. Ein Reiter „Anmeldung“ entfällt, solange keine Login-Ereignisse im Audit-Log stehen.
-- [ ] **Sichtbarkeit:** Jeder Nutzer sieht nur eigene Einträge; der Admin sieht zusätzlich Instanzereignisse (Nutzer gesperrt, Einstellung geändert), nie Aufrufinhalte oder Secrets anderer Nutzer.
+**P0-16 Dashboard and audit reading (phase 1)**
+The data (`last_used_at`, status, measurement records, audit write path) is available after phase 1; hence the clients table, attention card and audit view already run there. KPIs, statistics page and charts stay phase 2.
+- [ ] `GET /api/dashboard` (without KPIs): clients (OAuth and PAT, each with name, sign-in kind, allowlist status, "Zuletzt aktiv", Aktiv/Inaktiv per P0-1) and attention list (upstreams with `degraded`, `open`, `auth_expired`, `awaiting_auth`, `awaiting_approval`, each with `statusReason`). Without device names. The empty state (new instance) shows the MCP URL `https://<host>/mcp`, a copy button, the setup command and the PAT variant.
+- [ ] `GET /api/audit?category&cursor&limit`: management actions and status changes with time, actor, client, action, target and result. A tab "Anmeldung" (sign-in) is omitted as long as no login events are in the audit log.
+- [ ] **Visibility:** every user sees only their own entries; the admin additionally sees instance events (user banned, setting changed), never call contents or secrets of other users.
 
-### P1 — schnell danach
+### P1 — soon after
 
-- **Intelligentes Routing (Ziel 4), Meta-Tool-Modus** pro Nutzer/Profil: statt aller Tools nur `find_tools(intent)`, `describe_tool`, `invoke_tool` (+ Verwaltungs-Tools). Zweistufig:
-  1. **Vorfilter ohne LLM:** Volltext/BM25 über Tool-Name, Beschreibung, Schema, Upstream-Beschreibung; liefert Top-N (Standard 30).
-  2. **Auswahl durch das Modell des Aufrufers, per MCP:** Das Gateway hat **kein eigenes LLM, keinen API-Key und keinen Fremdanbieter**. Die Auswahl läuft immer über das Modell des Clients, entweder
-     - **a) per MCP-Sampling** (`sampling/createMessage`; in der Revision 2026-07-28 über das MRTR-Muster, siehe P0-12), wenn der Client es unterstützt: Das Gateway schickt Intent + Top-N-Kandidaten (Name, Kurzbeschreibung, Kennung) und erwartet eine Liste von 1–5 Kennungen als strukturierte Antwort; oder
-     - **b) als zweistufiger Tool-Dialog**, wenn nicht: `find_tools(intent)` gibt die kompakten Top-N-Kandidaten zurück, das Modell des Clients wählt selbst und holt mit `describe_tool(id)` das volle Schema, dann `invoke_tool(id, args)`. Das ist der erwartete Normalfall, da nicht alle Clients Sampling bieten.
-  - [ ] Kein Fallback nötig für „LLM nicht erreichbar": Stufe 1 liefert immer Kandidaten; fehlt Sampling, greift (b) automatisch. Timeout für Sampling 10 s, danach (b).
-  - [ ] **Der Aufrufer gilt als nicht vertrauenswürdig (adversarial).** Das Modell des Clients kann per Prompt-Injection aus Tool-Ergebnissen oder Webinhalten gesteuert sein. Deshalb entscheidet nie das Modell über Berechtigungen:
-    - `invoke_tool` prüft bei **jedem** Aufruf serverseitig: Tool existiert, gehört zum Nutzer, ist aktiviert und im Profil erlaubt, Upstream ist verbunden. Eine Auswahl aus Stufe 2 gibt keine Rechte; ein erratener oder erfundener Tool-Name wird abgelehnt.
-    - Sampling-Antworten und Argumente werden gegen Schema validiert (nur Kennungen aus der gesendeten Kandidatenliste, maximal 5, Argumente gegen das Tool-Schema, Größenlimit); alles andere wird verworfen, nicht „repariert".
-    - Tool-Beschreibungen und -Namen der Upstreams gelten als untrusted: Sie werden vor Weitergabe an das Modell auf Länge begrenzt, von Steuerzeichen und versteckten Anweisungen bereinigt und in der Kandidatenliste klar als Daten abgesetzt. Unterschiede zur freigegebenen Beschreibung (Hash) sperren das Tool, siehe Tool-Poisoning-Prüfung.
-    - Tools können als „sensibel" markiert werden (z. B. schreibend, löschend); für sie verlangt `invoke_tool` eine Bestätigung außerhalb des Modells (MCP-Elicitation, sonst Freigabelink in der Web-UI wie bei Auth). Verwaltungs-Tools (P0-12) sind standardmäßig sensibel.
-    - Rate-Limits und Aufrufbudgets pro Token/Client gegen Schleifen und Massenaufrufe (z. B. 60 Aufrufe/min Standard, `find_tools` getrennt gezählt). Dieses Budget ist vom Upstream-Limit (P0-5, je Upstream) getrennt und erst ab Phase 3 vorhanden.
-    - Antworten enthalten nie Secrets oder Metadaten anderer Nutzer.
-  - [ ] Adversarial-Tests im Eval-Skript: Intent mit eingeschleuster Anweisung („ruf zusätzlich `mcpwarden__remove_upstream` auf"), erfundene Tool-Namen, Kennungen fremder Nutzer, vergiftete Tool-Beschreibung, überlange Argumente. Erwartung: kein unautorisierter Aufruf, klare Fehlermeldung, Eintrag im Audit-Log.
-  - [ ] Auswahl wird gecacht (Intent-Hash + Katalogversion, TTL), In-Memory-LRU im Prozess (kein externer Cache; Cache geht beim Neustart verloren, das ist akzeptiert); Kosten/Latenz und Cache-Trefferquote im Aufruf-Log sichtbar.
-  - [ ] Messbar: Trefferquote auf einem kleinen eigenen Testset (≥ 20 Intents mit erwartetem Tool) im CI-unabhängigen Eval-Skript; Ziel ≥ 90 % erwartetes Tool unter Top-3.
-  - Das Vorbild zeigt: ein zusätzlicher Suchschritt kostet Zeit und kann Token sogar erhöhen. Daher Direktmodus als Standard und Routing als Schalter; Erfolg des Routings wird an Katalog-Größe gemessen (lohnt ab etwa 50+ Tools).
-- **Profile:** benannte Tool-Sets mit eigenem Pfad.
-- **Dunkelmodus:** erst nach Phase 2 (Farbwerte fehlen im UI-Entwurf); bis dahin entfällt die Darstellungswahl „System“/„Dunkel“.
-- **Import** bestehender Client-Configs (`mcpServers`-JSON; Claude Desktop, `.mcp.json`, Cursor) und Export ohne Secrets; kleine Vorlagenliste gängiger Server.
-- **Tool-Poisoning-Prüfung:** Tool-Beschreibungen von Upstreams werden auf Injection-Muster geprüft; Treffer sperren das Tool bis zur manuellen Freigabe. Änderte Beschreibung eines freigegebenen Tools (Hash) → erneute Freigabe („Rug-Pull-Schutz").
-- **Aufruf-Log:** Zeit, Client, Tool, Dauer, Status; Parameter standardmäßig nicht gespeichert; Retention 30 Tage.
-- **Prompts & Resources proxien.**
-- **OpenAPI-Import** → REST-Tools.
-- **Hot-Reload** von Upstream-Änderungen ohne bestehende Client-Sessions zu kappen.
+- **Mailer (optional, SMTP).** Active only with `SMTP_URL` (`smtps://user:pass@host:465` or `smtp://host:587` with mandatory STARTTLS, plaintext only to localhost) and `MAIL_FROM`; both are checked at startup (invalid or missing `MAIL_FROM` = startup error, messages never name credentials). Without `SMTP_URL` the mailer is a no-op, `GET /api/public-config` returns `mail: false`, and all mail features are invisible. The same public route reports `registrationOpen` (true only as long as no user exists yet); the login and registration pages read from it whether to offer "Registrieren" (register). The application knows only the port `Mailer.sendMail({to, subject, text, html?})` (adapters: SMTP, no-op, in-memory for tests).
+  - Hardening: CR/LF in recipient, subject and sender are rejected (header injection), only plaintext and simple, escaped HTML from fixed templates, links exclusively from `BASE_URL`, timeouts (connect, greeting, socket, send), at most 2 retries on temporary errors (not on auth or 5xx errors), limit per recipient (3 per hour), send errors never abort a request and are logged without address, token and credentials.
+  - [x] **Password reset:** "Passwort vergessen?" (visible only if `mail` is active), `/forgot-password` and `/reset-password`. The response is the same for known and unknown addresses (also in timing: sending is not awaited), token valid 15 minutes and single-use, in the link as a fragment (no access log), minimum length 12, afterwards all sessions of the user end.
+  - [x] **Invitation mails:** `POST /api/admin/invites` optionally takes `sendMail: true` (only with a bound address and an active mailer, otherwise 422 with `field: sendMail`). The link `/invite/<token>` (path as in the UI; the token is single-use and valid 7 days) additionally goes to the bound address; the admin still sees the link exactly once. The response carries `mailQueued`. Sending in the background, per-recipient limit and header-injection protection apply, errors never abort creation, the token is in no log. UI: checkbox "Per E-Mail senden" in the invitation dialog, visible only with `mail: true`.
+  - [x] **Status-change notifications:** the trigger is the same change that writes the audit entry (P0-14): to `open` or `auth_expired`, plus a "wieder erreichbar" (reachable again) mail on return to `healthy`. The recipient is exclusively the owner of the upstream (address and name are read from the database with the owner ID, never from the event; admins receive no foreign mails). Content: upstream name, state, `statusReason` and the link to `/upstreams/<id>` from `BASE_URL`; name and reason count as untrusted (control and bidi characters removed, URLs, `www.` hosts and addresses defused, truncated to 60 or 200 characters, HTML escaped), never secrets. Throttling: at most one mail per (upstream, state) per window (`MAIL_NOTIFY_WINDOW_MIN`, default 60 minutes, in memory, empty after a restart); flapping thus produces at most one alert and one recovery mail per window. Sending is fire-and-forget via a bounded queue (50 pending tasks, more is dropped and logged without address) and never blocks or alters the call path.
+  - [x] **Per-user opt-out:** setting `notifyStatusMail` (table `user_preference`, default `true`, deleted with the user), `GET`/`PATCH /api/me/settings` (`{ notifyStatusMail: boolean }`, unknown fields 422). UI: switch under Settings > Notifications, visible only with `mail: true`. An opt-out consumes no throttle window.
+  - P2 afterwards: email change by link and account self-deletion (clarify the conflict with the protection of the last admin beforehand).
 
-### P2 — Architektur offenhalten
+- **Intelligent routing (goal 4), meta-tool mode** per user/profile: instead of all tools only `find_tools(intent)`, `describe_tool`, `invoke_tool` (+ management tools). Two stages:
+  1. **Pre-filter without LLM:** full text/BM25 over tool name, description, schema, upstream description; returns the top N (default 30).
+  2. **Selection by the caller's model, via MCP:** the gateway has **no LLM of its own, no API key and no third-party provider**. The selection always runs through the client's model, either
+     - **a) via MCP sampling** (`sampling/createMessage`; in revision 2026-07-28 via the MRTR pattern, see P0-12) if the client supports it: the gateway sends intent + top-N candidates (name, short description, identifier) and expects a list of 1–5 identifiers as a structured response; or
+     - **b) as a two-step tool dialog** if not: `find_tools(intent)` returns the compact top-N candidates, the client's model chooses itself and fetches the full schema with `describe_tool(id)`, then `invoke_tool(id, args)`. This is the expected normal case, since not all clients offer sampling.
+  - [ ] No fallback needed for "LLM not reachable": stage 1 always returns candidates; if sampling is missing, (b) applies automatically. Timeout for sampling 10 s, then (b).
+  - [ ] **The caller is treated as untrusted (adversarial).** The client's model can be steered by prompt injection from tool results or web content. Therefore the model never decides about permissions:
+    - `invoke_tool` checks server-side on **every** call: the tool exists, belongs to the user, is enabled and allowed in the profile, the upstream is connected. A selection from stage 2 grants no rights; a guessed or invented tool name is rejected.
+    - Sampling responses and arguments are validated against a schema (only identifiers from the sent candidate list, at most 5, arguments against the tool schema, size limit); everything else is discarded, not "repaired".
+    - Tool descriptions and names of the upstreams count as untrusted: before being passed to the model they are limited in length, cleaned of control characters and hidden instructions, and clearly set off as data in the candidate list. Differences from the approved description (hash) block the tool, see tool-poisoning check.
+    - Tools can be marked "sensitive" (e.g. writing, deleting); for them `invoke_tool` requires a confirmation outside the model (MCP elicitation, otherwise an approval link in the web UI like with auth). Management tools (P0-12) are sensitive by default.
+    - Rate limits and call budgets per token/client against loops and mass calls (e.g. 60 calls/min default, `find_tools` counted separately). This budget is separate from the upstream limit (P0-5, per upstream) and exists only from phase 3.
+    - Responses never contain secrets or metadata of other users.
+  - [ ] Adversarial tests in the eval script: intent with a smuggled instruction ("additionally call `mcpwarden__remove_upstream`"), invented tool names, identifiers of foreign users, poisoned tool description, overlong arguments. Expectation: no unauthorized call, clear error message, entry in the audit log.
+  - [ ] The selection is cached (intent hash + catalog version, TTL), in-memory LRU in the process (no external cache; the cache is lost on restart, which is accepted); cost/latency and cache hit rate visible in the call log.
+  - [ ] Measurable: hit rate on a small own test set (≥ 20 intents with the expected tool) in the CI-independent eval script; target ≥ 90 % expected tool among the top 3.
+  - The model project shows: an additional search step costs time and can even increase tokens. Hence direct mode as the default and routing as a switch; the success of routing is measured against catalog size (worth it from about 50+ tools).
+- **Profiles:** named tool sets with their own path.
+- **Dark mode:** only after phase 2 (color values are missing in the UI draft); until then the appearance choice "System"/"Dunkel" is omitted.
+- **Import** of existing client configs (`mcpServers` JSON; Claude Desktop, `.mcp.json`, Cursor) and export without secrets; small template list of common servers.
+- **Tool-poisoning check:** tool descriptions of upstreams are checked for injection patterns; hits block the tool until manual approval. A changed description of an approved tool (hash) → renewed approval ("rug-pull protection").
+- **Call log:** time, client, tool, duration, status; parameters not stored by default; retention 30 days.
+- **Proxy prompts & resources.**
+- **OpenAPI import** → REST tools.
+- **Hot reload** of upstream changes without cutting existing client sessions.
 
-- Horizontale Skalierung auf echtem Postgres (MCP-Sessions, Link-Einmaligkeit und Rate-Limit-Zähler aus dem Speicher in die DB verlagern). Ein externer Cache wie Valkey ist **nicht** geplant; falls er je nötig wird, wird er hinter der bestehenden Cache-Funktion `get/set/del` mit TTL nachgerüstet. stdio-Prozesse bleiben pro Instanz, Routing dorthin braucht Sticky Sessions.
-- Sampling/Elicitation/Progress-Passthrough (in der Revision 2026-07-28 über MRTR-Zwischenantworten, `InputRequiredResult`).
-- Per-Nutzer-Identität an Multitenant-Upstreams (Token-Exchange statt gespeichertem Langzeit-Secret).
-- Mailversand (SMTP) mit den davon abhängigen Funktionen: E-Mail-Änderung per Link, Benachrichtigungsmails (Statuswechsel, neuer Client), Konto-Selbstlöschung (Konflikt mit dem Schutz des letzten Admins vorher klären).
-- Geteilte Upstreams/Teams; verteilte Rate-Limits (über mehrere Instanzen); Freigabe vor Tool-Aufruf (Approval).
-- Stärkere stdio-Isolation über den Worker-pro-Nutzer (P0-5) hinaus: eigener Container oder Sandbox je Nutzer, Netzwerk-Egress-Regeln. Nötig, sobald Nutzer dem Betreiber nicht mehr vertraut sind.
+### P2 — keep the architecture open
 
-## Technische Rahmenbedingungen
+- Horizontal scaling on real Postgres (move MCP sessions, link single-use and rate-limit counters from memory into the DB). An external cache such as Valkey is **not** planned; if it is ever needed, it will be retrofitted behind the existing cache function `get/set/del` with TTL. stdio processes stay per instance, routing to them needs sticky sessions.
+- Sampling/elicitation/progress passthrough (in revision 2026-07-28 via MRTR intermediate responses, `InputRequiredResult`).
+- Per-user identity at multitenant upstreams (token exchange instead of a stored long-term secret).
+- Building on the optional mailer (P1): email change by link and account self-deletion (clarify the conflict with the protection of the last admin beforehand); further notifications (e.g. new client).
+- Shared upstreams/teams; distributed rate limits (across several instances); approval before tool call.
+- Stronger stdio isolation beyond the worker per user (P0-5): own container or sandbox per user, network egress rules. Needed as soon as users no longer trust the operator.
 
-- **Stack:** Nuxt 4 (Nitro, Node), shadcn-vue, Drizzle, Better Auth, `@modelcontextprotocol/server` und `@modelcontextprotocol/client` (SDK-Linie v2, ersetzt `@modelcontextprotocol/sdk`). Spec-Revisionen: 2026-07-28 (zustandslos) und 2025-11-25 für ältere Clients.
-- **Gateway = MCP-Server nach außen, MCP-Client nach innen.** Pro (Nutzer, Upstream) eine gepoolte Client-Session; `tools/list` gecacht, per `list_changed` invalidiert (2026-Upstreams über `subscriptions/listen`).
-- **Single-Instance:** Sessions und stdio-Prozesse liegen im Speicher einer Instanz; horizontales Skalieren ist in v1 Nicht-Ziel. PGlite ist an einen Prozess gebunden; echtes Postgres entlastet die Datenbank bei größeren Instanzen, die Prozess-Zustände bleiben aber bis P2 pro Instanz.
-- **Zuständigkeit Frontend/Backend:** Das Frontend übernimmt alle `app/**`-Dateien (Seiten, Layouts, Komponenten, auch die in den Backend-Plänen genannten Login-, Consent-, Token- und Admin-Seiten). Die Backend-Phasen liefern nur API-Routen, Tests und Beiträge zu `shared/api-types.ts`. Navigationstexte folgen dem UI-Entwurf („Clients“ statt „Verbindungen“), API-Pfade bleiben.
-- **UI-Grundsätze:** Schriften werden lokal ausgeliefert (kein externer Font-Abruf auf einer self-hosted Instanz). Statusfarben nie ohne Textlabel (P0-14). Pfade wie der stdio-Arbeitsordner kommen vom Server, das UI baut sie nicht. Auto-Refresh ist reines Polling.
-- **Streaming:** Reverse-Proxy darf Streamable-HTTP/SSE nicht puffern (Hinweis in Doku, Heartbeat-Events gegen Idle-Timeouts).
-- **Sicherheitsmodell öffentlich:** Risiko Nr. 1 ist stdio (= Codeausführung auf dem Host). Daher Admin-Freigabe und Non-Root; Risiko Nr. 2 SSRF (P0-9); Risiko Nr. 3 manipulierte Tool-Beschreibungen (P1).
-- **Umgang mit dem Vorbild (`MikkoParkkola/mcp-gateway`, Rust):** Den Quellcode dürfen wir lesen und als Inspiration für Konzepte, Datenfluss und Randfälle nutzen. Es wird **kein Code kopiert oder 1:1 nach TypeScript übersetzt**; Implementierung entsteht eigenständig aus Spec und MCP-Spezifikation. Grund: Die Lizenz ist laut `LICENSES.md` PolyForm-Noncommercial 1.0.0 für alle eigenen Dateien (ältere Releases hatten teils MIT-Header, aktuell gilt das nicht mehr), kommerzielle Nutzung braucht eine separate Lizenz. Übernommene Ideen werden im Code nicht als Kopie gekennzeichnet, aber in `docs/inspirations.md` als Quelle der Idee festgehalten (Datei, Konzept, was wir anders lösen).
+## Technical constraints
 
-## Erfolgskriterien
+- **Stack:** Nuxt 4 (Nitro, Node), shadcn-vue, Drizzle, Better Auth, `@modelcontextprotocol/server` and `@modelcontextprotocol/client` (SDK line v2, replaces `@modelcontextprotocol/sdk`). Spec revisions: 2026-07-28 (stateless) and 2025-11-25 for older clients.
+- **Gateway = MCP server outward, MCP client inward.** One pooled client session per (user, upstream); `tools/list` cached, invalidated via `list_changed` (2026 upstreams via `subscriptions/listen`).
+- **Single instance:** sessions and stdio processes live in the memory of one instance; horizontal scaling is a non-goal in v1. PGlite is bound to one process; real Postgres relieves the database on larger instances, but the process states stay per instance until P2.
+- **Frontend/backend responsibility:** the frontend owns all `app/**` files (pages, layouts, components, including the login, consent, token and admin pages named in the backend plans). The backend phases deliver only API routes, tests and contributions to `shared/api-types.ts`. Navigation texts follow the UI draft ("Clients" instead of "Verbindungen"), API paths stay.
+- **UI principles:** fonts are served locally (no external font fetch on a self-hosted instance). Status colors never without a text label (P0-14). Paths such as the stdio working folder come from the server, the UI does not build them. Auto-refresh is pure polling. The UI language is German by decision; repository text (docs, code comments, tests, scripts) is English.
+- **Streaming:** the reverse proxy must not buffer Streamable HTTP/SSE (note in the docs, heartbeat events against idle timeouts).
+- **Public security model:** risk no. 1 is stdio (= code execution on the host). Hence admin approval and non-root; risk no. 2 SSRF (P0-9); risk no. 3 manipulated tool descriptions (P1).
+- **Handling of the model project (`MikkoParkkola/mcp-gateway`, Rust):** we may read the source code and use it as inspiration for concepts, data flow and edge cases. **No code is copied or translated 1:1 to TypeScript**; the implementation arises independently from the spec and the MCP specification. Reason: per `LICENSES.md` the license is PolyForm-Noncommercial 1.0.0 for all own files (older releases partly had MIT headers, which no longer applies at present), commercial use needs a separate license. Adopted ideas are not marked as copies in the code, but recorded in `docs/inspirations.md` as the source of the idea (file, concept, what we solve differently).
 
-**Leading (1–2 Wochen)**
-- Alle meine Clients nutzen genau **einen** Eintrag, alte Einzeleinträge entfernt (100 %).
-- Client-Erstverbindung per OAuth ≤ 60 s und ohne manuelles Token-Kopieren in ≥ 2 verschiedenen Clients.
-- Neuer Upstream bis nutzbar ≤ 2 min.
-- Gateway-Overhead pro `tools/call` p95 ≤ 50 ms; `tools/list` aus Cache ≤ 200 ms bei 10 Upstreams.
-- 0 Treffer in Isolationstest (Nutzer B erreicht Daten von A) und SSRF-Test (Metadaten-IP, private IPs blockiert).
+## Success criteria
 
-**Lagging (1–3 Monate)**
-- 0 Secrets in Client-Configs.
-- Token-Rotation eines Upstreams: 1 Änderung statt n.
-- Gemessene `tools/list`-Größe pro Client sinkt gegenüber vorher.
-- Verfügbarkeit des Containers ≥ 99 % (Selbstbeobachtung über Healthcheck).
+**Leading (1–2 weeks)**
+- All my clients use exactly **one** entry, old individual entries removed (100 %).
+- First client connection via OAuth ≤ 60 s and without manual token copying in ≥ 2 different clients.
+- New upstream until usable ≤ 2 min.
+- Gateway overhead per `tools/call` p95 ≤ 50 ms; `tools/list` from cache ≤ 200 ms with 10 upstreams.
+- 0 hits in the isolation test (user B reaches data of A) and the SSRF test (metadata IP, private IPs blocked).
 
-## Offene Fragen
+**Lagging (1–3 months)**
+- 0 secrets in client configs.
+- Token rotation of an upstream: 1 change instead of n.
+- Measured `tools/list` size per client drops compared to before.
+- Container availability ≥ 99 % (self-observation via healthcheck).
 
-**Blockierend**
-1. ~~LLM für das Routing~~ **Entschieden:** Modell des Aufrufers per MCP, adversarial behandelt (P1 Routing). Kein Anbieter, kein Key im Gateway. Offen und nicht blockierend: Welche der Ziel-Clients unterstützen Sampling? Das bestimmt, wie oft der Tool-Dialog (b) der Normalfall ist. — *Engineering, Messung in Phase 3*
-1a. ~~Upstream-OAuth-Redirect ohne DCR~~ **Entschieden:** out of scope, bis es jemand braucht (siehe Nicht-Ziele).
-2. ~~Wer sind die Endnutzer?~~ **Entschieden:** erst ich, später Team/Freunde → Mehrnutzerfähigkeit (Einladung, Isolation, Nutzersperre) bleibt P0, geteilte Upstreams P2.
-3. ~~stdio auf öffentlichem Host~~ **Entschieden:** Ein Node-Worker pro Nutzer kapselt dessen stdio-Prozesse (P0-5). Freigabe für Nicht-Admins bleibt eine Admin-Entscheidung pro Nutzer, weil Netzwerk und Kernel geteilt sind. **UID-Wechsel per Capabilities entschieden:** Container startet mit `cap_drop: ALL` und `cap_add: SETUID, SETGID, CHOWN` (CHOWN nur zum Anlegen der Nutzerverzeichnisse). Technisches Detail zur Umsetzung: Die Web-App läuft unprivilegiert; ein kleiner separater Supervisor-Prozess hält die Capabilities, startet die Worker unter der Nutzer-UID und nimmt nur Befehle der Web-App über einen Unix-Socket entgegen. So hat der Prozess, der HTTP-Anfragen aus dem Internet bedient, nie diese Rechte. Ist der Container ohne die Capabilities gestartet, schaltet sich stdio für Nicht-Admins ab (siehe P0-5). — *erledigt, Umsetzung beim Dockerfile-Entwurf*
-4. ~~Better-Auth-Spike~~ **Entschieden:** Better Auth trägt OAuth für MCP-Clients, in der Praxis mit mehreren Tools getestet. Kein eigener OAuth-Layer, kein Spike. **Abnahme P0-2:** Claude Code und Cursor; Claude Desktop/Web bei der ersten öffentlichen Instanz.
+## Open questions
 
-**Nicht blockierend**
-4a. ~~Valkey~~ **Entschieden:** raus. Cache für Tool-Listen und Routing-Ergebnisse ist In-Memory.
-5. Domain/Hosting-Ort und Reverse-Proxy (Streaming-Puffer, Timeouts)? — *Christian*
-6. Idle-Timeout stdio (Vorschlag 10 min), Limit gleichzeitiger Prozesse pro Nutzer (Vorschlag 5)? — *Engineering*
-7. Soll der Aufruf-Log Parameter/Ergebnisse speichern können (Debugging vs. Datenschutz)? — *Christian*
-8. ~~Dynamic Client Registration~~ **Entschieden:** Admin-Einstellung mit Allowlist gängiger Tools, unbekannte Clients bekommen eine Warnung (P0-2). Upstreams ohne DCR sind out of scope, bis jemand sie braucht; die Link-Seite meldet dann „nicht unterstützt".
-9. ~~Sollen neu entdeckte Upstream-Tools standardmäßig aktiv sein?~~ **Entschieden (2026-11-04): ja, bis die Tool-Poisoning-Prüfung (P1) existiert.** Ursprüngliche Frage: Sollen neu entdeckte Upstream-Tools standardmäßig aktiv sein? Die Spec schweigt (P0-7); der Review empfiehlt „ja“, bis die Tool-Poisoning-Prüfung (P1) existiert. — *Christian*
-10. ~~Phase-1-Defaults~~ **Entschieden (2026-11-04): übernommen.** Vorschlag aus dem Review: Phase-1-Defaults für stdio übernehmen (Frage 6: Idle 10 min, max. 5 Kindprozesse). — *Christian*
-11. ~~UI-Abgleich (acht Fragen)~~ **Entschieden (2026-11-04):** Frontend besitzt `app/**`; Token-Link-Einladung; keine Mailfunktionen und keine Selbstlöschung; Dashboard und Audit-Lesen ab Phase 1; Admin-Scope im Consent abwählbar; Audit nach Nutzer, Admin zusätzlich Instanzereignisse; Tags/Gerätenamen gestrichen, „Alle testen“ später, Heatmap nur mit `health-history`; Dunkelmodus nach Phase 2. Einarbeitung siehe „Änderungen ggü. v0.4“.
+**Blocking**
+1. ~~LLM for routing~~ **Decided:** the caller's model via MCP, treated adversarially (P1 routing). No provider, no key in the gateway. Open and non-blocking: which of the target clients support sampling? This determines how often the tool dialog (b) is the normal case. — *Engineering, measurement in phase 3*
+1a. ~~Upstream OAuth redirect without DCR~~ **Decided:** out of scope until someone needs it (see non-goals).
+2. ~~Who are the end users?~~ **Decided:** first me, later team/friends → multi-user capability (invitation, isolation, user ban) stays P0, shared upstreams P2.
+3. ~~stdio on a public host~~ **Decided:** one Node worker per user encapsulates their stdio processes (P0-5). Approval for non-admins remains an admin decision per user, because network and kernel are shared. **UID switch via capabilities decided:** the container starts with `cap_drop: ALL` and `cap_add: SETUID, SETGID, CHOWN` (CHOWN only for creating the user directories). Technical detail of the implementation: the web app runs unprivileged; a small separate supervisor process holds the capabilities, starts the workers under the user UID and accepts only commands of the web app via a Unix socket. This way the process that serves HTTP requests from the internet never has these rights. If the container is started without the capabilities, stdio switches off for non-admins (see P0-5). — *done, implementation with the Dockerfile draft*
+4. ~~Better Auth spike~~ **Decided:** Better Auth carries OAuth for MCP clients, tested in practice with several tools. No own OAuth layer, no spike. **Acceptance P0-2:** Claude Code and Cursor; Claude Desktop/Web with the first public instance.
 
-## Phasen
+**Non-blocking**
+4a. ~~Valkey~~ **Decided:** out. The cache for tool lists and routing results is in-memory.
+5. Domain/hosting location and reverse proxy (streaming buffer, timeouts)? — *Christian*
+6. Idle timeout stdio (proposal 10 min), limit of simultaneous processes per user (proposal 5)? — *Engineering*
+7. Should the call log be able to store parameters/results (debugging vs. privacy)? — *Christian*
+8. ~~Dynamic Client Registration~~ **Decided:** admin setting with an allowlist of common tools, unknown clients get a warning (P0-2). Upstreams without DCR are out of scope until someone needs them; the link page then reports "nicht unterstützt" (not supported).
+9. ~~Should newly discovered upstream tools be active by default?~~ **Decided (2026-11-04): yes, until the tool-poisoning check (P1) exists.** Original question: should newly discovered upstream tools be active by default? The spec is silent (P0-7); the review recommends "yes" until the tool-poisoning check (P1) exists. — *Christian*
+10. ~~Phase 1 defaults~~ **Decided (2026-11-04): adopted.** Proposal from the review: adopt the phase 1 defaults for stdio (question 6: idle 10 min, max. 5 child processes). — *Christian*
+11. ~~UI comparison (eight questions)~~ **Decided (2026-11-04):** the frontend owns `app/**`; token-link invitation; no mail features and no self-deletion; dashboard and audit reading from phase 1; admin scope in the consent deselectable; audit by user, admin additionally instance events; tags/device names dropped, "Alle testen" later, heatmap only with `health-history`; dark mode after phase 2. For incorporation see "Changes vs. v0.4".
+12. ~~Mail sending~~ **Decided (2026-11-05): optional instead of a non-goal.** Without `SMTP_URL` everything stays as before (link invitations, no mail server needed). Order: password reset (built) → invitation and status mails with opt-out (after phase 1) → email change and self-deletion (P2). Replaces the partial decision "no mail features" from question 11.
 
-- **Phase 0a (Fundament, zuerst):** Nuxt-4-Gerüst, Drizzle + PGlite (P0-11), Better-Auth-Adapter (Postgres) und dessen generiertes Schema inkl. `admin()`-Plugin (`role`, `banned`; Migration 0000), Migrationen beim Start, Master-Key-Prüfung. Better Auth speichert Nutzer, Sessions, OAuth-Clients, Codes und Tokens in der DB; ohne diese Schicht läuft weder Login noch OAuth. Fertig, wenn Registrierung/Login (erster Nutzer = Admin, atomar) gegen PGlite funktionieren, ein Neustart die Daten behält und derselbe Testsatz mit `DATABASE_URL` auf einen Postgres-Container ebenfalls grün ist. Der Umstiegstest PGlite→Postgres (Dump/Import) gehört **nicht** zur Abnahme, sondern zu Phase 1.
-- **Phase 0b (OAuth-Provider, braucht 0a):** Better Auth als OAuth-Provider für `/mcp` einbinden (P0-2, Scope `mcp:tools`, Widerruf pro Request) und mit Claude Code und Cursor verbinden; P0-3 (PAT) wird hier vorgezogen. Kein Spike mehr nötig, da bereits getestet; Phase dient als erster vertikaler Durchstich: Login → Consent → Token → `tools/list` mit einem Dummy-Upstream.
-- **Phase 1 (Kern):** P0-1 bis P0-7, P0-9 bis P0-11 und P0-16 (Dashboard ohne KPIs, Audit-Lesen). Meilenstein 1.1 enthält die Nutzerverwaltung aus P0-4 (Einladungslinks, Nutzerliste, Sperren/Entsperren, Löschen, Limits je Nutzer). Vom Resilienz- und Statistikteil: Minimum von P0-14 (Timeouts, einfacher Breaker, Status, `/healthz`, `/readyz`, Graceful Shutdown) und P0-15 (Schreibpfad der Messdaten). Dazu der Umstiegstest PGlite→Postgres (P0-11). Nach Abschluss alle Clients umstellen.
-- **Phase 2 (Selbstbedienung):** P0-12 Verwaltungs-Tools + Link-Flow, P0-13 Upstream-OAuth, P0-8 REST-Tools; Rest von P0-14 (aktiver Ping, Idempotent-Retry; `health-history`, falls Verfügbarkeit/Heatmap gebaut werden) und P0-15 (Perzentile, Rollups, Statistik-Seite, `get_stats`); Dashboard-KPIs und Diagramme; Admin-Scope im Consent (zwei Schalter). Danach Dunkelmodus.
-- **Phase 3 (Routing):** Keyword-Vorfilter + Auswahl durch den Aufrufer (Sampling oder Tool-Dialog) mit serverseitiger Prüfung, Eval-Skript inkl. Adversarial-Tests, Aufruf-Log, Import, Profile.
-- **Phase 4:** Tool-Poisoning-Prüfung, Prompts/Resources.
+## Phases
 
-Keine harten Deadlines.
+- **Phase 0a (foundation, first):** Nuxt 4 scaffold, Drizzle + PGlite (P0-11), Better Auth adapter (Postgres) and its generated schema incl. the `admin()` plugin (`role`, `banned`; migration 0000), migrations at startup, master key check. Better Auth stores users, sessions, OAuth clients, codes and tokens in the DB; without this layer neither login nor OAuth runs. Done when registration/login (first user = admin, atomic) work against PGlite, a restart keeps the data, and the same test set with `DATABASE_URL` pointing to a Postgres container is green as well. The PGlite→Postgres switch test (dump/import) is **not** part of the acceptance but of phase 1.
+- **Phase 0b (OAuth provider, needs 0a):** integrate Better Auth as the OAuth provider for `/mcp` (P0-2, scope `mcp:tools`, revocation per request) and connect with Claude Code and Cursor; P0-3 (PAT) is pulled forward here. No spike needed any more since already tested; the phase serves as the first vertical slice: login → consent → token → `tools/list` with a dummy upstream.
+- **Phase 1 (core):** P0-1 to P0-7, P0-9 to P0-11 and P0-16 (dashboard without KPIs, audit reading). Milestone 1.1 contains the user management from P0-4 (invitation links, user list, ban/unban, delete, per-user limits). From the resilience and statistics part: minimum of P0-14 (timeouts, simple breaker, status, `/healthz`, `/readyz`, graceful shutdown) and P0-15 (write path of the measurement data). Plus the PGlite→Postgres switch test (P0-11). After completion switch over all clients.
+- **Phase 2 (self-service):** P0-12 management tools + link flow, P0-13 upstream OAuth, P0-8 REST tools; rest of P0-14 (active ping, idempotent retry; `health-history` if availability/heatmap are built) and P0-15 (percentiles, rollups, statistics page, `get_stats`); dashboard KPIs and charts; admin scope in the consent (two switches). Then dark mode.
+- **Phase 3 (routing):** keyword pre-filter + selection by the caller (sampling or tool dialog) with server-side checking, eval script incl. adversarial tests, call log, import, profiles.
+- **Phase 4:** tool-poisoning check, prompts/resources.
+
+No hard deadlines.

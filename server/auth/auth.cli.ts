@@ -1,0 +1,17 @@
+// Only for `auth generate` (scripts/gen-auth-schema.sh). Never loaded at runtime.
+// Relative imports, valid baseURL (otherwise abort with "Invalid URL").
+import { betterAuth } from 'better-auth'
+import { drizzleAdapter } from '@better-auth/drizzle-adapter'
+import { buildAuthOptions } from './options'
+
+export const auth = betterAuth({
+  ...buildAuthOptions({
+    baseUrl: 'http://localhost:3000',
+    secret: 'cli-dummy-secret-cli-dummy-secret-0000',
+    allowedOrigins: ['http://localhost:3000'],
+    rateLimitEnabled: false,
+    trustProxy: 0,
+    countUsers: async () => 0,
+  }),
+  database: drizzleAdapter({} as never, { provider: 'pg' }),
+})

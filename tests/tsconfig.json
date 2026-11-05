@@ -1,0 +1,14 @@
+{
+  // Self-contained, so that Vitest/oxc never resolves a tsconfig for tests from a parent directory (e.g. another checkout).
+  "compilerOptions": {
+    "target": "ES2023",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "strict": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "types": ["node"],
+    "paths": { "#shared/*": ["../shared/*"], "~~/*": ["../*"] }
+  },
+  "include": ["./**/*", "../server/**/*", "../shared/**/*", "../supervisor/**/*"]
+}

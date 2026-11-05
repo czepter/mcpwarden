@@ -1,135 +1,137 @@
-# Review der Umsetzungspläne 0a, 0b, 1
+# Review of the implementation plans 0a, 0b, 1
 
-Stand: 2026-11-04 · Grundlage: `docs/spec.md` v0.3, `docs/plans/phase-0a.md`, `phase-0b.md`, `phase-1.md`
-Spec und Pläne wurden nicht geändert. „Geprüft“ heißt: gegen npm-Registry, offizielle Doku, Paket-Typdefinitionen oder per Spike nachvollzogen. „Unverifiziert“ ist markiert.
+As of: 2026-11-04 · Basis: `docs/spec.md` v0.3, `docs/plans/phase-0a.md`, `phase-0b.md`, `phase-1.md`
+Spec and plans were not changed. "Checked" means: verified against the npm registry, official docs, package type definitions or via a spike. "Unverified" is marked.
 
-## Kurzfazit
+Language: this document is English; the product UI is German by decision.
 
-Die drei Pläne sind einzeln brauchbar, passen aber an den Nahtstellen nicht zusammen: fast jede „Erwartung an 0a“ aus 0b und Phase 1 nennt andere Pfade, Exporte und Helfer, als 0a liefert. Dazu kommen zwei Lücken, die keiner der Pläne abdeckt: Admin-Funktionen aus P0-4 (erster Nutzer = Admin, Einladung/Allowlist, Nutzer sperren/löschen) und der Umstiegstest PGlite→Postgres (P0-11). Der PGlite-Spike ist erledigt und grün (siehe S1), 0a hängt also nicht mehr an U2. Ein Startproblem in 0a ist blockierend: Nitro wartet asynchrone Plugins nicht ab (B1).
-**Freigabe:** 0a **ja nach Korrektur von B1, B2, B3** · 0b **nein**, erst nach Schnittstellenabgleich (Abschnitt „Schnittstellen“) · Phase 1 **nein**, erst nach B2, B4, B5, B6 und Schnittstellenabgleich.
+## Short summary
 
-## Geprüfte Fakten (Belege für die Befunde)
+The three plans are usable individually, but do not fit together at the seams: almost every "expectation of 0a" from 0b and phase 1 names different paths, exports and helpers than 0a delivers. In addition there are two gaps that none of the plans covers: admin functions from P0-4 (first user = admin, invitation/allowlist, ban/delete users) and the PGlite→Postgres switch test (P0-11). The PGlite spike is done and green (see S1), so 0a no longer depends on U2. One startup problem in 0a is blocking: Nitro does not await asynchronous plugins (B1).
+**Approval:** 0a **yes after correction of B1, B2, B3** · 0b **no**, only after the interface reconciliation (section "Interfaces") · phase 1 **no**, only after B2, B4, B5, B6 and the interface reconciliation.
 
-| ID | Geprüft | Ergebnis |
+## Checked facts (evidence for the findings)
+
+| ID | Checked | Result |
 |---|---|---|
-| S1 | Spike im Scratchpad: `better-auth` 1.7.17 + `@better-auth/drizzle-adapter` 1.7.17 (`provider: 'pg'`) + `drizzle-orm` 0.45.4 + `@electric-sql/pglite` 0.5.15, Node 24.13 | Sign-up 200, Sign-in 200, 30 parallele `getSession` ok, `migrate()` zweimal → 1 Eintrag in `drizzle.__drizzle_migrations`, Neustart mit gleichem `dataDir` ok. U2 (0a) ist damit erledigt. Nicht geprüft: Lauf innerhalb Nuxt/Nitro. |
-| S2 | `npx auth@1.7.17 generate --help` | `--dialect postgresql` (wird für Drizzle auf `pg` abgebildet). U1 (0a) erledigt. Generiertes Schema: `id text`, Spalten explizit snake_case (`email_verified`, `user_id`). |
-| S3 | Schema-Generierung mit `admin()`, `jwt()`, `mcp()` | Tabellen: user, session, account, verification, jwks, oauth_client, **oauth_resource**, **oauth_client_resource**, oauth_refresh_token, oauth_access_token, oauth_consent, oauth_client_assertion. `admin()` ergänzt `role`, `banned`, `ban_reason`, `ban_expires`. CLI-Config mit `mcp()` braucht `baseURL`, sonst Abbruch („Invalid URL“); `mcp()` versucht beim Start `resources` in die DB zu schreiben. |
-| S4 | `nitropack@2.13.6` `runtime/internal/app.mjs` | `runNitroPlugins` ruft `plugin(nitroApp)` ohne `await`. Async-Plugins laufen also nebenläufig zum ersten Request. U4 (0a) ist **widerlegt**. |
-| S5 | `@nuxt/nitro-server@4.6.4` | h3 `^1.15.11`, nitropack `^2.13.6`. `toWebRequest(event)` ist der richtige Weg (0b Punkt 8 erledigt). |
-| S6 | `@nuxt/test-utils` 4.3.4 Peers | `vitest ^4.0.2 \|\| ^5.0.0`: Kompatibilität laut Peer gegeben (0a-Begründung „unverifiziert“ trifft nicht mehr zu). |
-| S7 | `@modelcontextprotocol/client` 2.4.0 Typen | `StreamableHTTPClientTransport` und `SSEClientTransport` haben `fetch?: FetchLike`; `RequestOptions` hat `signal`, `timeout`, `maxTotalTimeout`. Phase-1-Risiko R6 und „unverifiziert: timeout/signal“ sind damit entschärft. |
-| S8 | `@modelcontextprotocol/server` 2.4.0 Typen | `createMcpHandler` Optionen `legacy: 'stateless' \| 'reject'` (Default stateless), `bus`, `maxSubscriptions`, `keepAliveMs`; Rückgabe `{ fetch, close, notify, bus }`. `subscriptions/listen` wird unterstützt, `notify` publiziert `tools_list_changed` an **alle** offenen Listen-Streams des Handlers. Low-Level-Klasse `Server` ist exportiert, ebenso `originValidationResponse`, `hostHeaderValidationResponse`, `isLegacyRequest`. |
-| S9 | MCP-Spec 2026-07-28 (Transports, Streamable HTTP) | Keine Sessions, kein GET-Stream; `list_changed` über `subscriptions/listen`; Sampling/Elicitation über MRTR (`InputRequiredResult`), Server senden keine Requests mehr; Abbruch auf Streamable HTTP = Schließen des Antwort-Streams, `notifications/cancelled` nur noch auf stdio; Origin vorhanden und ungültig → MUST 403. |
-| S10 | Better-Auth-Doku `mcp`, `oauth-provider` | `mcp()` ersetzt `oauthProvider()`, `jwt()` Pflicht; JWT-Access-Tokens serverseitig nicht widerrufbar, deaktivierter Client: bestehende JWTs bleiben bis Ablauf gültig; Refresh-Rotation mit Reuse-Erkennung (`refreshTokenReuseInterval` bei `mcp()` 30 s); Rate-Limits `/oauth2/register` 5/60 s, `/oauth2/token` 20/60 s, nur bei aktivem globalem Rate-Limit (Standard: nur Produktion). Doku-Beispiel nutzt `legacy: "reject"`. Für DCR gibt es `clientPrivileges` (kann `create` verweigern); ob das für anonyme DCR greift, ist unverifiziert. |
-| S11 | `@electric-sql/pglite-tools` 0.4.15 `pgDump({ pg })` auf Spike-DB | SQL-Dump mit Daten (`user`) und `drizzle`-Schema erzeugt. Import in Postgres nicht getestet. O3 (0a) ist technisch machbar. |
-| S12 | libuv `src/unix/process.c` (v1.x) | Bei gesetztem `uid`/`gid` ruft libuv `setgroups(0, NULL)` vor `setgid`/`setuid`. Zusatzgruppen werden geleert, wenn `CAP_SETGID` vorhanden ist. Phase-1-R4 weitgehend erledigt; Pflichttest `id -G` bleibt sinnvoll. |
-| S13 | npm-Versionen | Alle in den Plänen genannten Versionen stimmen (nuxt 4.6.4, better-auth 1.7.17, drizzle-orm 0.45.4, drizzle-kit 0.31.11, pglite 0.5.15, SDK v1 1.32.2 / v2 2.4.0, `@modelcontextprotocol/node` 2.1.2, vitest 5.1.0, typescript 7.0.2, zod 4.6.7, undici 8.12.3). |
+| S1 | Spike in the scratchpad: `better-auth` 1.7.17 + `@better-auth/drizzle-adapter` 1.7.17 (`provider: 'pg'`) + `drizzle-orm` 0.45.4 + `@electric-sql/pglite` 0.5.15, Node 24.13 | Sign-up 200, sign-in 200, 30 parallel `getSession` ok, `migrate()` twice → 1 entry in `drizzle.__drizzle_migrations`, restart with the same `dataDir` ok. U2 (0a) is thereby settled. Not checked: a run inside Nuxt/Nitro. |
+| S2 | `npx auth@1.7.17 generate --help` | `--dialect postgresql` (mapped to `pg` for Drizzle). U1 (0a) settled. Generated schema: `id text`, columns explicitly snake_case (`email_verified`, `user_id`). |
+| S3 | Schema generation with `admin()`, `jwt()`, `mcp()` | Tables: user, session, account, verification, jwks, oauth_client, **oauth_resource**, **oauth_client_resource**, oauth_refresh_token, oauth_access_token, oauth_consent, oauth_client_assertion. `admin()` adds `role`, `banned`, `ban_reason`, `ban_expires`. The CLI config with `mcp()` needs `baseURL`, otherwise abort ("Invalid URL"); `mcp()` tries to write `resources` into the DB at startup. |
+| S4 | `nitropack@2.13.6` `runtime/internal/app.mjs` | `runNitroPlugins` calls `plugin(nitroApp)` without `await`. Async plugins thus run concurrently with the first request. U4 (0a) is **refuted**. |
+| S5 | `@nuxt/nitro-server@4.6.4` | h3 `^1.15.11`, nitropack `^2.13.6`. `toWebRequest(event)` is the right way (0b point 8 settled). |
+| S6 | `@nuxt/test-utils` 4.3.4 peers | `vitest ^4.0.2 \|\| ^5.0.0`: compatibility given per peer (the 0a rationale "unverified" no longer applies). |
+| S7 | `@modelcontextprotocol/client` 2.4.0 types | `StreamableHTTPClientTransport` and `SSEClientTransport` have `fetch?: FetchLike`; `RequestOptions` has `signal`, `timeout`, `maxTotalTimeout`. Phase 1 risk R6 and "unverified: timeout/signal" are thereby defused. |
+| S8 | `@modelcontextprotocol/server` 2.4.0 types | `createMcpHandler` options `legacy: 'stateless' \| 'reject'` (default stateless), `bus`, `maxSubscriptions`, `keepAliveMs`; return `{ fetch, close, notify, bus }`. `subscriptions/listen` is supported, `notify` publishes `tools_list_changed` to **all** open listen streams of the handler. The low-level class `Server` is exported, as are `originValidationResponse`, `hostHeaderValidationResponse`, `isLegacyRequest`. |
+| S9 | MCP spec 2026-07-28 (transports, Streamable HTTP) | No sessions, no GET stream; `list_changed` via `subscriptions/listen`; sampling/elicitation via MRTR (`InputRequiredResult`), servers no longer send requests; abort on Streamable HTTP = closing the response stream, `notifications/cancelled` only on stdio; origin present and invalid → MUST 403. |
+| S10 | Better Auth docs `mcp`, `oauth-provider` | `mcp()` replaces `oauthProvider()`, `jwt()` mandatory; JWT access tokens not revocable server-side, disabled client: existing JWTs stay valid until expiry; refresh rotation with reuse detection (`refreshTokenReuseInterval` for `mcp()` 30 s); rate limits `/oauth2/register` 5/60 s, `/oauth2/token` 20/60 s, only with the global rate limit active (default: production only). The docs example uses `legacy: "reject"`. For DCR there is `clientPrivileges` (can refuse `create`); whether it applies to anonymous DCR is unverified. |
+| S11 | `@electric-sql/pglite-tools` 0.4.15 `pgDump({ pg })` on the spike DB | SQL dump with data (`user`) and `drizzle` schema produced. Import into Postgres not tested. O3 (0a) is technically feasible. |
+| S12 | libuv `src/unix/process.c` (v1.x) | With `uid`/`gid` set, libuv calls `setgroups(0, NULL)` before `setgid`/`setuid`. Supplementary groups are cleared if `CAP_SETGID` is present. Phase 1 R4 largely settled; the mandatory test `id -G` stays sensible. |
+| S13 | npm versions | All versions named in the plans are correct (nuxt 4.6.4, better-auth 1.7.17, drizzle-orm 0.45.4, drizzle-kit 0.31.11, pglite 0.5.15, SDK v1 1.32.2 / v2 2.4.0, `@modelcontextprotocol/node` 2.1.2, vitest 5.1.0, typescript 7.0.2, zod 4.6.7, undici 8.12.3). |
 
-## Befunde
+## Findings
 
-| ID | Plan / Abschnitt | Schwere | Befund | Korrektur |
+| ID | Plan / section | Severity | Finding | Correction |
 |---|---|---|---|---|
-| B1 | 0a Task 7, U3/U4; Phase 1 §3 Plugins | blockierend | Nitro wartet async Plugins nicht ab (S4). `00-init.ts` mit `await getDb(); await runMigrations()` lässt Requests vor Ende der Migration zu; Phase-1-Plugin `20.gateway` startet vor der Migration. | Init als memoisiertes Promise in `getDb()` (Migration läuft darin genau einmal), `getAuth()` wartet darauf. Alle DB-Konsumenten sind damit automatisch abgesichert. Plugin startet nur `getDb().catch(exit(1))`. `/readyz` bleibt. U4 im Plan als widerlegt führen. |
-| B2 | 0a O1/§8, 0b E8/E10/E11/E13, Phase 1 §3 | blockierend | P0-4 hat keinen Eigentümer: „erster Nutzer = Admin“, Rolle, `banned`, `requireAdmin`, Einladung/Allowlist, Admin-Seite (Nutzer auflisten, sperren, löschen), `onUserDisabled/Deleted`. 0a schiebt nach Phase 1, Phase 1 setzt es bei 0a/0b voraus, 0b braucht es schon für die DCR-Admin-Seite und den Sperr-Check. | 0a: `admin()`-Plugin in Migration 0000 (S3), Hook „erster Nutzer bekommt `role=admin`“, `requireAdmin`. Phase 1: neue Aufgabe in 1.1 „Einladungen/Allowlist, Nutzerliste, Sperren (Sessions, OAuth-Refresh-Tokens, PATs), Löschen“ inkl. `user-lifecycle.ts`. |
-| B3 | 0a O1, Task 8 | wichtig | Registrierungssperre per `count(*)` im `before`-Hook ist ein Race: zwei parallele Erst-Registrierungen kommen beide durch (zwei Admins). Außerdem kann nach der Sperre kein Test einen zweiten Nutzer anlegen, 0b/Phase 1 brauchen aber Nutzer B für Isolationstests. | Sign-up in einem prozessweiten Mutex serialisieren (Single-Instance reicht). Zweite Nutzer in Tests über `auth.api.createUser` des Admin-Plugins anlegen; Helfer `createUser()` in 0a-Harness. |
-| B4 | Phase 1 §1/§7, Spec P0-11 | blockierend (Abdeckung) | Umstiegstest Dump PGlite → Import Postgres → Start mit neuer `DATABASE_URL` steht in keinem Plan (0a O3 verweist auf Phase 1, Phase 1 hat ihn nicht). | Aufgabe in Phase 1 (z. B. 1.4.3): `pgDump` (S11) → `psql` in Postgres-Container → App mit `DATABASE_URL` → Login und Upstreams vorhanden. CI-Job. README-Abschnitt Backup/Umstieg. |
-| B5 | Phase 1 §4.1, 1.3.1, 1.3.2 | blockierend (Sicherheit) | `ensureWorker({userId, uid})` kommt von der Web-App. Der Plan prüft nicht, dass der Supervisor die UID validiert. Eine kompromittierte Web-App könnte `uid: 0` oder die eigene UID anfordern; ein Kind mit UID 0 behält die permitted Capabilities (SETUID) und kann jede UID annehmen. | Supervisor akzeptiert nur `uid` im festen Bereich (≥ 20000, ≠ Web-UID, ≠ 0), `gid = uid`, `cwd` nur unter dem eigenen stdio-Baum. Test mit gefälschtem Befehl. |
-| B6 | Phase 1 1.3.1 | blockierend (Sicherheit) | `DATA_DIR` wird an die Web-UID gechownt, `DATA_DIR/stdio` liegt darin. Die Web-App kann `stdio` umbenennen und durch Symlinks ersetzen; der Supervisor (root, `CAP_CHOWN`) chownt dann beliebige Pfade an eine Nutzer-UID. | Getrennte Bäume: `DATA_DIR` root-eigen 0755, `DATA_DIR/app` (pgdata) Web-UID, `DATA_DIR/stdio` root 0711. Nutzerverzeichnisse mit `mkdir` (exklusiv) + `lchown`/`O_NOFOLLOW`-Prüfung anlegen. Abweichung von Spec-Pfad `DATA_DIR/stdio/<user_id>` (Plan nutzt `<uid>`) in Spec übernehmen. |
-| B7 | Phase 1 1.1.4 | wichtig (Sicherheit) | Prüfung über undici `connect.lookup` greift bei IP-Literalen nicht (kein DNS-Lookup). Die Testmatrix enthält Literale, die Umsetzung deckt sie nicht ab. | `assertPublicAddress()` zusätzlich auf literale Hosts vor dem Connect (nach WHATWG-URL-Normalisierung, die Dezimal/Hex/Oktal auflöst). Blockliste um `192.0.2/24`, `198.51.100/24`, `203.0.113/24`, `2001:db8::/32`, `2002::/16` (6to4, eingebettete v4 prüfen) ergänzen. SDK-Transporte bekommen eigene `fetch` (S7); `redirect: 'error'` für MCP-Transporte statt manuellem Folgen. |
-| B8 | Phase 1 §4.1 | wichtig (Sicherheit) | Der Root-Supervisor parst alle MCP-Frames zwischen Web-App und Worker. Damit liegt jeder Byte aus fremden stdio-Kindern im Datenpfad des privilegierten Prozesses. | Supervisor reicht pro Worker eine angenommene Socket-Verbindung der Web-App als `stdio[3]` an den Worker durch (`spawn`-Option `stdio` akzeptiert Socket-Streams, FD wird dupliziert; Node-Doku, nicht live geprüft). Danach fließen Daten direkt Web-App ↔ Worker. Falls verworfen: Framegröße hart begrenzen. |
-| B9 | 0b Annahme 2, R11; Phase 1 E2, R2 | wichtig | „Ohne Session kein `list_changed`-Push“ stimmt nur für 2025er-Clients. 2026-07-28-Clients nutzen `subscriptions/listen`, `createMcpHandler` bringt Bus und `notify` mit (S8, S9). | Phase 1: `tools_list_changed` beim Deaktivieren/Toggle publizieren. Achtung Mandantentrennung: `notify` geht an alle Streams des Handlers. Entweder Handler je Nutzer oder Bus, der nach `userId` filtert. 2025er-Clients: kein Push, akzeptieren. |
-| B10 | Phase 1 §6, 1.2.6; Spec P0-14 | wichtig | Abbruch per `notifications/cancelled` gilt bei 2026-Upstreams über HTTP nicht mehr; dort ist Stream-Schließen der Abbruch (S9). Der Testplan erwartet `cancelled` beim Fake. | Test je Ära: HTTP-2026 → Fake sieht Verbindungsabbruch; Legacy/stdio → `notifications/cancelled`. Spec-Text P0-14 anpassen. |
-| B11 | 0b Aufgabe 6, A5 | wichtig | Zusatzprüfung pro Request deckt Nutzer gesperrt, Client deaktiviert, Consent gelöscht ab. Ein einzelner Token-Widerruf (RFC 7009 auf Refresh-Token, Consent bleibt) wirkt erst nach Ablauf des JWT. Spec-Randfall „Token/Session widerrufen → 401 beim nächsten Request“ ist damit für diesen Fall nicht erfüllt. | Entweder zusätzlich prüfen, ob für `(user, client)` noch ein gültiger Refresh-Token existiert, oder Abweichung (≤ TTL 5 min) in Spec dokumentieren. Empfehlung: Prüfung ergänzen, eine Query mehr. |
-| B12 | 0b Aufgabe 1 Schritt 4 | klein | Tabellenliste unvollständig: `oauth_resource`, `oauth_client_resource` fehlen (S3). `mcp()` schreibt beim Start Resources in die DB; mit 0a-`auth.cli.ts` (`{} as never` als DB) gibt es eine Fehlermeldung beim Generieren, die Generierung klappt mit gesetzter `baseURL`. | Liste korrigieren; `auth.cli.ts` setzt `baseURL`. |
-| B13 | 0b Aufgabe 2 | klein | Protected-Resource-Metadata liefert `mcp()` selbst (S10), aber nur unter dem Auth-Handler. Eigenbau parallel dazu driftet. | Root-Routen `/.well-known/*` an `auth.handler` bzw. die Plugin-Helfer durchreichen statt JSON selbst zu bauen. |
-| B14 | 0b Aufgabe 4 Schritt 2 | klein | DCR-Gate: vor der Nitro-Middleware `clientPrivileges` (kann `create` verweigern) prüfen; Wirkung bei anonymer DCR unverifiziert. | Im Spike von Aufgabe 1 testen; Middleware nur als Fallback. |
-| B15 | 0b Aufgabe 3 Schritt 3 | klein | „Spec verlangt Hostname-Anzeige und Zusatzwarnung bei localhost“: steht nicht in `spec.md` (stammt aus der MCP-Spec). | Quelle richtig benennen; Anforderung behalten. |
-| B16 | 0a Task 10, 0b 6.1 | wichtig | Tests laufen gegen das Build (`NODE_ENV=production`), dort ist das Better-Auth-Rate-Limit aktiv (Standard: nur Produktion). Mehrere Sign-ins je Test laufen in 429. 0b will Rate-Limits je Testlauf an/aus. 0a verbietet neue ENV-Variablen ohne Spec-Änderung. | Eine Test-ENV (z. B. `RATE_LIMIT=off`) in die ENV-Liste aufnehmen (siehe E7) oder Limits per Testkonfig über Admin-Einstellung schalten. |
-| B17 | Phase 1 §1 A12, 1.2.7 | klein | Abnahmekriterium Overhead p95 hängt am eigenen Stats-Schreibpfad; ein Fehler dort verfälscht den Beleg. | Overhead zusätzlich im Lastskript außen messen (Client-Zeit minus Fake-Upstream-Zeit). |
-| B18 | Spec „Phasen“ | wichtig | P0-14 und P0-15 sind keiner Phase zugeordnet; Phase 1 nimmt Teile (E3), den Rest „Phase 2“, Spec-Phase 2 kennt sie nicht. P0-3 (PAT) gehört laut Spec zu Phase 1, 0b zieht es vor (sinnvoll). | Spec-Phasen ergänzen: P0-14/P0-15-Minimum in Phase 1, Rest in Phase 2; P0-3 in 0b. |
-| B19 | Spec Rahmen, P0-1, P0-5, P0-10, P0-12, P1 | wichtig | Spec-Texte veraltet bzw. durch begründete Planentscheidungen überholt: SDK-Paketname (v2), „Session-ID im Header“, Entschlüsselung „vom Supervisor“, ENV-Liste, „URL-Elicitation (2025-11-25)“ und `sampling/createMessage` (2026: MRTR, S9). | Spec v0.4: Abschnitt Änderungen mit den Punkten aus E1, E2, E4, E7 und dem MRTR-Hinweis für Phase 2/3. |
-| B20 | 0a §2 TS 7 | klein | TypeScript 7.0.2 mit `vue-tsc`/`nuxi typecheck`: `vue-tsc` 3.3.14 verlangt nur `>=5.0.0`, Funktion mit TS 7 unverifiziert. | Default TS 5.9/6.x pinnen, TS 7 später als eigene Aufgabe. Spart einen Fehlstart in Task 1. |
-| B21 | Phase 1 1.3.4, R4 | klein | Gruppen-Falle ist laut libuv-Quelltext gelöst (S12); `setpriv`-Fallback wird voraussichtlich nicht gebraucht. | Test behalten, `util-linux` nicht vorsorglich ins Image. |
-| B22 | Phase 1 1.1.2 | klein | `gen_random_uuid()` ist seit Postgres 13 Kernfunktion, PGlite basiert auf Postgres 17. Risiko gering; im Migrationstest ohnehin abgedeckt. | „Unverifiziert“-Vermerk durch Test in 1.1.2 ersetzen. |
-| B23 | alle | wichtig | Migrationen aus parallelen Branches kollidieren im drizzle-kit-Journal (`meta/_journal.json`). | Schemaänderungen strikt sequentiell (0a → 0b → 1), CI-Schritt `db:check` (0a Task 6) verpflichtend. |
+| B1 | 0a task 7, U3/U4; phase 1 §3 plugins | blocking | Nitro does not await async plugins (S4). `00-init.ts` with `await getDb(); await runMigrations()` lets requests through before the migration ends; the phase 1 plugin `20.gateway` starts before the migration. | Init as a memoized promise in `getDb()` (the migration runs in it exactly once), `getAuth()` waits for it. All DB consumers are thereby automatically secured. The plugin only kicks off `getDb().catch(exit(1))`. `/readyz` stays. Record U4 as refuted in the plan. |
+| B2 | 0a O1/§8, 0b E8/E10/E11/E13, phase 1 §3 | blocking | P0-4 has no owner: "first user = admin", role, `banned`, `requireAdmin`, invitation/allowlist, admin page (list, ban, delete users), `onUserDisabled/Deleted`. 0a defers to phase 1, phase 1 presupposes it from 0a/0b, 0b needs it already for the DCR admin page and the ban check. | 0a: `admin()` plugin in migration 0000 (S3), hook "first user gets `role=admin`", `requireAdmin`. Phase 1: new task in 1.1 "invitations/allowlist, user list, ban (sessions, OAuth refresh tokens, PATs), delete" incl. `user-lifecycle.ts`. |
+| B3 | 0a O1, task 8 | important | The registration lock via `count(*)` in the `before` hook is a race: two parallel first registrations both get through (two admins). Moreover after the lock no test can create a second user, yet 0b/phase 1 need user B for isolation tests. | Serialize sign-up in a process-wide mutex (single instance suffices). Create second users in tests via `auth.api.createUser` of the admin plugin; helper `createUser()` in the 0a harness. |
+| B4 | phase 1 §1/§7, spec P0-11 | blocking (coverage) | The switch test dump PGlite → import Postgres → start with a new `DATABASE_URL` is in no plan (0a O3 refers to phase 1, phase 1 does not have it). | Task in phase 1 (e.g. 1.4.3): `pgDump` (S11) → `psql` in a Postgres container → app with `DATABASE_URL` → login and upstreams present. CI job. README section backup/switching. |
+| B5 | phase 1 §4.1, 1.3.1, 1.3.2 | blocking (security) | `ensureWorker({userId, uid})` comes from the web app. The plan does not check that the supervisor validates the UID. A compromised web app could request `uid: 0` or its own UID; a child with UID 0 keeps the permitted capabilities (SETUID) and can assume any UID. | The supervisor accepts only `uid` in the fixed range (≥ 20000, ≠ web UID, ≠ 0), `gid = uid`, `cwd` only under the own stdio tree. Test with a forged command. |
+| B6 | phase 1 1.3.1 | blocking (security) | `DATA_DIR` is chowned to the web UID, `DATA_DIR/stdio` lies inside it. The web app can rename `stdio` and replace it with symlinks; the supervisor (root, `CAP_CHOWN`) then chowns arbitrary paths to a user UID. | Separate trees: `DATA_DIR` root-owned 0755, `DATA_DIR/app` (pgdata) web UID, `DATA_DIR/stdio` root 0711. Create user directories with `mkdir` (exclusive) + `lchown`/`O_NOFOLLOW` check. Carry the deviation from the spec path `DATA_DIR/stdio/<user_id>` (the plan uses `<uid>`) into the spec. |
+| B7 | phase 1 1.1.4 | important (security) | The check via undici `connect.lookup` does not apply to IP literals (no DNS lookup). The test matrix contains literals, the implementation does not cover them. | Additionally `assertPublicAddress()` on literal hosts before the connect (after WHATWG URL normalization, which resolves decimal/hex/octal). Extend the block list by `192.0.2/24`, `198.51.100/24`, `203.0.113/24`, `2001:db8::/32`, `2002::/16` (6to4, check embedded v4). SDK transports get their own `fetch` (S7); `redirect: 'error'` for MCP transports instead of manual following. |
+| B8 | phase 1 §4.1 | important (security) | The root supervisor parses all MCP frames between web app and worker. Thereby every byte from foreign stdio children lies in the data path of the privileged process. | The supervisor passes per worker an accepted socket connection of the web app as `stdio[3]` to the worker (the `spawn` option `stdio` accepts socket streams, the FD is duplicated; Node docs, not checked live). Afterwards data flows directly web app ↔ worker. If rejected: hard-limit the frame size. |
+| B9 | 0b assumption 2, R11; phase 1 E2, R2 | important | "Without a session no `list_changed` push" is true only for 2025 clients. 2026-07-28 clients use `subscriptions/listen`, `createMcpHandler` brings bus and `notify` (S8, S9). | Phase 1: publish `tools_list_changed` on disable/toggle. Mind tenant isolation: `notify` goes to all streams of the handler. Either handler per user or a bus that filters by `userId`. 2025 clients: no push, accept. |
+| B10 | phase 1 §6, 1.2.6; spec P0-14 | important | Abort via `notifications/cancelled` no longer applies to 2026 upstreams over HTTP; there closing the stream is the abort (S9). The test plan expects `cancelled` at the fake. | Test per era: HTTP-2026 → the fake sees the connection abort; legacy/stdio → `notifications/cancelled`. Adjust the spec text P0-14. |
+| B11 | 0b task 6, A5 | important | The additional check per request covers user banned, client disabled, consent deleted. A single token revocation (RFC 7009 on the refresh token, consent stays) takes effect only after the JWT expires. The spec edge case "token/session revoked → 401 on the next request" is thereby not met for this case. | Either additionally check whether a valid refresh token still exists for `(user, client)`, or document the deviation (≤ TTL 5 min) in the spec. Recommendation: add the check, one more query. |
+| B12 | 0b task 1 step 4 | small | Table list incomplete: `oauth_resource`, `oauth_client_resource` are missing (S3). `mcp()` writes resources into the DB at startup; with 0a `auth.cli.ts` (`{} as never` as DB) there is an error message on generation, generation works with `baseURL` set. | Correct the list; `auth.cli.ts` sets `baseURL`. |
+| B13 | 0b task 2 | small | `mcp()` delivers the protected-resource metadata itself (S10), but only under the auth handler. A parallel own build drifts. | Pass the root routes `/.well-known/*` through to `auth.handler` or the plugin helpers instead of building JSON ourselves. |
+| B14 | 0b task 4 step 2 | small | DCR gate: check `clientPrivileges` (can refuse `create`) before the Nitro middleware; effect on anonymous DCR unverified. | Test in the spike of task 1; middleware only as a fallback. |
+| B15 | 0b task 3 step 3 | small | "Spec requires hostname display and extra warning for localhost": not in `spec.md` (stems from the MCP spec). | Name the source correctly; keep the requirement. |
+| B16 | 0a task 10, 0b 6.1 | important | Tests run against the build (`NODE_ENV=production`), where the Better Auth rate limit is active (default: production only). Several sign-ins per test run into 429. 0b wants rate limits on/off per test run. 0a forbids new ENV variables without a spec change. | Add a test ENV (e.g. `RATE_LIMIT=off`) to the ENV list (see E7) or switch limits via the test config through an admin setting. |
+| B17 | phase 1 §1 A12, 1.2.7 | small | The acceptance criterion overhead p95 depends on the own stats write path; a bug there falsifies the evidence. | Additionally measure overhead from outside in the load script (client time minus fake upstream time). |
+| B18 | spec "Phases" | important | P0-14 and P0-15 are assigned to no phase; phase 1 takes parts (E3), the rest "phase 2", spec phase 2 does not know them. P0-3 (PAT) belongs to phase 1 per the spec, 0b pulls it forward (sensible). | Add spec phases: P0-14/P0-15 minimum in phase 1, rest in phase 2; P0-3 in 0b. |
+| B19 | spec framework, P0-1, P0-5, P0-10, P0-12, P1 | important | Spec texts outdated or overtaken by reasoned plan decisions: SDK package name (v2), "session ID in the header", decryption "by the supervisor", ENV list, "URL elicitation (2025-11-25)" and `sampling/createMessage` (2026: MRTR, S9). | Spec v0.4: changes section with the points from E1, E2, E4, E7 and the MRTR note for phase 2/3. |
+| B20 | 0a §2 TS 7 | small | TypeScript 7.0.2 with `vue-tsc`/`nuxi typecheck`: `vue-tsc` 3.3.14 requires only `>=5.0.0`, function with TS 7 unverified. | Pin TS 5.9/6.x by default, TS 7 later as its own task. Saves a false start in task 1. |
+| B21 | phase 1 1.3.4, R4 | small | The groups trap is solved per the libuv source (S12); the `setpriv` fallback is presumably not needed. | Keep the test, do not put `util-linux` into the image as a precaution. |
+| B22 | phase 1 1.1.2 | small | `gen_random_uuid()` is a core function since Postgres 13, PGlite is based on Postgres 17. Low risk; covered by the migration test anyway. | Replace the "unverified" note with a test in 1.1.2. |
+| B23 | all | important | Migrations from parallel branches collide in the drizzle-kit journal (`meta/_journal.json`). | Schema changes strictly sequential (0a → 0b → 1), CI step `db:check` (0a task 6) mandatory. |
 
-## Schnittstellen-Abgleich (Erwartung vs. 0a/0b)
+## Interface reconciliation (expectation vs. 0a/0b)
 
-Typ `user.id` ist überall `text` (0a §8, 0b E8, Phase 1 A5; generiertes Schema bestätigt, S2). Alle anderen Punkte weichen ab.
+The type `user.id` is `text` everywhere (0a §8, 0b E8, phase 1 A5; generated schema confirms, S2). All other points deviate.
 
-| Thema | 0a liefert (§3, §8) | 0b erwartet (§3) | Phase 1 erwartet (§3) | Entscheidung |
+| Topic | 0a delivers (§3, §8) | 0b expects (§3) | Phase 1 expects (§3) | Decision |
 |---|---|---|---|---|
-| Konfiguration | `getConfig()` aus `process.env`, `server/utils/config.ts` | E1 `runtimeConfig` in `nuxt.config.ts` | `getConfig()` ✓ | 0a-Variante; 0b E1 streichen. |
-| DB-Client | `getDb(): Promise<Db>` in `server/db/index.ts` | E2 `export db` in `server/db/index.ts` | `export const db` in `server/db/client.ts`, `casing: snake_case`, `withTx` | `getDb()` (wegen B1 async nötig). Kein `casing`-Flag: generiertes Schema benennt Spalten explizit (S2), eigene Tabellen ebenso. `withTx` streichen (YAGNI, PGlite: keine langen Tx). |
-| Auth-Instanz | `getAuth(): Promise<Auth>` in `server/auth/index.ts`, Optionen in `options.ts` | E4 `export auth`; E6 Plugin-Array, `basePath` bekannt | – | `getAuth()`; 0b ergänzt Plugins in `options.ts` (0a §8). |
-| Migration/Skripte | `db:schema`, `db:generate`, `db:check`; `server/plugins/00-init.ts` | E7 `db:generate-auth`, `db:migrate`, `server/plugins/migrate.ts` | `server/plugins/00.migrate.ts`, eigenes Plugin `20.gateway.ts` | 0a-Namen; Phase 1 `server/plugins/20-gateway.ts`, wartet auf `getDb()` (B1). |
-| Migrationsnummern | `0000_init` | „0001“ für OAuth (+ `mcpw`-Tabellen) | `00NN_phase1_*` | Reihenfolge 0000 (0a inkl. `admin()`), 0001 (0b OAuth), 0002 (0b eigene), ab 0003 Phase 1; Namen vergibt drizzle-kit. |
-| Rolle/Sperre | keine (O1 verschiebt Admin-Plugin auf Phase 1) | E8 `role`, E11 `banned`, erster Nutzer Admin | `role`, `banned` | in 0a über `admin()` (B2). |
-| Session-Helfer | `requireUser(event) → { user, session }` | E10 `requireUserSession`, `getSessionOrNull`, `requireAdmin` | `requireUserSession → { userId, role }`, `requireAdmin` | ein Name: `requireUser` + `requireAdmin` in `server/utils/session.ts` (0a). |
-| Seiten | `/login`, `/register` | E9 `/sign-in`, `loginPage: "/sign-in"` | – | `/login`; 0b `loginPage: "/login"`. |
-| UI-Basis | button, input, label, card | E13 Admin-Layout, Table, Dialog, Alert, Badge, Select | Layout mit Nav, `/admin`-Guard | 0b ergänzt Komponenten und Admin-Layout. |
-| Einstellungen | – | E14 `mcpw_app_setting` | `instance_setting` | **eine** Tabelle (0b legt sie an, Phase 1 nutzt sie). |
-| Tabellen-Präfix | – | `mcpw_` | ohne Präfix | einheitlich ohne Präfix (Better-Auth-Tabellen haben auch keins). |
-| Schlüsselableitung | `deriveUserKey` „später in `master-key.ts`“ | E15 `server/utils/crypto.ts` | `server/gateway/crypto/secrets.ts` | eine Datei: `server/gateway/crypto/secrets.ts`; 0a §8 anpassen. `decryptSecret` nimmt `userId` aus dem Auth-Kontext, nie aus der Zeile. |
-| Auth-Kontext `/mcp` | – | `AuthContext` in `server/auth/auth-context.ts` (`tokenType`, ohne `role`) | `GatewayAuth` in `server/utils/gateway-auth.ts` (`kind`, `role`), `requireGatewayAuth(request)` | 0b-Typ und -Pfad; Feld `role` ergänzen (access-guard liest die Nutzerzeile ohnehin). |
-| Naht zum Gateway | – | `ToolSource { listTools(ctx), callTool(ctx, name, args) }` in `server/mcp/upstream-port.ts` | `createGatewayServer(auth)` in `server/gateway/index.ts` liefert MCP-Server | `ToolSource` behalten, `callTool(ctx, name, args, { signal })` ergänzen. Phase 1 implementiert `ToolSource`, fasst das SDK-Server-Objekt nicht an. `list_changed` (B9) über den Handler aus 0b. |
-| Scope | – | `mcp:tools` | „`mcp`“ | `mcp:tools`. |
-| Origin-Prüfung | – | A8, `server/middleware/origin-check.ts` | 1.2.1 nur „falls nicht in 0b“ | in 0b; Phase-1-Aufgabe 1.2.1 streichen. |
-| Audit | – | ausdrücklich nicht in 0b (§9) | E9 „0b legt `audit_log` an“ | Phase 1 1.1 legt `audit_log` + `audit()` an. |
-| Logger | – | – | `server/utils/logger.ts` mit Redaction | Phase 1 legt an (in 1.1). |
-| Lebenszyklus | – | – | `user-lifecycle.ts` aus 0a/0b | Phase 1 (B2). |
-| Health | `/healthz`, `/readyz` in 0a | E17 unverändert | in §5 als neue Dateien | Phase 1 ändert die 0a-Dateien (Supervisor-Check). |
-| Tests | `tests/`, Build als Kindprozess, `TEST_BACKEND`, `TEST_PG_ADMIN_URL` | E12 `test/helpers/`, `@nuxt/test-utils` | `test/helpers/db.ts` `createTestDb()`, `TEST_DATABASE_URL`, `@nuxt/test-utils` | 0a-Harness und -Variablen für alle; Ordner `tests/`. `@nuxt/test-utils` wäre laut Peer möglich (S6), aber zwei Harnesses sind einer zu viel. |
-| ENV | sechs Spec-Namen, „neue nur mit Spec-Änderung“ | `ALLOWED_ORIGINS` | + `STDIO_MODE`, `SUPERVISOR_SOCKET`, `WEB_UID/GID`, `TRUST_PROXY` | siehe E7. |
+| Configuration | `getConfig()` from `process.env`, `server/utils/config.ts` | E1 `runtimeConfig` in `nuxt.config.ts` | `getConfig()` ✓ | 0a variant; drop 0b E1. |
+| DB client | `getDb(): Promise<Db>` in `server/db/index.ts` | E2 `export db` in `server/db/index.ts` | `export const db` in `server/db/client.ts`, `casing: snake_case`, `withTx` | `getDb()` (async needed because of B1). No `casing` flag: the generated schema names columns explicitly (S2), own tables likewise. Drop `withTx` (YAGNI, PGlite: no long tx). |
+| Auth instance | `getAuth(): Promise<Auth>` in `server/auth/index.ts`, options in `options.ts` | E4 `export auth`; E6 plugin array, `basePath` known | – | `getAuth()`; 0b adds plugins in `options.ts` (0a §8). |
+| Migration/scripts | `db:schema`, `db:generate`, `db:check`; `server/plugins/00-init.ts` | E7 `db:generate-auth`, `db:migrate`, `server/plugins/migrate.ts` | `server/plugins/00.migrate.ts`, own plugin `20.gateway.ts` | 0a names; phase 1 `server/plugins/20-gateway.ts`, waits for `getDb()` (B1). |
+| Migration numbers | `0000_init` | "0001" for OAuth (+ `mcpw` tables) | `00NN_phase1_*` | Order 0000 (0a incl. `admin()`), 0001 (0b OAuth), 0002 (0b own), from 0003 phase 1; names assigned by drizzle-kit. |
+| Role/ban | none (O1 defers the admin plugin to phase 1) | E8 `role`, E11 `banned`, first user admin | `role`, `banned` | in 0a via `admin()` (B2). |
+| Session helpers | `requireUser(event) → { user, session }` | E10 `requireUserSession`, `getSessionOrNull`, `requireAdmin` | `requireUserSession → { userId, role }`, `requireAdmin` | one name: `requireUser` + `requireAdmin` in `server/utils/session.ts` (0a). |
+| Pages | `/login`, `/register` | E9 `/sign-in`, `loginPage: "/sign-in"` | – | `/login`; 0b `loginPage: "/login"`. |
+| UI base | button, input, label, card | E13 admin layout, table, dialog, alert, badge, select | layout with nav, `/admin` guard | 0b adds components and admin layout. |
+| Settings | – | E14 `mcpw_app_setting` | `instance_setting` | **one** table (0b creates it, phase 1 uses it). |
+| Table prefix | – | `mcpw_` | without prefix | uniformly without prefix (Better Auth tables have none either). |
+| Key derivation | `deriveUserKey` "later in `master-key.ts`" | E15 `server/utils/crypto.ts` | `server/gateway/crypto/secrets.ts` | one file: `server/gateway/crypto/secrets.ts`; adjust 0a §8. `decryptSecret` takes `userId` from the auth context, never from the row. |
+| Auth context `/mcp` | – | `AuthContext` in `server/auth/auth-context.ts` (`tokenType`, without `role`) | `GatewayAuth` in `server/utils/gateway-auth.ts` (`kind`, `role`), `requireGatewayAuth(request)` | 0b type and path; add field `role` (access-guard reads the user row anyway). |
+| Seam to the gateway | – | `ToolSource { listTools(ctx), callTool(ctx, name, args) }` in `server/mcp/upstream-port.ts` | `createGatewayServer(auth)` in `server/gateway/index.ts` delivers an MCP server | Keep `ToolSource`, add `callTool(ctx, name, args, { signal })`. Phase 1 implements `ToolSource`, does not touch the SDK server object. `list_changed` (B9) via the handler from 0b. |
+| Scope | – | `mcp:tools` | "`mcp`" | `mcp:tools`. |
+| Origin check | – | A8, `server/middleware/origin-check.ts` | 1.2.1 only "if not in 0b" | in 0b; drop phase 1 task 1.2.1. |
+| Audit | – | explicitly not in 0b (§9) | E9 "0b creates `audit_log`" | Phase 1 1.1 creates `audit_log` + `audit()`. |
+| Logger | – | – | `server/utils/logger.ts` with redaction | Phase 1 creates (in 1.1). |
+| Lifecycle | – | – | `user-lifecycle.ts` from 0a/0b | Phase 1 (B2). |
+| Health | `/healthz`, `/readyz` in 0a | E17 unchanged | in §5 as new files | Phase 1 changes the 0a files (supervisor check). |
+| Tests | `tests/`, build as child process, `TEST_BACKEND`, `TEST_PG_ADMIN_URL` | E12 `test/helpers/`, `@nuxt/test-utils` | `test/helpers/db.ts` `createTestDb()`, `TEST_DATABASE_URL`, `@nuxt/test-utils` | 0a harness and variables for all; folder `tests/`. `@nuxt/test-utils` would be possible per peer (S6), but two harnesses are one too many. |
+| ENV | six spec names, "new ones only with a spec change" | `ALLOWED_ORIGINS` | + `STDIO_MODE`, `SUPERVISOR_SOCKET`, `WEB_UID/GID`, `TRUST_PROXY` | see E7. |
 
-## Empfehlungen zu den Entscheidungen
+## Recommendations on the decisions
 
-### Kann ich allein empfehlen
+### I can recommend alone
 
-| Punkt | Empfehlung | Begründung |
+| Point | Recommendation | Rationale |
 |---|---|---|
-| Phase 1 E1 SDK v2 | v2 (`@modelcontextprotocol/server`/`client` 2.4.0, `node` 2.1.2) | stabile Linie, Better-Auth-Doku baut darauf, nötige Optionen vorhanden (S7, S8). |
-| E3 Umfang P0-14/15 | wie vorgeschlagen | Timeouts/Breaker/Messpfad sitzen im Aufrufpfad; Spec-Phasen nachziehen (B18). |
-| E4 Entschlüsselung in der Web-App | annehmen | Supervisor bleibt ohne Key und DB; das Schutzziel „Worker-Env sauber“ bleibt. Die Web-App hält den Key ohnehin. Spec-Text P0-5 ändern. |
-| E5 ein Container, Supervisor startet Web-App | annehmen, mit B5, B6, B8 | Root→Nicht-Root-`setuid` leert permitted/effective; `no_new_privs` verhindert Rückgewinn. |
-| E6 slim/full | annehmen; in `slim` ist stdio fest aus (kein Supervisor-Bundle), nicht nur Default | sonst ist „slim = nur HTTP/REST“ (Spec) nur eine Voreinstellung. |
-| E7 zusätzliche ENV | nur `STDIO_MODE` und `TRUST_PROXY` (+ ein Test-Schalter, B16); Socket-Pfad und Web-UID als Konstanten | YAGNI; feste Werte im Image. Spec P0-10 um die Liste ergänzen. |
-| E8 neue Tools standardmäßig an | ja | Spec P0-7 schweigt; Rug-Pull-Schutz kommt mit P1-Poisoning-Prüfung. |
-| E9 `audit_log` | Phase 1 legt an | 0b schließt Audit aus. |
-| 0a O2 OAuth-Tabellen erst in 0b | ja | Generierung mit `mcp()` funktioniert nachträglich (S3); Migration 0001. |
-| 0a O3 Umstiegstest nicht in 0a | ja, aber Phase 1 muss ihn tragen (B4) | `pgDump` funktioniert (S11). |
-| 0b O2 TTL 5 min / Refresh 30 d | ja | mit Zusatzprüfung pro Request (und B11) ist die TTL zweitrangig. |
-| 0b O3 Scopes `openid offline_access mcp:tools`, `mcpwarden:admin` reserviert | ja | Phase 1 auf `mcp:tools` angleichen. |
-| 0b O4 DCR-Rate-Limit 5/min | ja | wirkt nur mit aktivem Rate-Limit und korrekter Client-IP hinter dem Proxy (0a R9). |
-| 0b Annahme 4 DCR ohne CIMD | ja für 0b | in A1/A2 beobachten, ob Claude Code oder Cursor CIMD bevorzugen; `@better-auth/cimd` 1.7.17 existiert als Folgeaufgabe. |
-| 0b `legacy: 'stateless'` | ja (nicht `reject` wie im Doku-Beispiel) | 2025er-Clients müssen bedient werden; mit echtem Claude Code in Aufgabe 5 bestätigen. |
+| Phase 1 E1 SDK v2 | v2 (`@modelcontextprotocol/server`/`client` 2.4.0, `node` 2.1.2) | stable line, the Better Auth docs build on it, required options present (S7, S8). |
+| E3 scope P0-14/15 | as proposed | timeouts/breaker/measurement path sit in the call path; carry the spec phases over (B18). |
+| E4 decryption in the web app | accept | the supervisor stays without key and DB; the protection goal "worker env clean" remains. The web app holds the key anyway. Change the spec text P0-5. |
+| E5 one container, the supervisor starts the web app | accept, with B5, B6, B8 | root→non-root `setuid` clears permitted/effective; `no_new_privs` prevents regaining. |
+| E6 slim/full | accept; in `slim` stdio is fixed off (no supervisor bundle), not just a default | otherwise "slim = HTTP/REST only" (spec) is only a preset. |
+| E7 additional ENV | only `STDIO_MODE` and `TRUST_PROXY` (+ a test switch, B16); socket path and web UID as constants | YAGNI; fixed values in the image. Add the list to spec P0-10. |
+| E8 new tools on by default | yes | Spec P0-7 is silent; rug-pull protection comes with the P1 poisoning check. |
+| E9 `audit_log` | phase 1 creates | 0b excludes audit. |
+| 0a O2 OAuth tables only in 0b | yes | Generation with `mcp()` works later (S3); migration 0001. |
+| 0a O3 switch test not in 0a | yes, but phase 1 must carry it (B4) | `pgDump` works (S11). |
+| 0b O2 TTL 5 min / refresh 30 d | yes | with the additional check per request (and B11) the TTL is secondary. |
+| 0b O3 scopes `openid offline_access mcp:tools`, `mcpwarden:admin` reserved | yes | Align phase 1 to `mcp:tools`. |
+| 0b O4 DCR rate limit 5/min | yes | works only with an active rate limit and a correct client IP behind the proxy (0a R9). |
+| 0b assumption 4 DCR without CIMD | yes for 0b | observe in A1/A2 whether Claude Code or Cursor prefer CIMD; `@better-auth/cimd` 1.7.17 exists as a follow-up task. |
+| 0b `legacy: 'stateless'` | yes (not `reject` as in the docs example) | 2025 clients must be served; confirm with real Claude Code in task 5. |
 
-### Muss der Nutzer entscheiden
+### The user must decide
 
-| Punkt | Frage | Empfehlung |
+| Point | Question | Recommendation |
 |---|---|---|
-| Phase 1 E2 / P0-1 / P0-5 | Spec ändern: „zustandslos (2026-07-28), 2025er-Clients stateless ohne Session“ und „`list_changed` für 2025er-Clients erst beim nächsten `tools/list`“? | ja; Push für 2026er-Clients über `subscriptions/listen` in Phase 1 einbauen (B9). Sessionful-Legacy nur, wenn ein Zielclient es nachweislich braucht. |
-| 0a O1 | Registrierung nach dem ersten Nutzer sperren, bis Einladungen da sind? | ja, mit Mutex (B3). Wann kommen Einladung/Allowlist: Vorschlag Phase 1, Meilenstein 1.1 (B2). |
-| B2 Ort der Admin-Funktionen | Admin-Plugin in 0a, Nutzerverwaltung in Phase 1 1.1? | ja. |
-| B11 | Einzel-Token-Widerruf sofort wirksam (eine Query mehr) oder ≤ 5 min Verzögerung dokumentieren? | sofort wirksam. |
-| 0b O1 | zweiter Pflichtclient | Cursor (lokal, ohne Tunnel), Fallback MCP Inspector; Claude Desktop/Web bei der ersten öffentlichen Instanz in Phase 1.4. |
-| B18/B19 | Spec v0.4 mit den gesammelten Änderungen | ja, vor Start von 0b. |
-| Spec-Frage 6 | stdio Idle 10 min, max. 5 Kinder | Phase-1-Defaults übernehmen. |
+| Phase 1 E2 / P0-1 / P0-5 | Change the spec: "stateless (2026-07-28), 2025 clients stateless without a session" and "`list_changed` for 2025 clients only on the next `tools/list`"? | yes; build the push for 2026 clients via `subscriptions/listen` into phase 1 (B9). Sessionful legacy only if a target client demonstrably needs it. |
+| 0a O1 | Lock registration after the first user until invitations exist? | yes, with a mutex (B3). When do invitation/allowlist come: proposal phase 1, milestone 1.1 (B2). |
+| B2 location of the admin functions | Admin plugin in 0a, user management in phase 1 1.1? | yes. |
+| B11 | Single-token revocation effective immediately (one more query) or document a delay of ≤ 5 min? | effective immediately. |
+| 0b O1 | second mandatory client | Cursor (local, without tunnel), fallback MCP Inspector; Claude Desktop/Web with the first public instance in phase 1.4. |
+| B18/B19 | Spec v0.4 with the collected changes | yes, before the start of 0b. |
+| Spec question 6 | stdio idle 10 min, max. 5 children | adopt the phase 1 defaults. |
 
-## Startreihenfolge
+## Start order
 
-**Sofort (nach Einarbeitung der 0a-Korrekturen B1, B2, B3, B20 in den Plan):**
-- 0a Task 1 (Gerüst; Node ≥ 24.15, TS 5.x/6.x), Task 2 (Tailwind/shadcn), Task 3 (Config/Master-Key).
-- 0a Task 4 (DB-Schicht) und Task 5 (Auth-Fabrik, Schema-Generierung mit `admin()`): der PGlite-Spike (U2) ist erledigt (S1), `--dialect postgresql` geklärt (S2).
+**Immediately (after incorporating the 0a corrections B1, B2, B3, B20 into the plan):**
+- 0a task 1 (scaffold; Node ≥ 24.15, TS 5.x/6.x), task 2 (Tailwind/shadcn), task 3 (config/master key).
+- 0a task 4 (DB layer) and task 5 (auth factory, schema generation with `admin()`): the PGlite spike (U2) is done (S1), `--dialect postgresql` clarified (S2).
 
-**Hängt noch an einem Spike im echten Nuxt-Build:**
-- 0a Task 7: Init über memoisiertes `getDb()`-Promise (B1) und Kopie des Migrationsordners ins `.output` (R3) im gebauten Artefakt prüfen. Ob Nitro bei SIGTERM den `close`-Hook ruft (für A2, sauberes PGlite-Schließen), ist unverifiziert und hier mitzuprüfen.
-- 0a Task 10/11: Rate-Limit-Schalter für Tests (B16) vorher festlegen.
+**Still depends on a spike in the real Nuxt build:**
+- 0a task 7: check init via the memoized `getDb()` promise (B1) and copying the migrations folder into `.output` (R3) in the built artifact. Whether Nitro calls the `close` hook on SIGTERM (for A2, clean PGlite closing) is unverified and to be checked along here.
+- 0a task 10/11: fix the rate-limit switch for tests (B16) beforehand.
 
-**Vor Start von 0b entscheiden:**
-- Schnittstellentabelle oben übernehmen (Pfade, `getDb`/`getAuth`, `requireUser`/`requireAdmin`, `/login`, Tabellenpräfix, Einstellungs-Tabelle, Test-Harness, `AuthContext` mit `role`, `ToolSource` mit `signal`).
+**Decide before the start of 0b:**
+- Adopt the interface table above (paths, `getDb`/`getAuth`, `requireUser`/`requireAdmin`, `/login`, table prefix, settings table, test harness, `AuthContext` with `role`, `ToolSource` with `signal`).
 - Spec v0.4 (B18, B19), E2.
 
-**Vor Start von Phase 1 entscheiden:**
-- B2 (Admin/Einladungen in 1.1), B4 (Umstiegstest), B5/B6/B8 (Supervisor-Härtung) in den Plan aufnehmen; E7-Liste festlegen.
+**Decide before the start of phase 1:**
+- Include B2 (admin/invitations in 1.1), B4 (switch test), B5/B6/B8 (supervisor hardening) in the plan; fix the E7 list.
