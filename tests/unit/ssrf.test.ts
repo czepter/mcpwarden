@@ -1,7 +1,7 @@
 import { createServer, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { AllowList, assertUrlAllowed, isBlockedAddress, precheckUrl, SsrfBlockedError } from '../../server/gateway/net/ssrf'
+import { AllowList, assertAddressesAllowed, assertUrlAllowed, isBlockedAddress, precheckUrl, SsrfBlockedError, validateAllowEntry } from '../../server/gateway/net/ssrf'
 import { createSafeFetch, UpstreamRedirectError } from '../../server/gateway/net/safe-fetch'
 
 const BLOCKED_LITERALS = [
@@ -124,5 +124,49 @@ describe('ssrf with real local server (no connection reaches the target)', () =>
     expect(r.status).toBe(429)
     expect(got).toBe(7)
     await f.close()
+  })
+})
+
+describe('ssrf extended ranges and allow-list hardening (L2, L3)', () => {
+  it.each([
+    'http://[2001:0:4136:e378:8000:63bf:3fff:fdd2]/', // Teredo 2001::/32
+    'http://[64:ff9b:1::1]/', // NAT64 lokal
+    'http://[fec0::1]/', // site-local
+    'http://192.88.99.1/', // 6to4-Relay-Anycast
+    'http://[::ffff:0:10.0.0.1]/', // SIIT ::ffff:0:0:0/96
+    'http://[::ffff:0:7f00:1]/',
+  ])('blocks %s', (u) => {
+    expect(() => assertUrlAllowed(u)).toThrow(SsrfBlockedError)
+  })
+  it('a hostname entry never opens metadata or link-local ranges, even for that exact host', () => {
+    const a = new AllowList(['evil.example'])
+    for (const ip of ['169.254.169.254', '100.100.100.200', 'fd00:ec2::254', '::ffff:169.254.169.254', '169.254.1.1', 'fe80::1', '192.0.0.192']) {
+      expect(() => assertAddressesAllowed('evil.example', [ip], a), ip).toThrow(SsrfBlockedError)
+    }
+    expect(() => assertAddressesAllowed('evil.example', ['10.1.1.1'], a)).not.toThrow() // normale private Adresse: Hostname-Ausnahme gilt
+  })
+  it('a broad CIDR does not open metadata; only an explicit single address does', () => {
+    for (const cidr of ['169.254.0.0/16', '100.64.0.0/10', '0.0.0.0/0', '::/0', 'fc00::/7']) {
+      const a = new AllowList([cidr])
+      expect(() => assertUrlAllowed('http://169.254.169.254/', a), cidr).toThrow(SsrfBlockedError)
+      expect(() => assertUrlAllowed('http://100.100.100.200/', a), cidr).toThrow(SsrfBlockedError)
+      expect(() => assertUrlAllowed('http://[fd00:ec2::254]/', a), cidr).toThrow(SsrfBlockedError)
+    }
+    expect(() => assertUrlAllowed('http://169.254.169.254/', new AllowList(['169.254.169.254']))).not.toThrow()
+    expect(() => assertUrlAllowed('http://169.254.169.254/', new AllowList(['169.254.169.254/32']))).not.toThrow()
+    expect(() => assertUrlAllowed('http://169.254.169.253/', new AllowList(['169.254.169.254']))).toThrow(SsrfBlockedError)
+    // anderes Link-Local per CIDR erlaubt
+    expect(() => assertUrlAllowed('http://169.254.5.5/', new AllowList(['169.254.5.0/24']))).not.toThrow()
+  })
+  it('malformed allow entries are rejected at config time; the lenient runtime parser skips them and opens nothing', () => {
+    for (const bad of ['10.0.0.0/abc', '10.0.0.0/33', '::1/129', '10.0.0.0/', '/8', 'not a host', '', '1.2.3.4.5', 'a..b', '10.0.0.0/-1']) {
+      expect(validateAllowEntry(bad), bad).not.toBeNull()
+      expect(() => new AllowList([bad]), bad).toThrow(/ssrf\.allow/)
+    }
+    for (const good of ['10.0.0.0/8', '192.168.5.5', 'fd00::/8', 'internal.example', 'my_host.lan']) expect(validateAllowEntry(good), good).toBeNull()
+    const { list, invalid } = AllowList.lenient(['10.0.0.0/abc', '10.1.0.0/16'])
+    expect(invalid).toEqual(['10.0.0.0/abc'])
+    expect(() => assertUrlAllowed('http://10.1.2.3/', list)).not.toThrow()
+    expect(() => assertUrlAllowed('http://10.2.2.3/', list)).toThrow(SsrfBlockedError)
   })
 })

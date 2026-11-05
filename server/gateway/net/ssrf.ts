@@ -18,9 +18,17 @@ export class SsrfBlockedError extends Error {
 const V4_BLOCKED = [
   '0.0.0.0/8', '10.0.0.0/8', '100.64.0.0/10', '127.0.0.0/8', '169.254.0.0/16', '172.16.0.0/12',
   '192.0.0.0/24', '192.0.2.0/24', '198.51.100.0/24', '203.0.113.0/24', '192.168.0.0/16',
-  '198.18.0.0/15', '224.0.0.0/4', '240.0.0.0/4',
+  '198.18.0.0/15', '224.0.0.0/4', '240.0.0.0/4', '192.88.99.0/24',
 ]
-const V6_BLOCKED = ['::/128', '::1/128', 'fc00::/7', 'fe80::/10', 'ff00::/8', '2001:db8::/32']
+const V6_BLOCKED = [
+  '::/128', '::1/128', 'fc00::/7', 'fe80::/10', 'fec0::/10' /* veraltet: site-local */, 'ff00::/8', '2001:db8::/32',
+  '2001::/32' /* Teredo */, '64:ff9b:1::/48' /* NAT64 lokal */, '::ffff:0:0:0/96' /* SIIT IPv4-translated */,
+]
+
+/** Cloud-Metadatendienste: nie über Hostnamen-Ausnahmen, nur über ausdrücklich genannte Einzeladresse. */
+const METADATA = ['169.254.169.254', '169.254.170.2', '100.100.100.200', '192.0.0.192', 'fd00:ec2::254']
+/** Link-Local: nie über Hostnamen-Ausnahmen, nur über CIDR/IP. */
+const LINK_LOCAL = netList(['169.254.0.0/16'], ['fe80::/10'])
 
 function netList(v4: string[], v6: string[]) {
   const l = new BlockList()
@@ -60,6 +68,10 @@ export function ipv6ToBytes(input: string): Uint8Array | null {
   return out
 }
 
+const sameV6 = (a: string, b: string) => {
+  const x = ipv6ToBytes(a), y = ipv6ToBytes(b)
+  return !!x && !!y && x.every((v, i) => v === y[i])
+}
 const v4From = (b: Uint8Array, o: number) => `${b[o]}.${b[o + 1]}.${b[o + 2]}.${b[o + 3]}`
 
 /** Liefert alle Adressen, die geprüft werden müssen (die Adresse selbst plus eingebettete v4). */
@@ -85,22 +97,63 @@ export function isBlockedAddress(ip: string): boolean {
 }
 
 /** Admin-Ausnahmeliste `ssrf.allow`: CIDR oder genauer Hostname. */
+const HOSTNAME_RE = /^(?=.{1,253}$)([a-z0-9_]([a-z0-9_-]{0,61}[a-z0-9_])?)(\.[a-z0-9_]([a-z0-9_-]{0,61}[a-z0-9_])?)*$/
+
+/** Prüft einen Eintrag der Ausnahmeliste; liefert den Fehlertext oder null. Für Admin-Routen und Konfiguration. */
+export function validateAllowEntry(raw: string): string | null {
+  const e = raw.trim().toLowerCase()
+  if (!e) return 'leerer Eintrag'
+  const slash = e.indexOf('/')
+  if (slash >= 0) {
+    const addr = e.slice(0, slash)
+    const bitsText = e.slice(slash + 1)
+    if (!/^\d{1,3}$/.test(bitsText)) return 'ungültige Präfixlänge'
+    const bits = Number(bitsText)
+    if (isIPv4(addr)) return bits <= 32 ? null : 'Präfixlänge über 32'
+    if (isIPv6(addr)) return bits <= 128 ? null : 'Präfixlänge über 128'
+    return 'ungültige Adresse'
+  }
+  if (isIP(e)) return null
+  return HOSTNAME_RE.test(e) && !/^[\d.]+$/.test(e) ? null : 'ungültiger Hostname'
+}
+
 export class AllowList {
   private cidrs = new BlockList()
+  private exact = new BlockList() // nur Einzeladressen (Literal oder /32, /128): einzig gültig für Metadatendienste
   private hosts = new Set<string>()
+  /** Ungültige Einträge werfen sofort (Konfigurationszeit); `AllowList.lenient` überspringt sie für den Laufzeitpfad. */
   constructor(entries: readonly string[] = []) {
     for (const raw of entries) {
-      const e = raw.trim().toLowerCase()
-      const slash = e.indexOf('/')
-      if (slash > 0) {
-        const addr = e.slice(0, slash)
-        const bits = Number(e.slice(slash + 1))
-        if (isIPv4(addr)) this.cidrs.addSubnet(addr, bits, 'ipv4')
-        else if (isIPv6(addr)) this.cidrs.addSubnet(addr, bits, 'ipv6')
-      } else if (isIP(e)) {
-        this.cidrs.addAddress(e, isIPv4(e) ? 'ipv4' : 'ipv6')
-      } else if (e) this.hosts.add(e)
+      const bad = validateAllowEntry(raw)
+      if (bad) throw new Error(`ssrf.allow: ${bad}: ${JSON.stringify(raw).slice(0, 80)}`)
+      this.add(raw.trim().toLowerCase())
     }
+  }
+  /** Laufzeit: ein kaputter gespeicherter Eintrag darf nicht jeden Abruf lahmlegen; er öffnet nichts. */
+  static lenient(entries: readonly string[] = []): { list: AllowList, invalid: string[] } {
+    const ok: string[] = []
+    const invalid: string[] = []
+    for (const e of entries) (validateAllowEntry(e) ? invalid : ok).push(e)
+    return { list: new AllowList(ok), invalid }
+  }
+  private add(e: string) {
+    const slash = e.indexOf('/')
+    if (slash > 0) {
+      const addr = e.slice(0, slash)
+      const bits = Number(e.slice(slash + 1))
+      const v = isIPv4(addr) ? 'ipv4' : 'ipv6'
+      this.cidrs.addSubnet(addr, bits, v)
+      if (bits === (v === 'ipv4' ? 32 : 128)) this.exact.addAddress(addr, v)
+    } else if (isIP(e)) {
+      const v = isIPv4(e) ? 'ipv4' : 'ipv6'
+      this.cidrs.addAddress(e, v)
+      this.exact.addAddress(e, v)
+    } else this.hosts.add(e)
+  }
+  /** Ausdrücklich als Einzeladresse freigegeben (kein Bereich). */
+  allowsExactAddress(ip: string) {
+    const all = expand(ip) ?? []
+    return all.length > 0 && all.every(a => this.exact.check(a, isIPv4(a) ? 'ipv4' : 'ipv6'))
   }
   allowsHost(host: string) { return this.hosts.has(host.toLowerCase()) }
   allowsAddress(ip: string) {
@@ -116,7 +169,13 @@ export function assertAddressesAllowed(host: string, addresses: string[], allow:
   const hostAllowed = allow.allowsHost(host)
   for (const a of addresses) {
     if (!isBlockedAddress(a)) continue
-    if (hostAllowed || allow.allowsAddress(a)) continue
+    const all = expand(a) ?? [a]
+    if (all.some(x => METADATA.includes(x.toLowerCase()) || (isIPv6(x) && sameV6(x, 'fd00:ec2::254')))) {
+      // Metadaten: nur eine ausdrücklich genannte Einzeladresse öffnet sie, nie Hostname oder Bereich
+      if (allow.allowsExactAddress(a)) continue
+    } else if (all.some(x => LINK_LOCAL.check(x, isIPv4(x) ? 'ipv4' : 'ipv6'))) {
+      if (allow.allowsAddress(a)) continue // CIDR/IP, aber nie per Hostname
+    } else if (hostAllowed || allow.allowsAddress(a)) continue
     throw new SsrfBlockedError(`${host} -> ${a}`)
   }
 }
