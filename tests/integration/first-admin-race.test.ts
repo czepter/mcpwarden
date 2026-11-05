@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, expect, it } from 'vitest'
-import { REGISTRATION_CLOSED } from '../../shared/api-types'
+import { INVITE_REQUIRED } from '../../shared/api-types'
 import { api, createInstance, startServer, type TestInstance, type TestServer } from './harness'
 
 let inst: TestInstance
@@ -21,7 +21,7 @@ it('10 parallele Erst-Registrierungen ergeben genau einen Admin (A9)', async () 
   expect(rs.filter(r => r.status === 200)).toHaveLength(1)
   const closed = rs.filter(r => r.status === 403)
   expect(closed).toHaveLength(9)
-  expect(closed.every(r => r.json.code === REGISTRATION_CLOSED)).toBe(true)
+  expect(closed.every(r => r.json.code === INVITE_REQUIRED)).toBe(true)
   const winner = rs.findIndex(r => r.status === 200)
   const c = api(srv.url)
   await c.request('/api/auth/sign-in/email', { body: { email: `u${winner}@example.com`, password: 'passwort-12345' } })

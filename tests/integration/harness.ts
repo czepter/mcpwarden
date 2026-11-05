@@ -108,6 +108,7 @@ export async function startServer(inst: TestInstance, opts: StartOptions = {}): 
     BETTER_AUTH_SECRET: 'test-secret-test-secret-test-secret-0123',
     MASTER_KEY: 'ab'.repeat(32),
     DATA_DIR: inst.dataDir,
+    MCPW_DUMMY_UPSTREAM: '1', // 0b-Tests nutzen den Dummy-Upstream neben dem echten Gateway
     DATABASE_URL: inst.databaseUrl,
     ...(opts.rateLimit ? {} : { RATE_LIMIT: 'off' }),
     ...opts.env,

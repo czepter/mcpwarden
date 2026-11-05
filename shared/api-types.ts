@@ -116,3 +116,141 @@ export type OAuthClientAdmin = {
   expiresAt: string | null // createdAt + 30 Tage, solange nie genutzt; sonst null
 }
 export type OAuthClientAdminList = { items: OAuthClientAdmin[] }
+
+// --- Phase 1: Upstreams, Admin, Audit, Dashboard (docs/plans/phase-1.md, Abschnitt 4.5) ---
+
+export type UpstreamStatus = 'unknown' | 'healthy' | 'degraded' | 'open' | 'auth_expired' | 'disabled'
+export type UpstreamSetup = 'ready' | 'awaiting_auth' | 'awaiting_approval'
+export type UpstreamType = 'http' | 'stdio'
+export type UpstreamTimeouts = { connectMs: number, listMs: number, callMs: number }
+
+export type UpstreamSummary = {
+  id: string
+  slug: string
+  name: string
+  description: string | null
+  type: UpstreamType
+  url: string | null
+  command: string | null
+  enabled: boolean
+  status: UpstreamStatus
+  statusReason: string | null
+  statusChangedAt: string | null
+  lastError: string | null
+  lastOkAt: string | null
+  setup: UpstreamSetup
+  toolsEnabled: number
+  toolsTotal: number
+  nextRetryAt: string | null
+  rateLimitHits5m: number
+  hasSecret: boolean
+}
+export type UpstreamDetail = UpstreamSummary & {
+  transport: 'auto' | 'streamable' | 'sse'
+  authType: 'none' | 'bearer' | 'header' | 'env'
+  authHeaderName: string | null
+  ratePerMin: number
+  maxConcurrent: number
+  timeouts: UpstreamTimeouts
+  args: string[]
+  cwd: string | null
+  env: Record<string, string>
+  secretNames: string[]
+  version: number
+  createdAt: string
+  updatedAt: string
+}
+export type UpstreamList = { items: UpstreamSummary[] }
+export type UpstreamInput = {
+  name: string
+  slug: string
+  type: UpstreamType
+  description?: string | null
+  url?: string
+  transport?: 'auto' | 'streamable' | 'sse'
+  authType?: 'none' | 'bearer' | 'header' | 'env'
+  authHeaderName?: string | null
+  ratePerMin?: number
+  maxConcurrent?: number
+  timeouts?: Partial<UpstreamTimeouts> | null
+  command?: string
+  args?: string[]
+  env?: Record<string, string>
+  cwd?: string | null
+}
+export type UpstreamPatch = Partial<Omit<UpstreamInput, 'slug' | 'type'>> & { enabled?: boolean }
+export type SecretInput = { kind: 'bearer' | 'header' | 'env', name?: string, value: string }
+export type SecretResult = { hasSecret: true, setup: UpstreamSetup }
+export type UpstreamTestErrorCode = 'ssrf_blocked' | 'redirect' | 'timeout' | 'connect_failed' | 'unauthorized' | 'upstream_error' | 'protocol' | 'awaiting_auth' | 'stdio_not_allowed'
+export type UpstreamTestResult =
+  | { ok: true, tools: Array<{ name: string, description?: string }>, latencyMs: number }
+  | { ok: false, errorCode: UpstreamTestErrorCode, message: string, latencyMs?: number }
+export type UpstreamToolItem = {
+  name: string
+  title: string | null
+  description: string | null
+  enabled: boolean
+  gone: boolean
+  firstSeenAt: string
+  lastSeenAt: string
+  annotations?: { readOnlyHint?: boolean, destructiveHint?: boolean, idempotentHint?: boolean }
+}
+export type UpstreamToolList = { items: UpstreamToolItem[], fetchedAt: string | null, stale: boolean }
+
+export type StdioReason = 'instance_disabled' | 'not_granted' | 'no_capabilities' | 'supervisor_unreachable' | 'image_slim'
+export type Capabilities = {
+  mcpUrl: string
+  role: Role
+  stdio: { allowed: boolean, reason?: StdioReason }
+  limits: { maxUpstreams: number, upstreamsUsed: number, maxConnections: number, callsPerMin: number }
+  defaults: { ratePerMin: number, maxConcurrent: number, timeouts: UpstreamTimeouts }
+}
+
+export type InviteStatus = 'open' | 'used' | 'expired' | 'revoked'
+export type InviteSummary = { id: string, email: string | null, createdAt: string, expiresAt: string, status: InviteStatus, usedAt: string | null, usedByUserId: string | null, createdByUserId: string | null }
+export type InviteList = { items: InviteSummary[] }
+export type InviteCreated = { id: string, email: string | null, createdAt: string, expiresAt: string, link: string }
+export type InviteInfo = { valid: true, email: string | null, expiresAt: string } | { valid: false, reason: 'expired' | 'used' | 'revoked' | 'unknown' }
+/** Stabile Codes (HTTP 403) von `POST /api/auth/sign-up/email`. */
+export const INVITE_REQUIRED = 'INVITE_REQUIRED'
+export const INVITE_INVALID = 'INVITE_INVALID'
+
+export type UserLimits = { maxUpstreams: number, callsPerMin: number, maxConnections: number, stdioMaxProcs: number, stdioIdleMin: number }
+export type AdminUser = {
+  id: string
+  email: string
+  name: string
+  role: Role
+  banned: boolean
+  banReason: string | null
+  createdAt: string
+  upstreamCount: number
+  lastActivityAt: string | null
+  stdioAllowed: boolean
+  limits: UserLimits
+}
+export type AdminUserList = { items: AdminUser[], defaults: UserLimits }
+export type AdminUserLimitsInput = Partial<UserLimits & { stdioAllowed: boolean }>
+export type AdminSettings = { 'stdio.enabled': boolean, 'ssrf.allow': string[] }
+export type AdminSettingsResult = AdminSettings & { warnings: Array<{ key: string, entry: string, code: 'covers_metadata_ip' }> }
+
+export type AuditItem = {
+  id: number
+  ts: string
+  actorKind: 'user' | 'admin' | 'system'
+  actorIsSelf: boolean
+  clientId: string | null
+  clientName: string | null
+  action: string
+  category: 'management' | 'auth' | 'status' | 'denied'
+  scope: 'user' | 'instance'
+  targetType: string
+  targetId: string | null
+  targetLabel: string | null
+  result: 'success' | 'denied' | 'pending' | 'status_change'
+}
+export type AuditList = { items: AuditItem[], nextCursor: string | null }
+
+export type DashboardClient = { kind: 'oauth' | 'pat', id: string, name: string, allowlisted: boolean | null, active: boolean, lastActiveAt: string | null, callsPerMin: number, contextTokensEstimate: number | null }
+export type DashboardAttention = { upstreamId: string, slug: string, name: string, status: UpstreamStatus, statusReason: string | null, nextRetryAt: string | null }
+export type Dashboard = { clients: DashboardClient[], attention: DashboardAttention[], attentionCount: number }
