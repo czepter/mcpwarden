@@ -9,7 +9,7 @@
  * GID (keine Gruppe 0). Es gilt das Design aus Plan 4.1; der Rohpipe-Fallback ist nicht nötig.
  */
 import { spawn, type ChildProcess } from 'node:child_process'
-import { chmodSync, chownSync, existsSync, mkdirSync, unlinkSync } from 'node:fs'
+import { chmodSync, chownSync, existsSync, mkdirSync, promises as fsp, unlinkSync } from 'node:fs'
 import net from 'node:net'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -27,6 +27,8 @@ export type SupervisorOptions = {
   workerJs: string
   /** Faktor für die Idle-Minuten (Tests: kleiner als 60000). */
   idleUnitMs?: number
+  /** Wartezeit auf das Ende eines Workers beim Stoppen in ms (Standard 5000; Tests: kuerzer). */
+  stopTimeoutMs?: number
   log?: (msg: string) => void
 }
 
@@ -35,6 +37,22 @@ const SECRET_ENV = ['MASTER_KEY', 'BETTER_AUTH_SECRET', 'DATABASE_URL']
 const BACKOFF_MIN = 1000
 const BACKOFF_MAX = 30_000
 const HARD = { maxProcs: 20, idleMin: 120 }
+
+/** Gibt es einen Prozess (auch Zombie ausgenommen) mit dieser UID? Liest /proc; ohne /proc gilt "nein". */
+export async function uidHasProcesses(uid: number, procDir = '/proc'): Promise<boolean> {
+  let names: string[]
+  try { names = (await fsp.readdir(procDir)).filter(n => /^\d+$/.test(n)) } catch { return false }
+  for (const n of names) {
+    try {
+      const st = await fsp.stat(join(procDir, n))
+      if (st.uid !== uid) continue
+      const status = await fsp.readFile(join(procDir, n, 'status'), 'utf8').catch(() => '')
+      if (/^State:\s+Z/m.test(status)) continue // Zombie: nichts mehr zu tun
+      return true
+    } catch { /* Prozess schon weg */ }
+  }
+  return false
+}
 
 export async function startSupervisor(o: SupervisorOptions) {
   const log = o.log ?? ((m: string) => process.stderr.write(`[supervisor] ${m}\n`))
@@ -170,20 +188,34 @@ export async function startSupervisor(o: SupervisorOptions) {
     })
   }
 
+  /** Wartet kurz, bis kein Prozess mehr mit dieser UID laeuft (nur mit eigener UID je Nutzer sinnvoll). */
+  async function uidGone(uid: number, ms = 3000): Promise<boolean> {
+    const end = Date.now() + ms
+    for (;;) {
+      if (!(await uidHasProcesses(uid))) return true
+      if (Date.now() >= end) return false
+      await new Promise(r => setTimeout(r, 50))
+    }
+  }
+
   async function stopWorker(userId: string, purge: boolean): Promise<number | null> {
     const w = workers.get(userId)
     const uid = w?.uid ?? uidmap.lookup(userId) ?? null
+    let exited = true
     if (w) {
       // Kein CAP_KILL: Stopp-Signal über den Steuerkanal (fd 4); der Worker beendet Kinder und sich selbst.
-      await new Promise<void>((res) => {
-        const t = setTimeout(res, 5000)
-        w.proc.once('exit', () => { clearTimeout(t); res() })
+      exited = await new Promise<boolean>((res) => {
+        const t = setTimeout(() => res(false), o.stopTimeoutMs ?? 5000)
+        w.proc.once('exit', () => { clearTimeout(t); res(true) })
         const ctl = w.proc.stdio[4] as import('node:stream').Writable | null
-        if (ctl) ctl.end('stop\n'); else res()
+        if (ctl) ctl.end('stop\n'); else { clearTimeout(t); res(true) }
       })
     }
     crashes.delete(userId)
     if (purge && uid !== null) {
+      // Nie unter laufenden Prozessen der UID loeschen: der Worker muss beendet sein, und mit Nutzerwechsel darf kein Prozess dieser UID uebrig sein
+      if (!exited) throw new Error('worker did not stop; refusing to purge')
+      if (canSwitchUser && !(await uidGone(uid))) throw new Error('processes of the uid are still running; refusing to purge')
       await purgeUserDir(o.dataDir, uid, argv => new Promise<number>((res) => {
         const p = spawn(argv[0]!, argv.slice(1), { cwd: join(o.dataDir, 'stdio'), stdio: 'ignore', env: { PATH: process.env.PATH ?? '/usr/bin:/bin' }, ...(canSwitchUser ? { uid, gid: uid } : {}) })
         p.on('error', () => res(127)); p.on('exit', c => res(c ?? 1))

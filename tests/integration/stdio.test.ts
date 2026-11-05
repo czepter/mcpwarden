@@ -1,7 +1,7 @@
-import { chmodSync, existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { startSupervisor } from '../../supervisor/main'
 import { SupervisorClient, type WorkerSession } from '../../server/gateway/stdio/supervisor-client'
 import { IpcTransport } from '../../server/gateway/stdio/ipc-transport'
@@ -10,6 +10,8 @@ import { ToolNotFoundError } from '../../server/gateway/ports'
 import { ctxFor, makeGateway, sig } from '../helpers/gateway'
 import { encryptSecret } from '../../server/gateway/crypto/secrets'
 import { execFileSync } from 'node:child_process'
+import net from 'node:net'
+import { encodeFrame, MAX_CONTROL_FRAME } from '../../supervisor/protocol'
 
 // Host-Lauf ohne Root: Supervisor im Modus "ohne Nutzerwechsel" (Worker unter der eigenen UID).
 // UID-Wechsel, Isolation und Härtung testet container-supervisor.test.ts im Linux-Container.
@@ -222,6 +224,32 @@ describe('stdio upstream through supervisor + worker', () => {
     for (const slug of ['pa', 'pb', 'pc']) expect(names).toContain(`${slug}__echo`)
     await h.gw.shutdown(300)
     sessions.closeAll()
+  })
+
+  it('purge is refused while the worker has not stopped: error reply, user directory kept (review L-f)', async () => {
+    const dir3 = mkdtempSync(join(tmpdir(), 'mcpw-data-'))
+    chmodSync(dir3, 0o755)
+    const stub = join(dir3, 'stuck-worker.mjs')
+    writeFileSync(stub, 'setInterval(() => {}, 1000)\n') // ignoriert den Stopp-Befehl
+    chmodSync(stub, 0o644)
+    const sup3 = await startSupervisor({ dataDir: dir3, socketPath: join(dir3, 'sup.sock'), webUid: process.getuid!(), webGid: process.getgid!(), stdioMode: 'auto', webCmd: ['sleep', '600'], workerJs: stub, stopTimeoutMs: 300, log: () => {} })
+    const client3 = new SupervisorClient(join(dir3, 'sup.sock'))
+    try {
+      const conn = net.connect(join(dir3, 'sup.sock'))
+      await new Promise<void>((res, rej) => { conn.once('connect', res); conn.once('error', rej) })
+      conn.write(encodeFrame({ v: 1, cmd: 'attach', userId: 'u-stuck' }, MAX_CONTROL_FRAME))
+      await vi.waitFor(() => expect(sup3.workers.has('u-stuck')).toBe(true))
+      const before = readdirSync(join(dir3, 'stdio')).filter(n => /^\d+$/.test(n))
+      expect(before).toHaveLength(1)
+      await expect(client3.stopWorker('u-stuck', true)).rejects.toMatchObject({ code: 'purge_failed' })
+      expect(readdirSync(join(dir3, 'stdio')).filter(n => /^\d+$/.test(n))).toEqual(before)
+      expect(await client3.ping()).toBe(true)
+      sup3.workers.get('u-stuck')?.proc.kill('SIGKILL')
+      conn.destroy()
+    } finally {
+      sup3.onExit(() => {})
+      await sup3.shutdown(0)
+    }
   })
 
 })
