@@ -137,6 +137,9 @@ export const API_PATHS = {
   signOut: '/api/auth/sign-out',
   upstreams: '/api/upstreams',
   capabilities: '/api/me/capabilities',
+  publicConfig: '/api/public-config',
+  requestPasswordReset: '/api/auth/request-password-reset',
+  resetPassword: '/api/auth/reset-password',
   pats: '/api/me/pats',
   connections: '/api/me/connections',
   audit: '/api/audit',
@@ -194,6 +197,8 @@ export type UpstreamTool = {
   firstSeenAt: string, lastSeenAt: string, annotations?: ToolAnnotations
 }
 export type ToolList = { items: UpstreamTool[], fetchedAt: string, stale: boolean }
+/** `GET /api/public-config`, ohne Sitzung. `mail`: SMTP_URL ist gesetzt (Passwort-Reset per Mail verfuegbar). */
+export type PublicConfig = { mail: boolean }
 export type Capabilities = {
   mcpUrl: string, role: Role
   stdio: { allowed: boolean, reason?: StdioDenyReason }
