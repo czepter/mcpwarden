@@ -57,4 +57,33 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
+      - run: node scripts/build-supervisor.mjs
       - run: pnpm test:int
+
+  # Supervisor im Linux-Container (UID-Wechsel, nur SETUID/SETGID/CHOWN, `id -G`, Härtung); Docker ist auf dem Runner vorhanden
+  container:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: node scripts/build-supervisor.mjs
+      - run: pnpm test:container
+
+  # Beispiel-Compose (Ziel full) baut und startet frisch: Registrierung, Einladung, Neustart, sauberes Ende
+  compose-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test:compose
