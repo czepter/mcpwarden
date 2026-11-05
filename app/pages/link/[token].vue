@@ -9,7 +9,7 @@ import { Button } from '~/components/ui/button'
 import { Input } from '~/components/ui/input'
 import { formatCountdown } from '~/lib/format'
 
-definePageMeta({ layout: 'auth' })
+definePageMeta({ layout: 'auth', middleware: 'phase2' })
 useHead({ title: 'Anmeldedaten eintragen · mcpwarden', meta: [{ name: 'referrer', content: 'no-referrer' }, { name: 'robots', content: 'noindex' }] })
 const token = String(useRoute().params.token)
 const { data, error, status } = useAsyncData(`link-${token.length}`, () => linkApi.get(token), { server: false })

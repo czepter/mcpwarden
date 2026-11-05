@@ -1,5 +1,5 @@
 <script setup lang="ts">
-definePageMeta({ layout: 'auth' })
+definePageMeta({ layout: 'auth', middleware: 'phase2' })
 useHead({ title: 'Fertig · mcpwarden', meta: [{ name: 'robots', content: 'noindex' }] })
 const status = String(useRoute().query.status ?? 'connected')
 const TEXT: Record<string, [string, string]> = {

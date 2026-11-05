@@ -9,6 +9,7 @@ import PageHeader from '~/components/shell/PageHeader.vue'
 import { Alert } from '~/components/ui/alert'
 import { Button } from '~/components/ui/button'
 
+definePageMeta({ middleware: 'phase2' })
 useHead({ title: 'stdio-Freigabe · mcpwarden' })
 const id = String(useRoute().params.id)
 const draft = useApi(`draft-${id}`, () => upstreamApi.draft(id))

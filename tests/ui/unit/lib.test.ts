@@ -39,6 +39,12 @@ describe('nav', () => {
     expect(labels('admin')).toContain('Admin')
     expect(labels('user')).not.toContain('Admin')
   })
+  it('Phase-2-Seiten (Statistik) nur im Mock-Build; ohne Backend-Route nicht in der Navigation', () => {
+    const labels = (p: boolean) => navFor('admin', p).flatMap(g => g.items.map(i => i.label))
+    expect(labels(true)).toContain('Statistik')
+    expect(labels(false)).not.toContain('Statistik')
+    expect(labels(false)).toContain('Upstreams')
+  })
 })
 
 describe('zod-schemas', () => {

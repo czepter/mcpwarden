@@ -10,6 +10,7 @@ import PageHeader from '~/components/shell/PageHeader.vue'
 import { formatNumber, formatPercent } from '~/lib/format'
 import { outcomeLabel } from '~/lib/labels'
 
+definePageMeta({ middleware: 'phase2' })
 useHead({ title: 'Statistik · mcpwarden' })
 const win = ref<StatsWindow>('24h')
 const { data, error, status, refresh } = useAsyncData('stats', () => statsApi.summary(win.value), { server: false, watch: [win] })

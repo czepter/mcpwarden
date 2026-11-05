@@ -28,7 +28,7 @@ export const publicApi = { config: () => http<PublicConfig>('GET', API_PATHS.pub
 
 export const oauthApi = {
   consentInfo: (query: string) => get<ConsentInfo>(`/api/oauth/consent-info${query}`),
-  // ponytail: Better-Auth oauth2.consent, Pfad unverifiziert; Server vergibt nur die gewaehlten Scopes.
+  // Better-Auth oauth2.consent (durch tests/smoke und tests/integration/oauth gegen das echte Backend belegt); der Server vergibt nur die gewaehlten Scopes.
   consent: (accept: boolean, scope: string[], query: string) =>
     post<{ redirectURI?: string, url?: string }>('/api/auth/oauth2/consent', { accept, scope: scope.join(' '), oauth_query: query.replace(/^\?/, '') }),
 }
