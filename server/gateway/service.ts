@@ -204,8 +204,10 @@ export async function patchUpstream(rt: Runtime, who: Who, id: string, body: Rec
   if (c.authType !== undefined && cur.type === 'http' && authType === 'env') throw bad('authType', 'http kennt kein env')
   if (authType === 'header' && !(c.authHeaderName ?? cur.authHeaderName)) throw bad('authHeaderName', 'authHeaderName fehlt')
   const patch: Parameters<typeof rt.repo.updateUpstream>[2] = { ...c, ...(body.enabled !== undefined ? { enabled: body.enabled as boolean } : {}) }
-  if (c.authType !== undefined && c.authType !== cur.authType) {
-    // Auth-Art gewechselt: alte Secrets passen nicht mehr
+  const headerRenamed = authType === 'header' && c.authHeaderName !== undefined && c.authHeaderName !== cur.authHeaderName
+  if ((c.authType !== undefined && c.authType !== cur.authType) || headerRenamed) {
+    // Auth-Art oder Headername gewechselt: das alte Secret passt nicht mehr (es ist an Art und Namen gebunden und wuerde sonst still
+    // ohne Header gesendet); der Nutzer traegt es neu ein
     for (const s of await rt.repo.getSecrets(who.id, id)) await rt.repo.deleteSecret(who.id, id, s.kind, s.name)
     patch.setup = authType === 'none' ? 'ready' : 'awaiting_auth'
   }

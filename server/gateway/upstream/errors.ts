@@ -4,6 +4,11 @@ import { UpstreamRedirectError } from '../net/safe-fetch'
 import { CatalogLimitError } from './catalog'
 
 export type ErrorCode = 'ssrf_blocked' | 'redirect' | 'timeout' | 'connect_failed' | 'unauthorized' | 'upstream_error' | 'protocol' | 'awaiting_auth' | 'stdio_not_allowed' | 'cancelled'
+/** Fuer die Auth-Art ist kein passendes Secret gespeichert (z. B. nach Umbenennen des Headers): nicht ohne Zugangsdaten verbinden. */
+export class CredentialsMissingError extends Error {
+  constructor() { super('credentials missing') }
+}
+
 export type Classified = { code: ErrorCode, message: string, status?: number, /** zählt für Breaker/Degraded */ counts: boolean, auth: boolean }
 
 const chain = (e: unknown) => { const out: unknown[] = []; for (let c = e, i = 0; c && i < 6; i++, c = (c as { cause?: unknown }).cause) out.push(c); return out }
@@ -12,6 +17,7 @@ const chain = (e: unknown) => { const out: unknown[] = []; for (let c = e, i = 0
 export function classifyError(e: unknown, opts: { hasAuth?: boolean, aborted?: boolean } = {}): Classified {
   const all = chain(e)
   if (all.some(x => x instanceof SsrfBlockedError || (x as Error)?.message?.includes(SSRF_MESSAGE))) return { code: 'ssrf_blocked', message: SSRF_MESSAGE, counts: false, auth: false }
+  if (all.some(x => x instanceof CredentialsMissingError)) return { code: 'awaiting_auth', message: 'Zugangsdaten fehlen noch', counts: false, auth: false }
   if (all.some(x => x instanceof UpstreamRedirectError)) return { code: 'redirect', message: 'Upstream leitet um, bitte Ziel-URL direkt eintragen', counts: false, auth: false }
   if (all.some(x => x instanceof CatalogLimitError)) return { code: 'protocol', message: 'Upstream liefert eine zu grosse Tool-Liste', counts: true, auth: false }
   const http = all.find((x): x is SdkHttpError => x instanceof SdkHttpError)

@@ -2,7 +2,7 @@ import { Client, SSEClientTransport, StreamableHTTPClientTransport } from '@mode
 import type { Transport } from '@modelcontextprotocol/client'
 import type { FetchLike } from '../net/safe-fetch'
 import { mergeTimeouts } from '../config'
-import { classifyError } from './errors'
+import { classifyError, CredentialsMissingError } from './errors'
 import { withRetry } from './retry'
 import type { UpstreamRow } from './types'
 
@@ -80,7 +80,10 @@ export async function connectUpstream(up: UpstreamRow, deps: ConnectDeps, signal
     }
     return { client, transport: 'stdio', retries: 0 }
   }
-  const headers = authHeaders(up, await deps.credentials(up, owner))
+  const creds = await deps.credentials(up, owner)
+  // Eine Auth-Art ohne passendes Secret nie still ohne Header verbinden
+  if ((up.authType === 'bearer' && !creds.bearer) || (up.authType === 'header' && !(up.authHeaderName && creds.headers?.[up.authHeaderName]))) throw new CredentialsMissingError()
+  const headers = authHeaders(up, creds)
   const attempt = async () => {
     const sig = AbortSignal.any([AbortSignal.timeout(t.connectMs), ...(signal ? [signal] : [])])
     const order: Array<'streamable' | 'sse'> = up.transport === 'auto' ? ['streamable', 'sse'] : [up.transport]
