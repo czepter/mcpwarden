@@ -1,107 +1,109 @@
 # mcpwarden
 
-Entwicklung: `pnpm install`, `pnpm env:init`, `pnpm dev`.
+Development: `pnpm install`, `pnpm env:init`, `pnpm dev`.
 
-Toolchain: Node 24 (`.nvmrc`). Nuxt ist auf 4.5.2 gepinnt, nicht auf 4.6.4: 4.6.x verlangt Node `^24.15.0`, 4.5.x läuft mit `^24.11.0` (lokal 24.13.0). Anheben auf 4.6.x, sobald Node >= 24.15 verfügbar ist (dann auch `engines.node` anpassen).
+Language: repository text (README, docs, code comments, tests, scripts, commit messages) is English; the product UI is German by decision, and so are the user-facing texts it displays (UI copy, error texts shown by the UI, mail subjects and bodies). API values stay English.
 
-## Entwicklung
+Toolchain: Node 24 (`.nvmrc`). Nuxt is pinned to 4.5.2, not 4.6.4: 4.6.x requires Node `^24.15.0`, 4.5.x runs with `^24.11.0` (locally 24.13.0). Raise to 4.6.x once Node >= 24.15 is available (then adjust `engines.node` too).
 
-Zuständigkeiten: `app/**` gehört dem Frontend, `server/**`, `tests/unit|integration`, Migrationen, `scripts/**` und `ci.yml` dem Backend. Gemeinsam (nur eigene Schlüssel, kleine Commits): `package.json`, `nuxt.config.ts`, `eslint.config.mjs`, Lockfile. `shared/api-types.ts` ist der Vertrag (Regeln im Kopfkommentar, Commit-Präfix `contract:`).
+## Development
 
-Vor dem ersten `dev` einmal `pnpm env:init` (legt `.env` mit Zufallswerten und Modus 600 an, überschreibt nie).
+Responsibilities: `app/**` belongs to the frontend; `server/**`, `tests/unit|integration`, migrations, `scripts/**` and `ci.yml` belong to the backend. Shared (own keys only, small commits): `package.json`, `nuxt.config.ts`, `eslint.config.mjs`, lockfile. `shared/api-types.ts` is the contract (rules in the header comment, commit prefix `contract:`).
 
-| Variable | Bedeutung |
+Before the first `dev`, run `pnpm env:init` once (creates `.env` with random values and mode 600, never overwrites).
+
+| Variable | Meaning |
 |---|---|
-| `BASE_URL` | Öffentliche URL, https Pflicht außer localhost |
-| `BETTER_AUTH_SECRET` | mindestens 32 Zeichen |
-| `MASTER_KEY` | 32 Byte als Base64 oder 64 Hex-Zeichen |
-| `DATABASE_URL` | leer = PGlite in `DATA_DIR/pgdata`, sonst `postgres://…` |
-| `DATA_DIR` | Datenverzeichnis, Default `./data` |
-| `ALLOWED_ORIGINS` | kommagetrennte Origins, Default Origin von `BASE_URL` |
-| `TRUST_PROXY` | optional, Default `false`: `X-Forwarded-For` wird ignoriert, als Client-IP für die Rate-Limits (Anmeldung, `/oauth2/token`, `/oauth2/register`, Einladungsinfo) gilt die Socket-Adresse. Hinter einem Reverse-Proxy `true` setzen (ein Proxy-Hop) oder die Anzahl verketteter Proxys (z. B. `2`): Client-IP ist dann der letzte bzw. N-te Eintrag von rechts, den der Proxy anhängt; links davon stehende Werte stammen vom Client und zählen nie. Ohne `true` teilen sich alle Clients hinter einem Proxy einen Zähler, mit `true` ohne Proxy davor kann ein Client sich per erfundenem Header eigene Zähler bauen: nur setzen, wenn wirklich ein Proxy davor steht, der den Header anhängt. Die Basis-URL kommt immer aus `BASE_URL` (nie aus `X-Forwarded-Host/-Proto`) |
-| `SMTP_URL` | optional: `smtps://user:pass@host:465` oder `smtp://user:pass@host:587` (STARTTLS Pflicht, Klartext nur an localhost). Geheim, URL-kodieren |
-| `MAIL_FROM` | Absender, Pflicht wenn `SMTP_URL` gesetzt ist, z. B. `mcpwarden <noreply@example.com>` |
-| `MAIL_NOTIFY_WINDOW_MIN` | optional: Mindestabstand der Statusmails je Upstream und Zustand in Minuten (1 bis 10080), Default `60` |
-| `RATE_LIMIT` | nur Tests: `off` schaltet das Better-Auth-Rate-Limit ab |
+| `BASE_URL` | Public URL, https required except for localhost |
+| `BETTER_AUTH_SECRET` | at least 32 characters |
+| `MASTER_KEY` | 32 bytes as Base64 or 64 hex characters |
+| `DATABASE_URL` | empty = PGlite in `DATA_DIR/pgdata`, otherwise `postgres://…` |
+| `DATA_DIR` | data directory, default `./data` |
+| `ALLOWED_ORIGINS` | comma-separated origins, default origin of `BASE_URL` |
+| `TRUST_PROXY` | optional, default `false`: `X-Forwarded-For` is ignored, the client IP for the rate limits (sign-in, `/oauth2/token`, `/oauth2/register`, invitation info) is the socket address. Behind a reverse proxy set `true` (one proxy hop) or the number of chained proxies (e.g. `2`): the client IP is then the last or N-th entry from the right that the proxy appends; values to the left of it come from the client and never count. Without `true`, all clients behind a proxy share one counter; with `true` and no proxy in front, a client can create its own counters with a forged header: set it only if a proxy that appends the header is really in front. The base URL always comes from `BASE_URL` (never from `X-Forwarded-Host/-Proto`) |
+| `SMTP_URL` | optional: `smtps://user:pass@host:465` or `smtp://user:pass@host:587` (STARTTLS required, plaintext only to localhost). Secret, URL-encode |
+| `MAIL_FROM` | sender, required when `SMTP_URL` is set, e.g. `mcpwarden <noreply@example.com>` |
+| `MAIL_NOTIFY_WINDOW_MIN` | optional: minimum spacing of status mails per upstream and state in minutes (1 to 10080), default `60` |
+| `RATE_LIMIT` | tests only: `off` disables the Better Auth rate limit |
 
-Der Start bricht mit Exit-Code 1 ab, wenn eine Pflichtvariable fehlt oder ungültig ist (Meldung nennt nur Namen, nie Werte).
+Startup aborts with exit code 1 if a required variable is missing or invalid (the message names only names, never values).
 
-Schema ändern: `pnpm db:schema` (Better-Auth-Schema neu generieren), `pnpm db:generate`, `pnpm db:check`. Migrationen nie von Hand editieren, Schemaänderungen strikt sequentiell (keine parallelen Migrations-Branches).
+Changing the schema: `pnpm db:schema` (regenerate the Better Auth schema), `pnpm db:generate`, `pnpm db:check`. Never edit migrations by hand, schema changes strictly sequential (no parallel migration branches).
 
-Tests: `pnpm build && pnpm test` (Unit und Integration gegen PGlite, das gebaute Artefakt läuft als Kindprozess). `pnpm test:pg` startet zusätzlich einen Postgres-Container (`TEST_PG_PORT` überschreibt Port 54329) und lässt dieselben Tests mit `TEST_BACKEND=postgres` laufen.
+Tests: `pnpm build && pnpm test` (unit and integration against PGlite, the built artifact runs as a child process). `pnpm test:pg` additionally starts a Postgres container (`TEST_PG_PORT` overrides port 54329) and runs the same tests with `TEST_BACKEND=postgres`.
 
-Hinweise: Single-Instance (prozessweiter Mutex für die Registrierung, PGlite erlaubt nur einen Prozess pro `DATA_DIR`; Deployment als Recreate, nicht Rolling). Kein automatisches Deployment.
+Notes: single instance (process-wide mutex for registration, PGlite allows only one process per `DATA_DIR`; deploy as recreate, not rolling). No automatic deployment.
 
-## Sendet mcpwarden E-Mails?
+## Does mcpwarden send emails?
 
-Optional. Ohne `SMTP_URL` nicht: Es wird kein Mailserver gebraucht, Einladungen bleiben Links, und alle Mailfunktionen sind ausgeblendet. Mit `SMTP_URL` und `MAIL_FROM` (siehe Tabelle) schaltet sich der Mailversand ein; gebaut sind „Passwort vergessen“ (Link 15 Minuten gültig, einmal verwendbar), Einladungsmails und Statusmails. Beim Erzeugen einer an eine Adresse gebundenen Einladung kann der Admin „Per E-Mail senden“ ankreuzen; der Link `/invite/<token>` geht dann zusätzlich an diese Adresse und bleibt im Dialog einmalig sichtbar. Wechselt ein Upstream nach `open` oder `auth_expired` (und einmal zurück nach gesund), bekommt nur sein Besitzer eine Mail mit Name, Zustand, einem bereinigten Grund und dem Link auf die Upstream-Seite (nie Secrets, nie Links aus Upstream-Text). Je Upstream und Zustand geht höchstens eine Mail pro Fenster raus (`MAIL_NOTIFY_WINDOW_MIN`, Default eine Stunde; der Zähler liegt im Speicher und beginnt nach einem Neustart neu), der Versand läuft im Hintergrund über eine begrenzte Warteschlange und kann einen Aufruf nie verlangsamen. Jeder Nutzer kann die Statusmails unter Einstellungen > Benachrichtigungen abschalten (Standard: an). Der Versand ist begrenzt (je Empfänger 3 pro Stunde), ein Fehler beim Versand bricht nie eine Anfrage ab, und weder Zugangsdaten noch Tokens landen im Log. Der Start bricht ab, wenn `SMTP_URL` ungültig ist oder `MAIL_FROM` fehlt.
+Optional. Not without `SMTP_URL`: no mail server is needed, invitations stay links, and all mail features are hidden. With `SMTP_URL` and `MAIL_FROM` (see table) mail sending switches on; built are "Passwort vergessen" (forgot password; link valid for 15 minutes, usable once), invitation mails and status mails. When creating an invitation bound to an address, the admin can tick "Per E-Mail senden" (send by email); the link `/invite/<token>` is then additionally sent to that address and stays visible once in the dialog. If an upstream changes to `open` or `auth_expired` (and once back to healthy), only its owner gets a mail with name, state, a sanitized reason and the link to the upstream page (never secrets, never links from upstream text). Per upstream and state at most one mail per window goes out (`MAIL_NOTIFY_WINDOW_MIN`, default one hour; the counter lives in memory and starts anew after a restart), sending runs in the background through a bounded queue and can never slow down a call. Every user can switch off status mails under Settings > Notifications ("Einstellungen" > "Benachrichtigungen"; default: on). Sending is limited (3 per hour per recipient), a sending error never aborts a request, and neither credentials nor tokens end up in the log. Startup aborts if `SMTP_URL` is invalid or `MAIL_FROM` is missing.
 
-## Client verbinden
+## Connecting a client
 
-Der MCP-Endpunkt ist `<BASE_URL>/mcp` (nur POST, zustandslos).
+The MCP endpoint is `<BASE_URL>/mcp` (POST only, stateless).
 
-OAuth (Claude Code, Cursor): Client per Dynamic Client Registration anlegen lassen, im Browser anmelden und die Zustimmung geben.
+OAuth (Claude Code, Cursor): let the client register via Dynamic Client Registration, sign in in the browser and give consent.
 
 ```sh
 claude mcp add --transport http mcpwarden <BASE_URL>/mcp
 ```
 
-Danach in Claude Code `/mcp` aufrufen und den Login im Browser abschliessen.
+Then call `/mcp` in Claude Code and complete the login in the browser.
 
-Personal Access Token: unter den Einstellungen (Tokens) erzeugen; der Klartext wird nur einmal angezeigt. Ein gesetzter `Authorization`-Header unterdrueckt laut Claude-Code-Doku OAuth.
+Personal access token: create it under Settings (Tokens); the plaintext is shown only once. According to the Claude Code docs, a set `Authorization` header suppresses OAuth.
 
 ```sh
 claude mcp add --transport http mcpwarden <BASE_URL>/mcp --header "Authorization: Bearer <pat>"
 ```
 
-Hinweis: Die manuelle Abnahme mit echten Clients (Claude Code, Cursor) ist noch nicht protokolliert; der automatisierte OAuth-PKCE-Flow-Test ist `tests/integration/oauth/flow.test.ts`.
+Note: manual acceptance with real clients (Claude Code, Cursor) has not been recorded yet; the automated OAuth PKCE flow test is `tests/integration/oauth/flow.test.ts`.
 
-## Docker und Betrieb
+## Docker and operations
 
-Zwei Ziele im `Dockerfile`: `full` (Standard) enthält den Supervisor, `uv`/`uvx` und die stdio-Worker, `slim` nur die Web-App (stdio fest aus, keine Capabilities nötig).
+Two targets in the `Dockerfile`: `full` (default) contains the supervisor, `uv`/`uvx` and the stdio workers, `slim` only the web app (stdio fixed off, no capabilities needed).
 
 ```sh
-pnpm env:init                       # .env mit Zufallswerten, Modus 600
-docker compose up -d --build        # Beispiel-Compose, Ziel full
+pnpm env:init                       # .env with random values, mode 600
+docker compose up -d --build        # example compose, target full
 curl http://localhost:3000/healthz  # {"ok":true}
 ```
 
-- `compose.yaml` (Ziel `full`): `cap_drop: [ALL]`, `cap_add: [SETUID, SETGID, CHOWN]`, `no-new-privileges`, `init: true`, `stop_grace_period: 40s`. Der Supervisor läuft als root nur zum Wechseln der UID; die Web-App läuft als UID 10001 ohne Capabilities. Ohne die drei Capabilities startet der Container, stdio ist dann für Nicht-Admins gesperrt (`no_capabilities`).
-- `BASE_URL` muss https sein (außer `localhost`). Reverse-Proxy: für `/mcp` keine Pufferung, lange Timeouts (offene `subscriptions/listen`-Streams), `X-Forwarded-For` anhängen (nicht überschreiben) und `TRUST_PROXY=true` setzen, sonst teilen sich alle Clients die Rate-Limit-Zähler des Proxys.
-- `/healthz` = Prozess lebt, `/readyz` = Migration durch und nicht im Herunterfahren (503 `draining`); Upstream-Ausfälle beeinflussen beide nie. `/readyz` meldet auch `stats_dropped` (verworfene Messdatensätze seit Start).
-- Herunterfahren (SIGTERM): `/readyz` wird sofort 503, laufende Aufrufe laufen bis zu 30 s aus, Pool und Worker werden geschlossen, Messdaten geflusht, dann Exit 0.
-- Altvolumes: Gehört `/data/pgdata` nicht UID 10001, bricht der Supervisor ab und nennt den einmaligen `chown`-Befehl. `/data` selbst muss root gehören und darf nicht gruppen-/welt-beschreibbar sein.
-- Schlüsselmaterial (`MASTER_KEY`, `BETTER_AUTH_SECRET`, `DATABASE_URL`) reicht der Supervisor nur an die Web-App weiter und entfernt es aus dem eigenen Prozess-Env; `/proc/<pid>/environ` des Supervisors zeigt weiter das Start-Env (nur root lesbar). Vollständig lösbar nur mit Docker-Secrets/Dateien (noch nicht umgesetzt).
+- `compose.yaml` (target `full`): `cap_drop: [ALL]`, `cap_add: [SETUID, SETGID, CHOWN]`, `no-new-privileges`, `init: true`, `stop_grace_period: 40s`. The supervisor runs as root only to switch UIDs; the web app runs as UID 10001 without capabilities. Without the three capabilities the container starts, stdio is then blocked for non-admins (`no_capabilities`).
+- `BASE_URL` must be https (except `localhost`). Reverse proxy: no buffering for `/mcp`, long timeouts (open `subscriptions/listen` streams), append `X-Forwarded-For` (do not overwrite) and set `TRUST_PROXY=true`, otherwise all clients share the proxy's rate-limit counters.
+- `/healthz` = process is alive, `/readyz` = migration done and not shutting down (503 `draining`); upstream outages never affect either. `/readyz` also reports `stats_dropped` (measurement records dropped since start).
+- Shutdown (SIGTERM): `/readyz` immediately becomes 503, running calls drain for up to 30 s, pool and workers are closed, measurement data is flushed, then exit 0.
+- Old volumes: if `/data/pgdata` does not belong to UID 10001, the supervisor aborts and names the one-time `chown` command. `/data` itself must belong to root and must not be group/world-writable.
+- The supervisor passes key material (`MASTER_KEY`, `BETTER_AUTH_SECRET`, `DATABASE_URL`) only to the web app and removes it from its own process env; `/proc/<pid>/environ` of the supervisor still shows the start env (readable by root only). Fully solvable only with Docker secrets/files (not implemented yet).
 
-### Backup und Umstieg PGlite nach Postgres
+### Backup and switching from PGlite to Postgres
 
-- Backup (PGlite): App stoppen, Volume `data` sichern. Postgres: übliches `pg_dump`.
-- Umstieg (App gestoppt, **gleicher** `MASTER_KEY`, sonst sind gespeicherte Secrets verloren):
+- Backup (PGlite): stop the app, back up the `data` volume. Postgres: the usual `pg_dump`.
+- Switching (app stopped, **same** `MASTER_KEY`, otherwise stored secrets are lost):
 
 ```sh
 docker run --rm -v mcpwarden_data:/data mcpwarden:full node /opt/tools/pglite-dump.mjs /data > dump.sql
-psql -v ON_ERROR_STOP=1 -f dump.sql postgres://user:pass@host/leere_datenbank
-# App mit DATABASE_URL=… und unverändertem MASTER_KEY starten (kein Migrationslauf nötig)
+psql -v ON_ERROR_STOP=1 -f dump.sql postgres://user:pass@host/empty_database
+# start the app with DATABASE_URL=… and the unchanged MASTER_KEY (no migration run needed)
 ```
 
-Der Ablauf ist durch `tests/integration/migrate-pglite-to-pg.test.ts` belegt (Login, Upstreams, Tool-Filter, entschlüsselbares Secret, laufende Sequenzen, unveränderte Migrationstabelle, Registrierung per Einladung).
+The procedure is verified by `tests/integration/migrate-pglite-to-pg.test.ts` (login, upstreams, tool filter, decryptable secret, running sequences, unchanged migrations table, registration via invitation).
 
-### Sicherheitshinweise
+### Security notes
 
-- Einladungslinks (`/invite/<token>`, 7 Tage, einmalig) sind Geheimnisse: nur an die gemeinte Person weitergeben. Die optionale E-Mail-Bindung wird nicht verifiziert (kein Mailversand).
-- Verändernde `/api/**`-Anfragen mit Sitzungs-Cookie prüfen `Origin` (bzw. `Sec-Fetch-Site`) gegen `BASE_URL`/`ALLOWED_ORIGINS` und antworten sonst 403 `forbidden_origin`; Anfragen mit `Authorization`-Header (PAT) sind ausgenommen. `/api/auth/**` prüft Better Auth selbst, die Better-Auth-Admin-Endpunkte (`/api/auth/admin/*`) und die OAuth-Client-Verwaltung (`create-client` u. a.) sind per HTTP gesperrt (404).
-- Sperren widerruft Sitzungen, PATs und OAuth-Zustimmungen/-Tokens des Nutzers endgültig; nach dem Entsperren muss er sich neu anmelden und neue Tokens/Verbindungen anlegen.
-- stdio-Upstreams: Nutzer-Worker laufen unter eigener UID, teilen aber Netz und Kernel mit der Instanz; eine kompromittierte Web-App erreicht den Worker. Freigabe pro Nutzer durch den Admin, Standard aus.
-- Master-Key-Rotation gibt es nicht (`upstream_secret.key_version` ist dafür reserviert).
-- `ssrf.allow` (Admin-Einstellung): CIDR oder genauer Hostname. Cloud-Metadatenadressen (169.254.169.254, 100.100.100.200, fd00:ec2::254) öffnet nur ein ausdrücklich eingetragener Einzeladresse-Eintrag, nie ein Hostname oder Bereich; Link-Local nur per CIDR/IP.
+- Invitation links (`/invite/<token>`, 7 days, single use) are secrets: pass them on only to the intended person. The optional email binding is not verified (no mail sending).
+- State-changing `/api/**` requests with a session cookie check `Origin` (or `Sec-Fetch-Site`) against `BASE_URL`/`ALLOWED_ORIGINS` and otherwise answer 403 `forbidden_origin`; requests with an `Authorization` header (PAT) are exempt. `/api/auth/**` is checked by Better Auth itself; the Better Auth admin endpoints (`/api/auth/admin/*`) and the OAuth client management (`create-client` etc.) are blocked via HTTP (404).
+- Banning permanently revokes the user's sessions, PATs and OAuth consents/tokens; after unbanning, the user must sign in again and create new tokens/connections.
+- stdio upstreams: user workers run under their own UID but share network and kernel with the instance; a compromised web app reaches the worker. Approval per user by the admin, default off.
+- There is no master key rotation (`upstream_secret.key_version` is reserved for it).
+- `ssrf.allow` (admin setting): CIDR or exact hostname. Cloud metadata addresses (169.254.169.254, 100.100.100.200, fd00:ec2::254) are opened only by an explicitly entered single-address entry, never by a hostname or range; link-local only via CIDR/IP.
 
-Tests: `pnpm test:container` (Supervisor im Container, Docker nötig), `pnpm test:compose` (Compose-Smoke gegen ein frisch gebautes Image), `pnpm test:slim` (baut und startet das Ziel `slim` ohne Capabilities, prüft `/healthz`, `/readyz`, UID 10001 und dass stdio fest gesperrt ist; läuft auch in der CI).
+Tests: `pnpm test:container` (supervisor in the container, Docker required), `pnpm test:compose` (compose smoke against a freshly built image), `pnpm test:slim` (builds and starts the `slim` target without capabilities, checks `/healthz`, `/readyz`, UID 10001 and that stdio is fixed blocked; also runs in CI).
 
-Frontend gegen echte Routen: Mocks (MSW) gibt es nur in Mock-Builds (`pnpm ui:dev`, `pnpm ui:build`, `VITE_API_MOCK`); `pnpm build` und `pnpm dev` sprechen immer mit dem echten Backend (`pnpm ui:check-build` stellt sicher, dass kein Mock-Code im Build steckt). Vertrag und Full-Stack:
+Frontend against real routes: mocks (MSW) exist only in mock builds (`pnpm ui:dev`, `pnpm ui:build`, `VITE_API_MOCK`); `pnpm build` and `pnpm dev` always talk to the real backend (`pnpm ui:check-build` ensures that no mock code is in the build). Contract and full stack:
 
-- `tests/contract/schemas.ts`: strikte zod-Schemas je Route. Sie prüfen die Mocks (`pnpm ui:test`) und die echten Antworten des gebauten Servers auf PGlite bzw. Postgres (`tests/integration/contract.test.ts`, Teil von `pnpm test` und `pnpm test:pg`).
-- `pnpm smoke` (nach `pnpm build`): Full-Stack-Smoke gegen eine frische Instanz (Erst-Admin, Login, Einladung und zweiter Nutzer, PAT, OAuth 2.1 mit DCR, PKCE S256, Consent und Refresh, `/mcp` `tools/list` und `tools/call` über ein Fake-MCP, Mandantentrennung, falsche Audience, sofortiger Widerruf). Als Vitest-Suite: `tests/integration/smoke.test.ts`; im Container: `pnpm test:compose`.
-- `pnpm ui:e2e`: Playwright gegen die Mocks (`ui:e2e:mock`) und gegen das echte Backend ohne MSW (`ui:e2e:real`). Optional `PW_CHROMIUM_PATH`, `E2E_PORT`, `E2E_REAL_PORT`.
+- `tests/contract/schemas.ts`: strict zod schemas per route. They check the mocks (`pnpm ui:test`) and the real responses of the built server on PGlite or Postgres (`tests/integration/contract.test.ts`, part of `pnpm test` and `pnpm test:pg`).
+- `pnpm smoke` (after `pnpm build`): full-stack smoke against a fresh instance (first admin, login, invitation and second user, PAT, OAuth 2.1 with DCR, PKCE S256, consent and refresh, `/mcp` `tools/list` and `tools/call` via a fake MCP, tenant isolation, wrong audience, immediate revocation). As a Vitest suite: `tests/integration/smoke.test.ts`; in the container: `pnpm test:compose`.
+- `pnpm ui:e2e`: Playwright against the mocks (`ui:e2e:mock`) and against the real backend without MSW (`ui:e2e:real`). Optional `PW_CHROMIUM_PATH`, `E2E_PORT`, `E2E_REAL_PORT`.
 
 
-UI gegen Entwurf: Abweichungen je Seite, Bildpaare (`docs/ui-review/`) und die 11 noch offenen Gestaltungsentscheidungen stehen in [`docs/ui-mockup-review.md`](docs/ui-mockup-review.md); bewusst weggelassene Punkte in [`docs/ui-abgleich.md`](docs/ui-abgleich.md). Die Strukturprüfungen dazu sind `tests/ui/e2e/mockup-parity.spec.ts` (ohne Pixel-Snapshots). Nicht erledigt: die manuelle Abnahme mit Claude Code und Cursor (siehe „Client verbinden“) und ein Review der 11 Entscheidungen durch den Owner.
+UI against the draft: deviations per page, image pairs (`docs/ui-review/`) and the 11 still open design decisions are in [`docs/ui-mockup-review.md`](docs/ui-mockup-review.md); deliberately omitted items in [`docs/ui-comparison.md`](docs/ui-comparison.md). The structural checks for them are `tests/ui/e2e/mockup-parity.spec.ts` (without pixel snapshots). Not done: manual acceptance with Claude Code and Cursor (see "Connecting a client") and a review of the 11 decisions by the owner.
