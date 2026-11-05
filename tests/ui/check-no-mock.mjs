@@ -1,10 +1,11 @@
 // Faellt aus, wenn ein Produktions-Build Mock-Code enthaelt (R14). Aufruf: node tests/ui/check-no-mock.mjs .output
-import { readdirSync, readFileSync, statSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 // Inhaltsmarker fuer Mock-Code und den echten Worker (INTEGRITY_CHECKSUM). Der Dateiname im Aufraeum-Code der Echt-App ist erlaubt.
-const NEEDLES = ['INTEGRITY_CHECKSUM', 'startMock', 'seedUpstreams', 'setupWorker']
+// mockRole/mockScenario: localStorage-Schluessel der Mock-Steuerung (Banner); __styleguide: Route nur im Mock-Build.
+const NEEDLES = ['INTEGRITY_CHECKSUM', 'startMock', 'seedUpstreams', 'setupWorker', 'mockRole', 'mockScenario', '__styleguide', '__API_MOCK__']
 
 export function findMock(dir) {
   const hits = []
@@ -22,6 +23,7 @@ export function findMock(dir) {
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const dir = process.argv[2] ?? '.output'
+  if (!existsSync(dir)) { console.error(`${dir} fehlt: erst "pnpm build" ausfuehren.`); process.exit(2) }
   const hits = findMock(dir)
   if (hits.length) { console.error(`Mock-Code im Build ${dir}:\n${hits.join('\n')}`); process.exit(1) }
   console.log(`OK: kein Mock-Code in ${dir}`)

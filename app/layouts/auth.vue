@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import MockBanner from '~/components/shell/MockBanner.vue'
+// Mock-Banner nur im Mock-Build: __API_MOCK__ ist Kompilier-Konstante, im Produktions-Build faellt Zweig samt Chunk weg.
+const MockBanner = __API_MOCK__ ? defineAsyncComponent(() => import('~/components/shell/MockBanner.vue')) : undefined
 </script>
 
 <template>
   <div class="min-h-screen bg-background">
-    <MockBanner />
+    <component :is="MockBanner" v-if="MockBanner" />
     <main class="mx-auto flex min-h-[80vh] flex-col items-center justify-center gap-4 px-4 py-10">
       <div class="flex items-center gap-2.5">
         <div class="flex size-9 items-center justify-center rounded-md bg-primary text-base font-bold text-primary-foreground" aria-hidden="true">m</div>
