@@ -185,7 +185,7 @@ test('Admin: Einladung erzeugen (Einmal-Link), Nutzer sperren, Allowlist-Eintrag
   await expect(page.getByTestId('one-time-value')).toContainText('/invite/')
   await page.getByRole('button', { name: 'Mara sperren' }).click()
   await page.getByRole('alertdialog').getByRole('button', { name: 'Sperren' }).click()
-  await expect(page.getByText('Gesperrt')).toBeVisible()
+  await expect(page.getByText('Gesperrt', { exact: true })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Christian sperren' })).toBeDisabled()
   await page.goto('/admin/oauth')
   await page.getByRole('button', { name: '+ Eintrag' }).click()
