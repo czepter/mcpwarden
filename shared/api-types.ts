@@ -213,7 +213,8 @@ export type Capabilities = {
 export type InviteStatus = 'open' | 'used' | 'expired' | 'revoked'
 export type InviteSummary = { id: string, email: string | null, createdAt: string, expiresAt: string, status: InviteStatus, usedAt: string | null, usedByUserId: string | null, createdByUserId: string | null }
 export type InviteList = { items: InviteSummary[] }
-export type InviteCreated = { id: string, email: string | null, createdAt: string, expiresAt: string, link: string }
+/** `mailQueued`: der Link wurde zusaetzlich zum Versand an die gebundene Adresse uebergeben (Zustellung nicht garantiert). */
+export type InviteCreated = { id: string, email: string | null, createdAt: string, expiresAt: string, link: string, mailQueued?: boolean }
 export type InviteInfo = { valid: true, email: string | null, expiresAt: string } | { valid: false, reason: 'expired' | 'used' | 'revoked' | 'unknown' }
 /** Stabile Codes (HTTP 403) von `POST /api/auth/sign-up/email`. */
 export const INVITE_REQUIRED = 'INVITE_REQUIRED'
@@ -289,6 +290,7 @@ export const API_PATHS = {
   signOut: '/api/auth/sign-out',
   upstreams: '/api/upstreams',
   capabilities: '/api/me/capabilities',
+  meSettings: '/api/me/settings',
   publicConfig: '/api/public-config',
   requestPasswordReset: '/api/auth/request-password-reset',
   resetPassword: '/api/auth/reset-password',
@@ -303,6 +305,9 @@ export type ToolMode = 'direct' | 'meta' // Phase 3
 
 /** `GET /api/public-config`, ohne Sitzung. `mail`: SMTP_URL ist gesetzt (Passwort-Reset per Mail verfuegbar). */
 export type PublicConfig = { mail: boolean }
+
+/** Persoenliche Einstellungen (`GET`/`PATCH /api/me/settings`). `notifyStatusMail` gilt nur bei aktivem Mailer. */
+export type MeSettings = { notifyStatusMail: boolean }
 
 // Statistik (Phase 2, Vorschlag)
 export type StatsWindow = '5m' | '1h' | '24h' | '7d'

@@ -80,6 +80,13 @@ export const userGatewayLimits = pgTable('user_gateway_limits', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 })
 
+/** Persoenliche Einstellungen je Nutzer. Fehlt die Zeile, gelten die Defaults (Benachrichtigung an). */
+export const userPreference = pgTable('user_preference', {
+  userId: text('user_id').primaryKey().references(() => user.id, { onDelete: 'cascade' }),
+  notifyStatusMail: boolean('notify_status_mail').notNull().default(true),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+})
+
 export const userInvite = pgTable('user_invite', {
   id: uuid('id').primaryKey().defaultRandom(),
   tokenHash: text('token_hash').notNull().unique(),

@@ -13,6 +13,9 @@ import type { UpstreamRow } from './upstream/types'
 import { getDb } from '../db'
 import { getMasterKey } from '../utils/master-key'
 import { audit } from '../utils/audit'
+import { getMailer } from '../mail'
+import { createStatusNotifier } from '../mail/notify'
+import { getConfig } from '../utils/config'
 import { notifyToolsChanged } from '../mcp/notify'
 import { registerGatewayLifecycle } from './lifecycle'
 
@@ -50,6 +53,20 @@ async function create(): Promise<Runtime> {
   const supervisor = imageTarget === 'full' && stdioMode !== 'off' ? new SupervisorClient(process.env.SUP_SOCKET ?? '/run/mcpwarden/sup.sock') : null
   const sessions = new Map<string, WorkerSession>()
 
+  const cfg = getConfig()
+  // Statusmails (nur mit aktivem Mailer): Fire-and-forget, gedrosselt je (Upstream, Zustand), Opt-out je Nutzer
+  const statusMail = createStatusNotifier({
+    mailer: getMailer(),
+    baseUrl: cfg.baseUrl,
+    windowMs: cfg.statusMailWindowMin * 60_000,
+    log: m => console.error(m),
+    lookup: async (userId, upstreamId) => {
+      const [owner, up] = await Promise.all([repo.getUserLite(userId), repo.getUpstream(userId, upstreamId)])
+      if (!owner || owner.banned || !up) return null
+      return { email: owner.email, name: up.name, notify: await repo.getNotifyStatusMail(userId) }
+    },
+  })
+
   const rtRef = {} as Runtime
   const gw = createGateway({
     store: repo,
@@ -64,6 +81,7 @@ async function create(): Promise<Runtime> {
         const attention = (x: string) => x === 'open' || x === 'auth_expired'
         if (attention(s.status) || (attention(prev) && s.status === 'healthy')) {
           await audit(repo, { userId, actor: 'system', action: 'upstream.status', targetType: 'upstream', targetId: id, meta: { status: s.status, previous: prev } }, log)
+          statusMail.notify({ upstreamId: id, userId, status: s.status, previous: prev, reason: s.reason })
         }
       },
     },
