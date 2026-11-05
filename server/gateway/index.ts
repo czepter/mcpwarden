@@ -1,6 +1,6 @@
 import { decryptSecret } from './crypto/secrets'
 import { createSafeFetch, type FetchLike } from './net/safe-fetch'
-import { AllowList } from './net/ssrf'
+import type { AllowList } from './net/ssrf'
 import { GatewayCore } from './proxy/handlers'
 import { StatsBuffer, type CallStatRow } from './stats/buffer'
 import { Catalog } from './upstream/catalog'

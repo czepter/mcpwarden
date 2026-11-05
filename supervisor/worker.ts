@@ -10,7 +10,6 @@ import { encodeFrame, FrameError, FrameReader, MAX_DATA_FRAME, type FromWorker, 
 
 const MAX_LINE = MAX_DATA_FRAME - 1024
 const STDERR_TAIL = 8 * 1024
-const HOME = process.env.HOME ?? process.cwd()
 const ROOT = process.cwd() // = DATA_DIR/stdio/<uid>, gesetzt vom Supervisor
 const MAX_CHILDREN = Number(process.env.WORKER_MAX_CHILDREN ?? 5)
 const IDLE_MS = Number(process.env.WORKER_IDLE_MIN ?? 10) * 60_000

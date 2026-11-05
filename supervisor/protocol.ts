@@ -19,7 +19,7 @@ export function encodeFrame(obj: unknown, max = MAX_DATA_FRAME): Buffer {
 
 /** Inkrementeller Decoder; wirft FrameError bei Überlänge, bevor Speicher belegt wird. */
 export class FrameReader {
-  private buf = Buffer.alloc(0)
+  private buf: Buffer = Buffer.alloc(0)
   constructor(private max: number) {}
   push(chunk: Buffer): unknown[] {
     this.buf = this.buf.length ? Buffer.concat([this.buf, chunk]) : chunk

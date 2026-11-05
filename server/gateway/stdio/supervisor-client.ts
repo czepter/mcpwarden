@@ -46,14 +46,14 @@ export class SupervisorClient {
     let ack: Reply | undefined
     let ready: () => void = () => {}
     const readyP = new Promise<void>((res) => { ready = res })
-    let session: WorkerSession | undefined
+    const sess: { current?: WorkerSession } = {}
     s.on('data', (d) => {
       let frames: unknown[]
       try { frames = reader.push(d) } catch { s.destroy(); return }
       for (const f of frames) {
         if (!ack) { ack = f as Reply; ackResolve?.(ack); continue }
-        if (!session) { queue.push(f); continue }
-        session.dispatch(f as FromWorker)
+        if (!sess.current) { queue.push(f); continue }
+        sess.current.dispatch(f as FromWorker)
       }
     })
     const closed = new Promise<void>(res => s.once('close', () => res()))
@@ -64,8 +64,9 @@ export class SupervisorClient {
       closed.then(() => { throw new SupervisorError('closed') }),
     ])
     if (!a.ok) { s.destroy(); throw new SupervisorError(a.error ?? 'attach_failed', a.retryMs) }
-    session = new WorkerSession(s)
-    void closed.then(() => session!.markClosed())
+    const session = new WorkerSession(s)
+    sess.current = session
+    void closed.then(() => session.markClosed())
     for (const f of queue) { const m = f as FromWorker; if (m.t === 'ready') ready(); else session.dispatch(m) }
     session.onReady = ready
     await Promise.race([readyP, closed.then(() => { throw new SupervisorError('worker_exited') })])

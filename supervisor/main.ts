@@ -13,7 +13,7 @@ import { chmodSync, chownSync, existsSync, mkdirSync, statSync, unlinkSync } fro
 import net from 'node:net'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { encodeFrame, FrameError, FrameReader, MAX_CONTROL_FRAME, parseCommand, type Command } from './protocol'
+import { encodeFrame, FrameReader, MAX_CONTROL_FRAME, parseCommand, type Command, type FrameError } from './protocol'
 import { ensureUserDir, purgeUserDir, realFs, UidMap, UnsafeDirectory, type FsOps } from './users'
 
 export type SupervisorOptions = {
@@ -95,7 +95,7 @@ export async function startSupervisor(o: SupervisorOptions) {
           if (reader.pending !== 0 || frames.length !== 1) { conn.destroy(); return }
           conn.off('data', onData)
           conn.pause()
-          await handleAttach(conn, cmd).catch((e) => { log(`attach failed: ${(e as Error).message}`); try { reply(conn, { ok: false, error: 'internal' }) } catch {} ; conn.destroy() })
+          await handleAttach(conn, cmd).catch((e) => { log(`attach failed: ${(e as Error).message}`); try { reply(conn, { ok: false, error: 'internal' }) } catch { /* Verbindung schon weg */ } conn.destroy() })
           return
         }
         await handleControl(conn, cmd)
@@ -197,7 +197,7 @@ export async function startSupervisor(o: SupervisorOptions) {
     }
     await Promise.all([...workers.keys()].map(u => stopWorker(u, false)))
     server.close()
-    try { unlinkSync(o.socketPath) } catch {}
+    try { unlinkSync(o.socketPath) } catch { /* Socket-Datei existiert nicht */ }
     exitHandler(code)
   }
   let exitHandler: (code: number) => void = c => process.exit(c)

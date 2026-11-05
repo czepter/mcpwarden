@@ -130,7 +130,7 @@ export class StatsBuffer {
     const batch = this.items.splice(0, this.o.batch ?? STATS.flushBatch)
     this.inflight = batch
     this.flushing = (async () => {
-      let failed: Item[] = []
+      let failed: Item[]
       try { failed = await this.writeIsolating(batch) } catch (err) {
         this.o.log?.('stats flush failed', err)
         failed = (err as { unwritten?: Item[] }).unwritten ?? batch
