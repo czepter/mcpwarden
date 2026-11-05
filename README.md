@@ -90,6 +90,7 @@ Der Ablauf ist durch `tests/integration/migrate-pglite-to-pg.test.ts` belegt (Lo
 
 - Einladungslinks (`/invite/<token>`, 7 Tage, einmalig) sind Geheimnisse: nur an die gemeinte Person weitergeben. Die optionale E-Mail-Bindung wird nicht verifiziert (kein Mailversand).
 - Verändernde `/api/**`-Anfragen mit Sitzungs-Cookie prüfen `Origin` (bzw. `Sec-Fetch-Site`) gegen `BASE_URL`/`ALLOWED_ORIGINS` und antworten sonst 403 `forbidden_origin`; Anfragen mit `Authorization`-Header (PAT) sind ausgenommen. `/api/auth/**` prüft Better Auth selbst, die Better-Auth-Admin-Endpunkte (`/api/auth/admin/*`) und die OAuth-Client-Verwaltung (`create-client` u. a.) sind per HTTP gesperrt (404).
+- Sperren widerruft Sitzungen, PATs und OAuth-Zustimmungen/-Tokens des Nutzers endgültig; nach dem Entsperren muss er sich neu anmelden und neue Tokens/Verbindungen anlegen.
 - stdio-Upstreams: Nutzer-Worker laufen unter eigener UID, teilen aber Netz und Kernel mit der Instanz; eine kompromittierte Web-App erreicht den Worker. Freigabe pro Nutzer durch den Admin, Standard aus.
 - Master-Key-Rotation gibt es nicht (`upstream_secret.key_version` ist dafür reserviert).
 - `ssrf.allow` (Admin-Einstellung): CIDR oder genauer Hostname. Cloud-Metadatenadressen (169.254.169.254, 100.100.100.200, fd00:ec2::254) öffnet nur ein ausdrücklich eingetragener Einzeladresse-Eintrag, nie ein Hostname oder Bereich; Link-Local nur per CIDR/IP.

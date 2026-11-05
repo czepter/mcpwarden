@@ -254,13 +254,17 @@ export function smokeSteps(o: SmokeOptions): SmokeStep[] {
     assert.equal(await toolsListStatus(patB.token), 200)
   })
 
-  step('Nutzer sperren: Token sofort ungueltig, Entsperren stellt wieder her', async () => {
+  step('Nutzer sperren: Token sofort ungueltig und auch nach dem Entsperren widerrufen; neue Zugangsdaten gehen', async () => {
     const users = (await admin.request('/api/admin/users')).json.items as Array<{ id: string, email: string }>
     const bobId = users.find(u => u.email === 'bob@example.com')!.id
     assert.equal((await admin.request(`/api/admin/users/${bobId}/ban`, { body: { reason: 'smoke' } })).status, 204)
     assert.equal(await toolsListStatus(patB.token), 401)
     assert.equal((await admin.request(`/api/admin/users/${bobId}/unban`, { body: {} })).status, 204)
-    assert.equal(await toolsListStatus(patB.token), 200)
+    assert.equal(await toolsListStatus(patB.token), 401) // Entsperren belebt widerrufene Zugangsdaten nicht wieder (Spec P0-4)
+    const again = api(base, '198.51.100.32')
+    assert.equal((await again.request('/api/auth/sign-in/email', { body: { email: 'bob@example.com', password: PW } })).status, 200)
+    const fresh = (await again.request('/api/me/pats', { body: { name: 'bob-neu' } })).json as PatCreated
+    assert.equal(await toolsListStatus(fresh.token), 200)
   })
 
   return steps
