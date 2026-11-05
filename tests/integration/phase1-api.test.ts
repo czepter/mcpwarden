@@ -105,6 +105,18 @@ describe('invites (P0-4)', () => {
     expect((await fetchSignUp(token, 'rev@example.com')).json.code).toBe(INVITE_INVALID)
     expect(await fetch(`${srv.url}/api/invites/${'z'.repeat(43)}`).then(x => x.json())).toMatchObject({ valid: false, reason: 'unknown' })
   })
+  it('malformed ids on admin routes answer 404, not 500 (review L-h)', async () => {
+    for (const id of ['not-a-uuid', '1', "x'--", '%00', 'ZZZZZZZZ-ZZZZ-ZZZZ-ZZZZ-ZZZZZZZZZZZZ']) {
+      const r = await admin.request(`/api/admin/invites/${encodeURIComponent(id)}`, { method: 'DELETE' })
+      expect(r.status, id).toBe(404)
+      expect(r.json.data.code).toBe('not_found')
+    }
+    for (const [m, p] of [['GET', ''], ['DELETE', ''], ['GET', '/tools']] as const) {
+      expect((await admin.request(`/api/upstreams/not-a-uuid${p}`, { method: m })).status, `${m} ${p}`).toBe(404)
+    }
+    expect((await admin.request('/api/admin/oauth/allowlist/not-a-uuid', { method: 'DELETE' })).status).toBe(404)
+    expect((await admin.request('/api/admin/users/not-a-user/unban', { body: {} })).status).toBe(404)
+  })
   it('non-admins cannot manage invites', async () => {
     const u = await invitedUser('plain@example.com')
     expect((await u.request('/api/admin/invites')).status).toBe(403)

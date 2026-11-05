@@ -20,6 +20,7 @@ import { LimitReached, SlugTaken, type NewUpstream } from './upstream/repo'
 import type { Runtime } from './runtime'
 import { getMasterKey } from '../utils/master-key'
 import { notifyToolsChanged, closeUserStreams } from '../mcp/notify'
+import { UUID_RE } from '../auth/dcr-store'
 import { runUserBanned, runUserDeleted, runUserDisabled } from '../utils/user-lifecycle'
 import type { upstream as upstreamTable } from '../db/schema'
 
@@ -503,6 +504,7 @@ export async function adminCreateInvite(rt: Runtime, admin: Who, baseUrl: URL, e
   return { id: row.id, email: row.email, createdAt: row.createdAt.toISOString(), expiresAt: row.expiresAt.toISOString(), link, mailQueued: wantMail }
 }
 export async function adminRevokeInvite(rt: Runtime, admin: Who, id: string) {
+  if (!UUID_RE.test(id)) throw apiError(404, 'not_found', 'Einladung nicht gefunden') // sonst wirft Postgres "invalid input syntax for uuid" (500)
   if (!(await rt.repo.revokeInvite(id))) throw apiError(409, 'invite_not_open', 'Die Einladung ist nicht mehr offen')
   await audit(rt.repo, { userId: null, actor: `admin:${admin.id}`, action: 'invite.revoke', targetType: 'invite', targetId: id })
 }
