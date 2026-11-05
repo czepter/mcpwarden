@@ -64,7 +64,7 @@ const initials = computed(() => (user.value?.name ?? '?').split(/\s+/).map(s => 
       <DropdownMenu>
         <DropdownMenuTrigger as-child>
           <button type="button" class="flex min-h-[52px] w-full items-center gap-2.5 rounded-sm px-1.5 text-left hover:bg-sidebar-accent group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0" aria-label="Benutzermenü" data-testid="user-menu">
-            <span class="flex size-8 shrink-0 items-center justify-center rounded-full bg-border text-xs font-semibold text-[#27272a]" aria-hidden="true">{{ initials }}</span>
+            <span class="flex size-8 shrink-0 items-center justify-center rounded-full bg-border text-xs font-semibold text-avatar-fg" aria-hidden="true">{{ initials }}</span>
             <span class="min-w-0 flex-1 group-data-[collapsible=icon]:hidden">
               <span class="block text-[13px] font-semibold">{{ user?.name }}</span>
               <span class="block truncate text-xs text-muted-foreground">{{ user?.email }}</span>
