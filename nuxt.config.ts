@@ -20,6 +20,14 @@ export default defineNuxtConfig({
   css: ['~/assets/css/tailwind.css'],
   // __API_MOCK__ ist eine Kompilier-Konstante ('' im Produktions-Build) und wird samt Mock-Code wegoptimiert.
   vite: { plugins: [tailwindcss()], define: { __API_MOCK__: JSON.stringify(process.env.VITE_API_MOCK ?? '') } },
+  // Der Styleguide (/__styleguide) existiert nur in Mock-Builds.
+  hooks: {
+    'pages:extend'(pages) {
+      if (process.env.VITE_API_MOCK) return
+      const i = pages.findIndex(p => p.path === '/__styleguide')
+      if (i >= 0) pages.splice(i, 1)
+    },
+  },
   shadcn: { prefix: '', componentDir: './app/components/ui' },
   app: { head: { htmlAttrs: { lang: 'de' }, title: 'mcpwarden' } },
 })
