@@ -1,4 +1,4 @@
-import type { AdminSettings, AdminUser, AllowlistEntry, AuditItem, ConnectionSummary, DcrMode, InviteSummary, OAuthClientAdmin, PatSummary, UpstreamDetail, UpstreamToolItem } from '#shared/api-types'
+import type { AdminSettings, AdminUser, AllowlistEntry, AuditItem, ConnectionSummary, DcrMode, InviteSummary, OAuthClientAdmin, PatSummary, StdioReason, UpstreamDetail, UpstreamToolItem } from '#shared/api-types'
 import * as seed from './seed'
 
 export type MockScenario = 'default' | 'empty' | 'error' | 'slow' | 'forbidden' | 'huge'
@@ -56,6 +56,11 @@ export function scenario(): MockScenario { return (store()?.getItem('mockScenari
 export function mailEnabled(): boolean { return store()?.getItem('mockMail') !== 'off' }
 /** Registration without invitation (mock): localStorage `mockRegistration` = `open` simulates a fresh instance without users. */
 export function registrationOpen(): boolean { return store()?.getItem('mockRegistration') === 'open' }
+/** Forced stdio block reason (mock): localStorage `mockStdioReason` = one of the `StdioReason` values, e.g. `image_slim`. */
+export function stdioReasonOverride(): StdioReason | null {
+  const v = store()?.getItem('mockStdioReason')
+  return v && ['instance_disabled', 'not_granted', 'no_capabilities', 'supervisor_unreachable', 'image_slim'].includes(v) ? v as StdioReason : null
+}
 export function role(): MockRole { return (store()?.getItem('mockRole') as MockRole) || 'admin' }
 export function currentUser() {
   const s = getState()

@@ -41,6 +41,11 @@ describe('Mock rules like the backend', () => {
     // healthy, ready upstreams of the seed stay out
     expect(dash.attention.every(x => x.setup !== 'ready' || ['degraded', 'open', 'auth_expired'].includes(x.status))).toBe(true)
   })
+  it('Capabilities: stdio block reasons for the approval checklist stay inside the contract', async () => {
+    expect(schemas.capabilities.parse(await (await call('/api/me/capabilities')).json()).stdio).toEqual({ allowed: true })
+    getState().settings['stdio.enabled'] = false
+    expect(schemas.capabilities.parse(await (await call('/api/me/capabilities')).json()).stdio).toEqual({ allowed: false, reason: 'instance_disabled' })
+  })
   it('PAT plaintext only in the POST response, never in the state or in the list', async () => {
     const created = await (await post('/api/me/pats', { name: 'canary' })).json() as { token: string }
     expect(created.token).toMatch(/^mcpw_pat_/)

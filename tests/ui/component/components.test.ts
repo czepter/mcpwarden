@@ -6,6 +6,7 @@ import OneTimeSecret from '~/components/common/OneTimeSecret.vue'
 import SecretField from '~/components/common/SecretField.vue'
 import StatusBadge from '~/components/common/StatusBadge.vue'
 import SparkBars from '~/components/common/SparkBars.vue'
+import StdioChecklist from '~/components/upstreams/StdioChecklist.vue'
 import ToolTable from '~/components/upstreams/ToolTable.vue'
 import type { UpstreamToolItem } from '#shared/api-types'
 
@@ -91,5 +92,36 @@ describe('ConfirmDialog', () => {
     await vi.waitFor(() => expect(target.value).toBeNull())
     expect(seen).toEqual(['token-1'])
     w.unmount()
+  })
+})
+
+describe('StdioChecklist', () => {
+  const rows = (caps: { stdio: { allowed: boolean, reason?: string } }) => mount(StdioChecklist, { props: { caps: caps as never } }).findAll('li')
+  it('every row carries an icon and a state text, the command row stays open', () => {
+    const r = rows({ stdio: { allowed: true } })
+    expect(r.map(x => x.attributes('data-state'))).toEqual(['ok', 'ok', 'open'])
+    for (const li of r) {
+      expect(li.find('svg[aria-hidden="true"]').exists()).toBe(true)
+      expect(li.find('[data-testid="checklist-state"]').text()).toMatch(/^(Erfüllt|Blockiert|Offen)$/)
+    }
+  })
+  it('shows the block reason in words and marks later rows as open', () => {
+    const r = rows({ stdio: { allowed: false, reason: 'instance_disabled' } })
+    expect(r.map(x => x.attributes('data-state'))).toEqual(['blocked', 'open', 'open'])
+    expect(r[0]!.text()).toContain('auf dieser Instanz ausgeschaltet')
+  })
+  it('not approved account: instance ok, account blocked', () => {
+    const r = rows({ stdio: { allowed: false, reason: 'not_granted' } })
+    expect(r.map(x => x.attributes('data-state'))).toEqual(['ok', 'blocked', 'open'])
+    expect(r[1]!.text()).toContain('nicht freigegeben')
+  })
+  it('slim image: the runtime row comes first and is blocked', () => {
+    const r = rows({ stdio: { allowed: false, reason: 'image_slim' } })
+    expect(r.map(x => x.attributes('data-state'))).toEqual(['blocked', 'open', 'open', 'open'])
+    expect(r[0]!.text()).toContain('slim')
+  })
+  it.each(['supervisor_unreachable', 'no_capabilities'])('runtime reason %s: instance and account ok, isolation blocked', (reason) => {
+    const r = rows({ stdio: { allowed: false, reason } })
+    expect(r.map(x => x.attributes('data-state'))).toEqual(['ok', 'ok', 'blocked', 'open'])
   })
 })

@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { login, prep } from './helpers'
+import { axe, login, prep } from './helpers'
 
 // Structural checks from the mockup comparison (docs/ui-mockup-review.md). Deliberately no pixel snapshots:
 // they would not be stable between machines. What is checked are the draft's dimensions (44 px, underline, text labels).
@@ -81,4 +81,32 @@ test('Token page and dashboard: page titles like the draft', async ({ page }) =>
   await page.goto('/settings/tokens')
   await expect(page.getByRole('heading', { name: 'Personal Access Tokens', level: 1 })).toBeVisible()
   await expect(page.getByRole('navigation', { name: /breadcrumb/i }).getByText('Tokens', { exact: true })).toBeVisible()
+})
+
+test('stdio approval: checklist with icon and text per row, block reasons from the capabilities', async ({ page }) => {
+  await login(page)
+  await page.goto('/upstreams/up_5/approve')
+  const list = page.getByTestId('stdio-checklist')
+  await expect(list.getByRole('listitem')).toHaveCount(3)
+  await expect(list.getByRole('listitem').nth(0)).toContainText('Erfüllt')
+  await expect(list.getByRole('listitem').nth(2)).toContainText('Offen')
+  await expect(page.getByRole('button', { name: 'Freigeben' })).toBeEnabled()
+  await expect(page.getByTestId('stdio-block-reason')).toHaveCount(0)
+  // Blocked by the slim image: reason in words, state as text (not colour only), approval disabled
+  await page.evaluate(() => localStorage.setItem('mockStdioReason', 'image_slim'))
+  await page.reload()
+  const rows = page.getByTestId('stdio-checklist').getByRole('listitem')
+  await expect(rows.first()).toContainText('Blockiert')
+  await expect(page.getByTestId('stdio-block-reason')).toContainText('slim')
+  for (const row of await rows.all()) {
+    await expect(row.locator('svg[aria-hidden="true"]')).toHaveCount(1)
+    await expect(row.getByTestId('checklist-state')).not.toHaveText('')
+  }
+  await expect(page.getByRole('button', { name: 'Freigeben' })).toBeDisabled()
+  await axe(page)
+  // Global switch off
+  await page.evaluate(() => { localStorage.removeItem('mockStdioReason'); const k = 'mcpwarden.mock.state'; const s = JSON.parse(sessionStorage.getItem(k)!); s.settings['stdio.enabled'] = false; sessionStorage.setItem(k, JSON.stringify(s)) })
+  await page.reload()
+  await expect(page.getByTestId('stdio-block-reason')).toContainText('ausgeschaltet')
+  await axe(page)
 })

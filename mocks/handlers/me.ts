@@ -1,5 +1,5 @@
 import type { Capabilities, ConnectionList, MeSettings, PatCreated, PatList } from '#shared/api-types'
-import { getState, role, save, scenario } from '../state'
+import { getState, role, save, scenario, stdioReasonOverride } from '../state'
 import { body, err, json, nid, noContent, route } from '../util'
 
 export const meHandlers = [
@@ -7,7 +7,7 @@ export const meHandlers = [
     const s = getState()
     const caps: Capabilities = {
       mcpUrl: 'https://mcp.example.test/mcp', role: role(),
-      stdio: role() === 'admin' && s.settings['stdio.enabled'] ? { allowed: true } : { allowed: false, reason: !s.settings['stdio.enabled'] ? 'instance_disabled' : 'not_granted' },
+      stdio: stdioReasonOverride() ? { allowed: false, reason: stdioReasonOverride()! } : role() === 'admin' && s.settings['stdio.enabled'] ? { allowed: true } : { allowed: false, reason: !s.settings['stdio.enabled'] ? 'instance_disabled' : 'not_granted' },
       limits: { maxUpstreams: 50, upstreamsUsed: s.upstreams.length, maxConnections: 20, callsPerMin: 120 },
       defaults: { ratePerMin: 60, maxConcurrent: 5, timeouts: { connectMs: 10_000, listMs: 15_000, callMs: 60_000 } },
       features: { healthHistory: false, toolMode: false, callLog: false },
