@@ -1,0 +1,280 @@
+import { expect, test } from '@playwright/test'
+import { axe, login, prep } from './helpers'
+
+test('Login, Navigation, Einklappen bleibt nach Neuladen, Strg+B', async ({ page }) => {
+  await login(page)
+  await expect(page.getByRole('navigation', { name: 'Hauptnavigation' })).toBeVisible()
+  await expect(page.getByRole('link', { name: 'Admin' })).toBeVisible()
+  await page.getByTestId('collapse').click()
+  await expect(page.locator('[data-slot="sidebar"]').first()).toHaveAttribute('data-state', 'collapsed')
+  await page.reload()
+  await expect(page.locator('[data-slot="sidebar"]').first()).toHaveAttribute('data-state', 'collapsed')
+  await page.keyboard.press('Control+b')
+  await expect(page.locator('[data-slot="sidebar"]').first()).toHaveAttribute('data-state', 'expanded')
+  const panel = page.locator('[data-sidebar="sidebar"]').first().locator('xpath=..')
+  await expect.poll(() => panel.evaluate(e => e.getBoundingClientRect().width)).toBe(248)
+})
+
+test('falsches Passwort zeigt Fehler, Registrierung ohne Einladung gesperrt', async ({ page }) => {
+  await prep(page)
+  await page.goto('/login')
+  await page.getByLabel('E-Mail').fill('a@b.de')
+  await page.getByLabel('Passwort').fill('falsch')
+  await page.getByRole('button', { name: 'Anmelden' }).click()
+  await expect(page.getByRole('alert').filter({ hasText: 'stimmt nicht' })).toBeVisible()
+  await page.goto('/register')
+  await page.getByLabel('Name').fill('Neu')
+  await page.getByLabel('E-Mail').fill('neu@example.test')
+  await page.getByLabel('Passwort', { exact: true }).fill('langgenugpasswort')
+  await page.getByLabel('Passwort bestätigen').fill('langgenugpasswort')
+  await page.getByRole('button', { name: 'Konto anlegen' }).click()
+  await expect(page.getByText('nur mit Einladung')).toBeVisible()
+})
+
+test('Einladung: gueltig, gebunden, abgelaufen, verbraucht', async ({ page }) => {
+  await prep(page)
+  await page.goto('/invite/abgelaufen-token')
+  await expect(page.getByText('abgelaufen')).toBeVisible()
+  await page.goto('/invite/verbraucht-token')
+  await expect(page.getByText('bereits verwendet')).toBeVisible()
+  await page.goto('/invite/gebunden-token')
+  await expect(page.getByLabel('E-Mail')).toHaveValue('neu@example.test')
+  await expect(page.getByLabel('E-Mail')).toHaveJSProperty('readOnly', true)
+  await page.goto('/invite/gueltig-token')
+  await page.getByLabel('Name').fill('Neu')
+  await page.getByLabel('E-Mail').fill('n@example.test')
+  await page.getByLabel('Passwort', { exact: true }).fill('langgenugpasswort')
+  await page.getByLabel('Passwort bestätigen').fill('langgenugpasswort')
+  await page.getByRole('button', { name: 'Konto anlegen' }).click()
+  await expect(page.getByRole('heading', { name: 'Dashboard', level: 1 })).toBeVisible()
+  expect(await page.locator('meta[name="referrer"]').count()).toBe(0) // Meta nur auf der Link-Seite
+})
+
+test('Consent: unbekannter Client braucht Haekchen, bekannter nicht, ungueltige Signatur', async ({ page }) => {
+  await login(page)
+  await page.goto('/consent?client_id=agent-x&sig=ok')
+  const allow = page.getByRole('button', { name: 'Zugriff erlauben' })
+  await expect(page.getByText('Unbekannter Client')).toBeVisible()
+  await expect(allow).toBeDisabled()
+  await page.getByRole('checkbox').click()
+  await expect(allow).toBeEnabled()
+  await expect(page.getByText('mcp:tools')).toBeVisible()
+  await expect(page.getByText('mcpwarden:admin')).toHaveCount(0)
+  // Auch wenn der Server den Admin-Scope schon anbietet (Phase 2): bis dahin kein Schalter.
+  await page.goto('/consent?client_id=agent-admin&sig=ok')
+  await expect(page.getByRole('heading', { name: 'Dieser Client darf' })).toBeVisible()
+  await expect(page.getByText('mcpwarden:admin')).toHaveCount(0)
+  await expect(page.getByRole('switch')).toHaveCount(0)
+  await page.goto('/consent?client_id=claude-code&sig=ok')
+  await expect(page.getByRole('checkbox')).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Zugriff erlauben' })).toBeEnabled()
+  await expect(page.getByText('localhost').first()).toBeVisible()
+  await page.goto('/consent?client_id=bad-sig&sig=bad')
+  await expect(page.getByText('nicht gültig oder abgelaufen')).toBeVisible()
+})
+
+test('Upstream anlegen unter 2 Minuten, testen, Tool-Schalter, Slug-Kollision, loeschen', async ({ page }) => {
+  await login(page)
+  const t0 = Date.now()
+  await page.goto('/upstreams/new')
+  await page.getByLabel('Anzeigename').fill('Demo')
+  await page.getByLabel('Kurzname').fill('demo')
+  await page.getByLabel('Server-URL').fill('https://mcp.demo.example/mcp')
+  await page.getByRole('button', { name: 'Anlegen und verbinden' }).click()
+  await expect(page.getByTestId('test-ok')).toBeVisible()
+  expect(Date.now() - t0).toBeLessThan(120_000)
+  await page.getByRole('link', { name: 'Zum Upstream' }).click()
+  await page.getByRole('tab', { name: 'Tools' }).click()
+  const sw = page.getByRole('switch').first()
+  await expect(sw).toBeChecked()
+  await sw.click()
+  await expect(sw).not.toBeChecked()
+  await page.goto('/upstreams/new')
+  await page.getByLabel('Anzeigename').fill('Dup')
+  await page.getByLabel('Kurzname').fill('github')
+  await page.getByLabel('Server-URL').fill('https://mcp.dup.example/mcp')
+  await page.getByRole('button', { name: 'Anlegen und verbinden' }).click()
+  await expect(page.getByText('schon vergeben')).toBeVisible()
+  await page.goto('/upstreams')
+  await expect(page.getByRole('row', { name: /Demo/ })).toBeVisible()
+  await page.getByRole('link', { name: 'Demo mcp.demo.example/mcp' }).click()
+  await page.getByRole('button', { name: 'Löschen' }).click()
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Löschen' }).click()
+  await expect(page).toHaveURL(/\/upstreams$/)
+})
+
+test('Upstream-Liste: Filter ohne Treffer, Fremd-ID 404, stdio gesperrt fuer Nutzer', async ({ page }) => {
+  await login(page, { role: 'user' })
+  await page.goto('/upstreams')
+  await page.getByLabel('Upstreams suchen').fill('zzzz')
+  await expect(page.getByText('Keine Treffer')).toBeVisible()
+  await page.goto('/upstreams/fremd')
+  await expect(page.getByText('Nicht gefunden')).toBeVisible()
+  await page.goto('/upstreams/new')
+  await expect(page.getByTestId('stdio-reason')).toContainText('nicht freigegeben')
+})
+
+test('Tokens: Klartext einmalig, danach nirgends (Canary)', async ({ page }) => {
+  await login(page)
+  await page.goto('/settings/tokens')
+  await page.getByRole('button', { name: '+ Token erzeugen' }).click()
+  await page.getByLabel('Name').fill('canary')
+  await page.getByRole('button', { name: 'Erzeugen' }).click()
+  const token = await page.getByTestId('one-time-value').innerText()
+  expect(token).toMatch(/^mcpw_pat_/)
+  await page.getByRole('button', { name: 'Schließen' }).click()
+  await expect(page.getByTestId('one-time-secret')).toHaveCount(0)
+  for (const p of ['/settings/tokens', '/', '/settings', '/audit']) {
+    await page.goto(p)
+    expect(await page.content()).not.toContain(token)
+  }
+  await page.waitForLoadState('networkidle')
+  const stores = await page.evaluate(() => JSON.stringify([localStorage, sessionStorage, document.cookie]))
+  expect(stores).not.toContain(token)
+  await page.goto('/settings/tokens')
+  await page.getByRole('button', { name: 'Token canary widerrufen' }).click()
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Widerrufen' }).click()
+  await expect(page.getByText('Token widerrufen.')).toBeVisible()
+})
+
+test('Secret-Canary: eingegeben, gespeichert, nirgends wieder sichtbar', async ({ page }) => {
+  const canary = 'CANARY-7f3a9c-secret'
+  const logs: string[] = []
+  page.on('console', m => logs.push(m.text()))
+  const bodies: string[] = []
+  page.on('response', async (r) => { if (r.url().includes('/api/')) bodies.push(await r.text().catch(() => '')) })
+  await login(page)
+  await page.goto('/upstreams/new')
+  await page.getByLabel('Anzeigename').fill('Geheim')
+  await page.getByLabel('Kurzname').fill('geheim')
+  await page.getByLabel('Server-URL').fill('https://mcp.geheim.example/mcp')
+  await page.getByText('Bearer', { exact: true }).click()
+  await page.getByLabel('Secret', { exact: true }).fill(canary)
+  await page.getByRole('button', { name: 'Anlegen und verbinden' }).click()
+  await expect(page.getByRole('link', { name: 'Zum Upstream' })).toBeVisible()
+  for (const p of ['/', '/upstreams', '/settings', '/settings/tokens', '/settings/connections', '/audit', '/admin/users', '/admin/oauth', '/admin/settings']) {
+    await page.goto(p)
+    await page.waitForLoadState('networkidle')
+    expect(await page.content()).not.toContain(canary)
+  }
+  await page.getByRole('link', { name: 'Upstreams' }).first().click()
+  await page.getByRole('link', { name: /^Geheim/ }).click()
+  await page.getByRole('tab', { name: 'Auth' }).click()
+  await expect(page.getByText('Gesetzt').first()).toBeVisible()
+  expect(await page.getByLabel('Neues Secret').inputValue()).toBe('')
+  const stores = await page.evaluate(() => JSON.stringify([localStorage, sessionStorage, document.cookie]))
+  expect(stores).not.toContain(canary)
+  expect(bodies.join('')).not.toContain(canary) // Antworten enthalten das Secret nie
+  expect(logs.join('\n')).not.toContain(canary)
+})
+
+test('Nutzer: Admin-Bereich leitet um, Nav ohne Admin', async ({ page }) => {
+  await login(page, { role: 'user' })
+  await expect(page.getByRole('link', { name: 'Admin' })).toHaveCount(0)
+  await page.goto('/admin/users')
+  await expect(page.getByRole('heading', { name: 'Dashboard', level: 1 })).toBeVisible()
+  await expect(page.getByText('nur für Admins')).toBeVisible()
+})
+
+test('Admin: Einladung erzeugen (Einmal-Link), Nutzer sperren, Allowlist-Eintrag, Instanz', async ({ page }) => {
+  await login(page)
+  await page.goto('/admin/users')
+  await expect(page.getByTestId('admin-hint')).toBeVisible()
+  await page.getByRole('button', { name: '+ Einladung erzeugen' }).click()
+  await page.getByRole('dialog').getByRole('button', { name: 'Erzeugen' }).click()
+  await expect(page.getByTestId('one-time-value')).toContainText('/invite/')
+  await page.getByRole('button', { name: 'Mara sperren' }).click()
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Sperren' }).click()
+  await expect(page.getByText('Gesperrt', { exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Christian sperren' })).toBeDisabled()
+  await page.goto('/admin/oauth')
+  await page.getByRole('button', { name: '+ Eintrag' }).click()
+  await page.getByLabel('Bezeichnung').fill('Mein Tool')
+  await page.getByLabel('Name-Muster').fill('Mein*')
+  await page.getByLabel('Redirect-Muster').fill('myapp://*')
+  await page.getByRole('button', { name: 'Hinzufügen' }).click()
+  await expect(page.getByText('Mein Tool')).toBeVisible()
+  await page.goto('/admin/settings')
+  await page.getByLabel('Neue Ausnahme').fill('169.254.169.254/32')
+  await page.getByRole('button', { name: '+ Eintrag' }).click()
+  await expect(page.getByRole('alert').filter({ hasText: 'Metadaten' })).toBeVisible()
+})
+
+test('Dashboard leer, Fehler, 403 und nichts-zu-tun', async ({ page }) => {
+  await login(page, { scenario: 'empty' })
+  await expect(page.getByTestId('mcp-url')).toBeVisible()
+  await expect(page.getByTestId('nothing-to-do')).toBeVisible()
+  await page.evaluate(() => localStorage.setItem('mockScenario', 'error'))
+  await page.reload()
+  await expect(page.getByTestId('error-state').first()).toBeVisible()
+  await page.evaluate(() => localStorage.setItem('mockScenario', 'forbidden'))
+  await page.goto('/audit')
+  await expect(page.getByText('Kein Zugriff')).toBeVisible()
+})
+
+test('Gestrichenes ist nirgends erreichbar (F12)', async ({ page }) => {
+  await login(page)
+  const banned = [/Tags/, /Alle testen/, /Konto löschen/, /E-Mail ändern/, /Benachrichtigung/, /Dunkel/, /Gerät/]
+  for (const p of ['/', '/upstreams', '/settings', '/settings/connections', '/admin/settings', '/upstreams/up_1']) {
+    await page.goto(p)
+    await page.waitForLoadState('networkidle')
+    const text = await page.locator('body').innerText()
+    for (const b of banned) expect(text, `${p} ${b}`).not.toMatch(b)
+  }
+  await page.goto('/settings')
+  await expect(page.getByRole('radio')).toHaveCount(0)
+  const settings = await page.locator('main, body').first().innerText()
+  expect(settings).not.toMatch(/Farbschema|Dunkel|\bHell\b|\bSystem\b/)
+})
+
+test('Darstellung: Standard "eingeklappt" wirkt, eigenes Umschalten hat Vorrang', async ({ page }) => {
+  await login(page)
+  await page.goto('/settings')
+  await page.getByLabel('Seitenleiste standardmäßig eingeklappt').click()
+  await page.context().clearCookies({ name: 'sidebar_state' })
+  await page.goto('/')
+  await expect(page.locator('[data-slot="sidebar"]').first()).toHaveAttribute('data-state', 'collapsed')
+  await page.getByTestId('collapse').click()
+  await page.reload()
+  await expect(page.locator('[data-slot="sidebar"]').first()).toHaveAttribute('data-state', 'expanded')
+})
+
+test('375 px: Seitenleiste als Off-Canvas, Seite nutzbar', async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 800 })
+  await login(page)
+  const scrollW = await page.evaluate(() => document.documentElement.scrollWidth)
+  expect(scrollW).toBeLessThanOrEqual(376)
+  await page.getByRole('button', { name: 'Navigation öffnen' }).click()
+  await page.getByRole('link', { name: 'Upstreams' }).click()
+  await expect(page.getByRole('heading', { name: 'Upstreams', level: 1 })).toBeVisible()
+})
+
+test('Auto-Refresh-Auswahl und Formatierung', async ({ page }) => {
+  await login(page)
+  await page.goto('/stats')
+  await expect(page.getByText('9 874').first()).toBeVisible()
+  await page.getByRole('button', { name: '1 h' }).click()
+  await expect(page.getByText('987').first()).toBeVisible()
+})
+
+test.describe('axe je Seite', () => {
+  const pages = ['/', '/upstreams', '/upstreams/new', '/upstreams/up_1', '/upstreams/up_1/edit', '/upstreams/up_1?tab=tools', '/upstreams/up_1?tab=auth', '/stats', '/audit', '/settings', '/settings/tokens', '/settings/connections', '/admin/users', '/admin/oauth', '/admin/settings', '/upstreams/up_1/approve', '/__styleguide']
+  for (const p of pages) {
+    test(p, async ({ page }) => {
+      await login(page)
+      await page.goto(p)
+      await page.waitForLoadState('networkidle')
+      await expect(page.locator('h1')).toHaveCount(1)
+      await axe(page)
+    })
+  }
+  for (const p of ['/login', '/register', '/invite/gueltig-token', '/invite/abgelaufen-token', '/consent?client_id=agent-x&sig=ok', '/link/abc', '/link/done?status=connected']) {
+    test(p, async ({ page }) => {
+      await prep(page)
+      if (p.startsWith('/consent') || p.startsWith('/link')) { await login(page) }
+      await page.goto(p)
+      await page.waitForLoadState('networkidle')
+      await axe(page)
+    })
+  }
+})
