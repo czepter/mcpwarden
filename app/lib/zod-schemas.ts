@@ -38,7 +38,7 @@ export const allowlistSchema = z.object({
 })
 
 export const upstreamSchema = z.object({
-  type: z.enum(['http', 'stdio', 'rest']),
+  type: z.enum(['http', 'stdio']),
   name: z.string().trim().min(1, 'Der Anzeigename darf nicht leer sein.'),
   slug: z.string().regex(SLUG_RE, 'Nur a–z, 0–9 und Bindestrich, nicht am Anfang, höchstens 32 Zeichen.'),
   url: z.string(), transport: z.enum(['auto', 'streamable', 'sse']),

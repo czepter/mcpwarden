@@ -121,8 +121,8 @@ export type OAuthClientAdminList = { items: OAuthClientAdmin[] }
 
 export type UpstreamStatus = 'unknown' | 'healthy' | 'degraded' | 'open' | 'auth_expired' | 'disabled'
 export type UpstreamSetup = 'ready' | 'awaiting_auth' | 'awaiting_approval'
-export type UpstreamType = 'http' | 'stdio' | 'rest' // 'rest': Phase 2, Phase-1-Backend lehnt es mit 400 ab
-export type UpstreamAuthType = 'none' | 'bearer' | 'header' | 'env' | 'oauth' // 'oauth': Phase 2
+export type UpstreamType = 'http' | 'stdio'
+export type UpstreamAuthType = 'none' | 'bearer' | 'header' | 'env' // 'env': nur stdio
 export type UpstreamTimeouts = { connectMs: number, listMs: number, callMs: number }
 
 export type UpstreamSummary = {
@@ -301,8 +301,12 @@ export const API_PATHS = {
 export type CallOutcome = 'ok' | 'tool_error' | 'timeout' | 'upstream_error' | 'rate_limited' | 'breaker_open' | 'denied'
 export type ToolMode = 'direct' | 'meta' // Phase 3
 
-/** `GET /api/public-config`, ohne Sitzung. `mail`: SMTP_URL ist gesetzt (Passwort-Reset per Mail verfuegbar). */
-export type PublicConfig = { mail: boolean }
+/**
+ * `GET /api/public-config`, ohne Sitzung.
+ * `mail`: SMTP_URL ist gesetzt (Passwort-Reset per Mail verfuegbar).
+ * `registrationOpen`: true nur solange noch kein Nutzer existiert (der erste Nutzer registriert sich ohne Einladung).
+ */
+export type PublicConfig = { mail: boolean, registrationOpen: boolean }
 
 // Statistik (Phase 2, Vorschlag)
 export type StatsWindow = '5m' | '1h' | '24h' | '7d'

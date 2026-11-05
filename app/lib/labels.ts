@@ -20,7 +20,7 @@ export const scopeLabel = (v: string) => pick({
   'mcp:tools': 'Tools auflisten und aufrufen', 'mcpwarden:admin': 'Upstreams verwalten', 'openid': 'Anmeldung', 'offline_access': 'Angemeldet bleiben',
 }, v)
 
-export const typeLabel = (v: UpstreamType | string) => pick({ http: 'HTTP', stdio: 'stdio', rest: 'REST' }, v)
+export const typeLabel = (v: UpstreamType | string) => pick({ http: 'HTTP', stdio: 'stdio' }, v)
 export const authTypeLabel = (v: string) => pick({ none: 'Keine', bearer: 'Bearer-Token', header: 'Eigener Header', oauth: 'OAuth' }, v)
 export const dcrModeLabel = (v: DcrMode) => ({ off: 'Aus', allowlist: 'Nur Allowlist', open: 'Offen mit Warnung' })[v]
 export const roleLabel = (v: string) => pick({ admin: 'Admin', user: 'Nutzer' }, v)

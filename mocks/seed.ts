@@ -8,13 +8,13 @@ const ahead = (min: number) => new Date(Date.now() + min * 60_000).toISOString()
 export const DEFAULT_LIMITS: UserLimits = { maxUpstreams: 50, callsPerMin: 120, maxConnections: 20, stdioMaxProcs: 5, stdioIdleMin: 10 }
 
 const bars = (s: string) => s.split('').map(c => ({ g: 'ok', y: 'warn', r: 'err', n: 'none' } as const)[c as 'g'])
-const SRC: Array<[string, string, string, 'http' | 'stdio' | 'rest', UpstreamDetail['status'], number, number, string | null, string, number | null]> = [
+const SRC: Array<[string, string, string, 'http' | 'stdio', UpstreamDetail['status'], number, number, string | null, string, number | null]> = [
   ['github', 'GitHub', 'api.githubcopilot.com/mcp', 'http', 'healthy', 38, 42, null, 'gggggggggggggggggggggggg', 212],
   ['sentry', 'Sentry', 'mcp.sentry.dev/mcp', 'http', 'auth_expired', 14, 14, 'Refresh-Token abgelehnt. Neuer Link nötig.', 'ggggggggggggggggggnnnrrr', null],
   ['filesystem', 'Filesystem', 'npx @modelcontextprotocol/server-filesystem', 'stdio', 'healthy', 11, 11, null, 'gggggggggggggggggggggggg', 38],
   ['linear', 'Linear', 'mcp.linear.app/mcp', 'http', 'degraded', 24, 31, 'Mehrere Fehler in Folge, Verbindung eingeschränkt.', 'ggggggggggggyggyyggyyyyy', 1240],
   ['postgres-prod', 'Postgres (prod)', 'uvx mcp-server-postgres', 'stdio', 'open', 6, 6, 'Breaker offen, nächster Versuch gleich.', 'ggggggggggggggggrrrrrrrr', null],
-  ['local', 'Lokale REST-Tools', '3 REST-Tools', 'rest', 'healthy', 3, 3, null, 'ggggggggggggggggggggggng', 96],
+  ['local', 'Lokale Tools', 'tools.internal.example/mcp', 'http', 'healthy', 3, 3, null, 'ggggggggggggggggggggggng', 96],
   ['notion', 'Notion', 'mcp.notion.com/mcp', 'http', 'disabled', 0, 18, 'Vom Nutzer deaktiviert.', 'nnnnnnnnnnnnnnnnnnnnnnnn', null],
 ]
 

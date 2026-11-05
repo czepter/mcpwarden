@@ -65,7 +65,7 @@ const sub = (u: UpstreamSummary) => (u.url ?? u.command ?? '').replace(/^https?:
     </Select>
     <Select v-model="typeFilter">
       <SelectTrigger class="w-36" aria-label="Typ filtern"><SelectValue placeholder="Typ" /></SelectTrigger>
-      <SelectContent><SelectItem value="all">Alle Typen</SelectItem><SelectItem value="http">HTTP</SelectItem><SelectItem value="stdio">stdio</SelectItem><SelectItem value="rest">REST</SelectItem></SelectContent>
+      <SelectContent><SelectItem value="all">Alle Typen</SelectItem><SelectItem value="http">HTTP</SelectItem><SelectItem value="stdio">stdio</SelectItem></SelectContent>
     </Select>
   </section>
 

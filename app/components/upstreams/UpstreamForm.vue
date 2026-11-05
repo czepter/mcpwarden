@@ -23,7 +23,7 @@ const d = props.caps.defaults
 const i = props.initial
 const { form, formError, busy, submit } = useZodForm(upstreamSchema, {
   type: i?.type ?? 'http', name: i?.name ?? '', slug: i?.slug ?? '', url: i?.url ?? '', transport: i?.transport ?? 'auto',
-  authType: (i?.authType === 'oauth' || i?.authType === 'env' ? 'none' : i?.authType) ?? 'none', authHeaderName: i?.authHeaderName ?? '', secret: '',
+  authType: (i?.authType === 'env' ? 'none' : i?.authType) ?? 'none', authHeaderName: i?.authHeaderName ?? '', secret: '',
   command: i?.command ?? '', args: i?.args.join('\n') ?? '', cwd: i?.cwd ?? '',
   ratePerMin: i?.ratePerMin ?? d.ratePerMin, maxConcurrent: i?.maxConcurrent ?? d.maxConcurrent,
   connectS: (i?.timeouts.connectMs ?? d.timeouts.connectMs) / 1000, listS: (i?.timeouts.listMs ?? d.timeouts.listMs) / 1000, callS: (i?.timeouts.callMs ?? d.timeouts.callMs) / 1000,
