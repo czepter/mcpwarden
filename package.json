@@ -23,7 +23,7 @@
     "db:schema": "sh scripts/gen-auth-schema.sh",
     "db:generate": "drizzle-kit generate",
     "db:check": "drizzle-kit check",
-    "test:pg": "docker compose -p mcpw-0a -f compose.test.yaml up -d --wait && (TEST_BACKEND=postgres TEST_PG_ADMIN_URL=${TEST_PG_ADMIN_URL:-postgres://postgres:test@localhost:${TEST_PG_PORT:-54329}/postgres} vitest run -c tests/vitest.config.ts --project integration; s=$?; docker compose -p mcpw-0a -f compose.test.yaml down -v; exit $s)",
+    "test:pg": "docker compose -p ${TEST_PG_PROJECT:-mcpw-0a} -f compose.test.yaml up -d --wait && (TEST_BACKEND=postgres TEST_PG_ADMIN_URL=${TEST_PG_ADMIN_URL:-postgres://postgres:test@localhost:${TEST_PG_PORT:-54329}/postgres} vitest run -c tests/vitest.config.ts --project integration; s=$?; docker compose -p ${TEST_PG_PROJECT:-mcpw-0a} -f compose.test.yaml down -v; exit $s)",
     "ui:dev": "pnpm ui:prep && VITE_API_MOCK=all nuxt dev",
     "ui:build": "pnpm ui:prep && VITE_API_MOCK=all nuxt build",
     "ui:test": "vitest run --config tests/ui/vitest.config.ts",
