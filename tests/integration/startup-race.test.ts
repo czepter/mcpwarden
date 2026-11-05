@@ -5,12 +5,12 @@ let inst: TestInstance
 beforeAll(async () => { inst = await createInstance() })
 afterAll(async () => { await inst?.cleanup() })
 
-it('Anfragen unmittelbar nach Prozessstart sehen nie eine nicht migrierte DB (A8)', async () => {
+it('Requests immediately after process start never see an unmigrated DB (A8)', async () => {
   const srv = await startServer(inst, { noWait: true })
   const statuses: number[] = []
   const end = Date.now() + 30_000
   let readyAt = 0
-  // Sofort und parallel feuern, bis /readyz bereit ist.
+  // Fire immediately and in parallel until /readyz is ready.
   while (Date.now() < end && !readyAt) {
     const batch = await Promise.all(Array.from({ length: 10 }, async () => {
       try {

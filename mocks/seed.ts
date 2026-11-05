@@ -49,11 +49,11 @@ export const seedUsers = (): AdminUser[] => [
 
 export const seedInvites = (): InviteSummary[] => [
   { id: 'inv_1', email: null, createdAt: ago(60 * 24), expiresAt: ahead(60 * 24 * 6), status: 'open', usedAt: null, usedByUserId: null, createdByUserId: 'usr_1' },
-  { id: 'inv_2', email: 'neu@example.test', createdAt: ago(60 * 24 * 2), expiresAt: ahead(60 * 24 * 5), status: 'open', usedAt: null, usedByUserId: null, createdByUserId: 'usr_1' },
+  { id: 'inv_2', email: 'new@example.test', createdAt: ago(60 * 24 * 2), expiresAt: ahead(60 * 24 * 5), status: 'open', usedAt: null, usedByUserId: null, createdByUserId: 'usr_1' },
 ]
-/** Feste Test-Token der Einladungs-Seite (keine Geheimnisse). */
+/** Fixed test tokens of the invitation page (no secrets). */
 export const SEED_INVITE_TOKENS: Record<string, string> = {
-  'gueltig-token': 'inv_1', 'gebunden-token': 'inv_2', 'abgelaufen-token': 'expired', 'verbraucht-token': 'used',
+  'valid-token': 'inv_1', 'bound-token': 'inv_2', 'expired-token': 'expired', 'used-token': 'used',
 }
 
 export const seedPats = (): PatSummary[] => [

@@ -1,11 +1,11 @@
 import { McpServer } from '@modelcontextprotocol/server'
 import { z } from 'zod'
 
-/** Steuerbarer Zustand des Fake-Upstreams (im Testprozess direkt manipulierbar). */
+/** Controllable state of the fake upstream (directly manipulable in the test process). */
 export type FakeState = {
   calls: Record<string, number>
   cancelled: number
-  aborted: number // Verbindungen, die vor der Antwort geschlossen wurden
+  aborted: number // connections closed before the response
   mode: 'ok' | 'hang' | 'status500' | 'hang-http' | 'retry429'
   slowMs: number
   extraTools: Array<{ name: string, description?: string }>
@@ -35,7 +35,7 @@ export function buildFakeServer(state: FakeState, extra: { toolNames?: string[] 
     return { content: [{ type: 'resource', resource: { uri: 'file:///x.txt', mimeType: 'text/plain', text: 'hi' } }] }
   })
   s.registerTool('fail', { description: 'Tool error' }, async () => { count('fail'); return { isError: true, content: [{ type: 'text', text: 'boom' }] } })
-  // nicht-idempotent: jeder Aufruf erhöht den Zähler; bei hang/status500 darf er nie doppelt laufen
+  // non-idempotent: every call increments the counter; with hang/status500 it must never run twice
   s.registerTool('create_order', { description: 'Non-idempotent', inputSchema: z.object({}) },
     async (_a, ctx) => { count('create_order'); await gate(ctx.mcpReq.signal); return { content: [{ type: 'text', text: `order-${state.calls.create_order}` }] } })
   for (const t of [...state.extraTools, ...(extra.toolNames ?? []).map(name => ({ name }))]) {

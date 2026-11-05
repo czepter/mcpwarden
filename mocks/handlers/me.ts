@@ -37,7 +37,7 @@ export const meHandlers = [
     const rnd = Math.random().toString(36).slice(2, 6)
     const token = `mcpw_pat_${rnd}${Math.random().toString(36).slice(2)}${Math.random().toString(36).slice(2)}`
     const p = { id: nid('pat'), name, prefix: `mcpw_pat_${rnd}`, createdAt: new Date().toISOString(), lastUsedAt: null, revokedAt: null }
-    s.pats.unshift(p); save() // Klartext nur in dieser Antwort, nicht im Zustand
+    s.pats.unshift(p); save() // plaintext only in this response, not in the state
     return json<PatCreated>({ ...p, token }, 201)
   }),
   route('delete', '/api/me/pats/:id', ({ params }) => {

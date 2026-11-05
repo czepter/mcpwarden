@@ -40,8 +40,8 @@ describe('proxy passthrough', () => {
       const r = await h.gw.toolSource.callTool(ctx, 'one__echo', { text: 'x' }, { signal: sig() })
       calls.push(r.isError ? 'denied' : 'ok')
     }
-    expect(calls.filter(c => c === 'ok')).toHaveLength(5) // das Nutzerlimit (5/min) greift trotz wechselnder jti
-    expect(h.gw.limiter.size()).toBeLessThanOrEqual(3) // Nutzer, Client, Upstream; nicht 12 Token-Buckets
+    expect(calls.filter(c => c === 'ok')).toHaveLength(5) // the user limit (5/min) applies despite changing jti
+    expect(h.gw.limiter.size()).toBeLessThanOrEqual(3) // user, client, upstream; not 12 token buckets
   })
 
   it('reuses the pooled connection; version change reconnects; disabling a user closes it', async () => {

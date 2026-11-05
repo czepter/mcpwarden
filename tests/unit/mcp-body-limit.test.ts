@@ -1,4 +1,4 @@
-// Review L-d: /mcp liest nie mehr als das Body-Limit in den Speicher.
+// Review L-d: /mcp never reads more than the body limit into memory.
 import { describe, expect, it } from 'vitest'
 import type { AuthContext } from '../../server/auth/auth-context'
 import { createGateway } from '../../server/mcp/handler'
@@ -15,7 +15,7 @@ function gw() {
   })
 }
 
-/** Strom, der mitzaehlt, wie viel gelesen wurde (Content-Length wird nicht gesetzt). */
+/** Stream that counts how much was read (Content-Length is not set). */
 function counting(total: number, chunk = 8 * 1024) {
   const state = { pulled: 0 }
   const stream = new ReadableStream<Uint8Array>({
@@ -37,7 +37,7 @@ describe('/mcp body limit', () => {
     const res = await g.handle(post(stream))
     expect(res.status).toBe(413)
     expect(await res.json()).toEqual({ error: 'payload_too_large' })
-    expect(state.pulled).toBeLessThan(MAX + 256 * 1024) // nicht die 50 MiB
+    expect(state.pulled).toBeLessThan(MAX + 256 * 1024) // not the 50 MiB
     await g.close()
   })
   it('refuses a declared oversized body without reading it', async () => {
@@ -45,7 +45,7 @@ describe('/mcp body limit', () => {
     const { state, stream } = counting(10 * 1024 * 1024)
     const res = await g.handle(post(stream, { 'content-length': String(10 * 1024 * 1024) }))
     expect(res.status).toBe(413)
-    expect(state.pulled).toBeLessThanOrEqual(16 * 1024) // höchstens der vorgeladene erste Chunk, nicht die 10 MiB
+    expect(state.pulled).toBeLessThanOrEqual(16 * 1024) // at most the preloaded first chunk, not the 10 MiB
     await g.close()
   })
   it('a body within the limit is passed on intact', async () => {

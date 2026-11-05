@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url'
 
 const root = fileURLToPath(new URL('..', import.meta.url))
 
-// Container-Tests (Docker nötig): pnpm test:container
+// Container tests (Docker required): pnpm test:container
 export default defineConfig({
   root,
   test: {

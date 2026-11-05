@@ -41,7 +41,7 @@ describe('tenant binding (M1)', () => {
     const up = h.store.addUpstream('B', { slug: 'one', url: a.url, authType: 'bearer' })
     h.store.secrets.push({ userId: 'B', upstreamId: up.id, kind: 'bearer', name: '', ciphertext: encryptSecret(h.masterKey, 'B', { upstreamId: up.id, kind: 'bearer', name: '' }, 'tok') })
     expect((await h.gw.credentials(up, 'B')).bearer).toBe('tok')
-    // dieselbe Zeile unter fremdem Nutzerschlüssel: GCM-Tag passt nicht
+    // same row under a foreign user key: GCM tag does not match
     expect(() => decryptSecret(h.masterKey, 'A', { upstreamId: up.id, kind: 'bearer', name: '' }, h.store.secrets[0]!.ciphertext)).toThrow()
   })
 })
@@ -61,7 +61,7 @@ describe('breaker probe release (M2) and cache hits (M3)', () => {
     expect(b.allow()).toBe(true)
     expect(b.allow()).toBe(false)
     hl.failure('auth')
-    expect(b.allow()).toBe(true) // vorher: dauerhaft blockiert
+    expect(b.allow()).toBe(true) // before: permanently blocked
   })
   it('pool limit error releases the half-open probe', async () => {
     h = makeGateway()
@@ -80,7 +80,7 @@ describe('breaker probe release (M2) and cache hits (M3)', () => {
     h = makeGateway()
     const up = h.store.addUpstream('A', { slug: 'one', url: a.url })
     const ctx = ctxFor('A')
-    await h.gw.toolSource.listTools(ctx) // füllt den Cache
+    await h.gw.toolSource.listTools(ctx) // fills the cache
     const hl = h.gw.healthFor(up)
     const allow = vi.spyOn(hl.breaker, 'allow')
     const ok = vi.spyOn(hl, 'success')
@@ -128,9 +128,9 @@ describe('limiter (L7)', () => {
     for (const u of ['ab', 'abc']) { const r = l.acquire(input(u, `tok-${u}`)); expect(r.ok).toBe(true); if (r.ok) r.release() }
     l.forgetUser('ab')
     const keys = [...(l as unknown as { buckets: Map<string, unknown> }).buckets.keys()]
-    expect(keys.some(k => k.includes('abc'))).toBe(true) // abc bleibt
+    expect(keys.some(k => k.includes('abc'))).toBe(true) // abc stays
     expect(keys.some(k => /(^|:)ab(:|$)/.test(k))).toBe(false)
-    expect(l.acquire(input('abc', 'tok-abc')).ok).toBe(false) // abc behält sein leeres Kontingent
+    expect(l.acquire(input('abc', 'tok-abc')).ok).toBe(false) // abc keeps its empty quota
   })
   it('a 429 with Retry-After blocks that upstream (and only it)', async () => {
     h = makeGateway()

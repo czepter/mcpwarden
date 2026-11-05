@@ -19,7 +19,7 @@ export function makeGateway(over: Partial<GatewayOptions> = {}) {
     store, masterKey,
     statusSink: { onChange: (id, _u, s, prev) => { statuses.push({ id, s, prev }) } },
     statsWrite: async (r) => { rows.push(...r) },
-    getAllow: () => new AllowList(['127.0.0.0/8']), // Tests laufen gegen localhost
+    getAllow: () => new AllowList(['127.0.0.0/8']), // tests run against localhost
     ...over,
   })
   return { store, gw, rows, statuses, masterKey }

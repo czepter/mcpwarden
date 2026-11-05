@@ -1,24 +1,24 @@
 import { expect, test } from '@playwright/test'
 import { axe, prep } from './helpers'
 
-test('Login zeigt „Passwort vergessen?“ nur, wenn Mail aktiv ist', async ({ page }) => {
+test('Login shows „Passwort vergessen?“ only when mail is active', async ({ page }) => {
   await prep(page, { mail: 'on' })
   await page.goto('/login')
   await expect(page.getByRole('link', { name: 'Passwort vergessen?' })).toBeVisible()
   await axe(page)
 })
 
-test('ohne Mail: /forgot-password erklaert es ohne Formular, und Login zeigt keinen Link', async ({ page }) => {
+test('without mail: /forgot-password explains it without a form, and login shows no link', async ({ page }) => {
   await prep(page, { mail: 'off' })
   await page.goto('/forgot-password')
-  await expect(page.getByText('nicht eingerichtet')).toBeVisible() // Konfiguration ist geladen
+  await expect(page.getByText('nicht eingerichtet')).toBeVisible() // configuration is loaded
   await expect(page.getByRole('button', { name: 'Link senden' })).toHaveCount(0)
-  await page.getByRole('link', { name: 'Zurück zur Anmeldung' }).click() // Client-Navigation: gleiche geladene Konfiguration
+  await page.getByRole('link', { name: 'Zurück zur Anmeldung' }).click() // client navigation: same loaded configuration
   await expect(page.getByRole('button', { name: 'Anmelden' })).toBeVisible()
   await expect(page.getByRole('link', { name: 'Passwort vergessen?' })).toHaveCount(0)
 })
 
-test('Link anfordern: ungueltige Adresse wird markiert, gueltige zeigt immer dieselbe neutrale Antwort', async ({ page }) => {
+test('Request link: invalid address is flagged, a valid one always shows the same neutral response', async ({ page }) => {
   await prep(page)
   await page.goto('/login')
   await page.getByRole('link', { name: 'Passwort vergessen?' }).click()
@@ -27,7 +27,7 @@ test('Link anfordern: ungueltige Adresse wird markiert, gueltige zeigt immer die
   await page.getByLabel('E-Mail').fill('kaputt')
   await page.getByRole('button', { name: 'Link senden' }).click()
   await expect(page.getByText('keine gültige E-Mail-Adresse')).toBeVisible()
-  // Der Fehler erscheint schon beim Verlassen des Feldes; erst der Fokus zeigt, dass der Submit selbst durch ist (sonst trifft er die neue Eingabe).
+  // The error appears already when leaving the field; only the focus shows that the submit itself is done (otherwise it hits the new input).
   await expect(page.getByLabel('E-Mail')).toBeFocused()
   await page.getByLabel('E-Mail').fill('irgendwer@example.test')
   await page.getByRole('button', { name: 'Link senden' }).click()
@@ -35,38 +35,38 @@ test('Link anfordern: ungueltige Adresse wird markiert, gueltige zeigt immer die
   await expect(page.getByRole('status')).not.toContainText('irgendwer')
 })
 
-test('Neues Passwort: Mindestlaenge 12, Bestaetigung, Token verschwindet aus der Adresszeile, danach Anmeldung', async ({ page }) => {
+test('New password: minimum length 12, confirmation, token disappears from the address bar, then login', async ({ page }) => {
   await prep(page)
-  await page.goto('/reset-password#token=gueltig123')
+  await page.goto('/reset-password#token=valid123')
   await expect(page.getByRole('heading', { name: 'Neues Passwort festlegen', level: 1 })).toBeVisible()
-  await expect.poll(() => page.url()).not.toContain('gueltig123')
+  await expect.poll(() => page.url()).not.toContain('valid123')
   expect(await page.locator('meta[name="referrer"]').getAttribute('content')).toBe('no-referrer')
   await axe(page)
-  await page.getByLabel('Neues Passwort').fill('zukurz')
-  await page.getByLabel('Passwort bestätigen').fill('zukurz')
+  await page.getByLabel('Neues Passwort').fill('tooshort')
+  await page.getByLabel('Passwort bestätigen').fill('tooshort')
   await page.getByRole('button', { name: 'Passwort speichern' }).click()
-  // Die Beschreibung am Feld trägt denselben Text: auf den Fehler (role=alert) und den Fokus des Submits warten, sonst läuft der Test dem Submit davon.
+  // The description on the field carries the same text: wait for the error (role=alert) and the submit focus, otherwise the test runs ahead of the submit.
   await expect(page.getByRole('alert').filter({ hasText: 'Mindestens 12 Zeichen.' })).toBeVisible()
   await expect(page.getByLabel('Neues Passwort')).toBeFocused()
-  await page.getByLabel('Neues Passwort').fill('langgenugpasswort')
-  await page.getByLabel('Passwort bestätigen').fill('anderespasswort1')
+  await page.getByLabel('Neues Passwort').fill('longenoughpassword')
+  await page.getByLabel('Passwort bestätigen').fill('otherpassword1')
   await page.getByRole('button', { name: 'Passwort speichern' }).click()
   await expect(page.getByText('stimmen nicht überein')).toBeVisible()
   await expect(page.getByLabel('Passwort bestätigen')).toBeFocused()
-  await page.getByLabel('Passwort bestätigen').fill('langgenugpasswort')
+  await page.getByLabel('Passwort bestätigen').fill('longenoughpassword')
   await page.getByRole('button', { name: 'Passwort speichern' }).click()
   await expect(page).toHaveURL(/\/login\?reset=1/)
   await expect(page.getByRole('status')).toContainText('Passwort wurde geändert')
 })
 
-test('abgelaufener oder fehlender Token: Link nicht nutzbar, neuer Link anforderbar', async ({ page }) => {
+test('expired or missing token: link unusable, new link can be requested', async ({ page }) => {
   await prep(page)
   await page.goto('/reset-password')
   await expect(page.getByRole('heading', { name: 'Link nicht nutzbar' })).toBeVisible()
   await expect(page.getByRole('link', { name: 'Neuen Link anfordern' })).toBeVisible()
-  await page.goto('/reset-password#token=abgelaufen')
-  await page.getByLabel('Neues Passwort').fill('langgenugpasswort')
-  await page.getByLabel('Passwort bestätigen').fill('langgenugpasswort')
+  await page.goto('/reset-password#token=expired')
+  await page.getByLabel('Neues Passwort').fill('longenoughpassword')
+  await page.getByLabel('Passwort bestätigen').fill('longenoughpassword')
   await page.getByRole('button', { name: 'Passwort speichern' }).click()
   await expect(page.getByRole('heading', { name: 'Link nicht nutzbar' })).toBeVisible()
   await axe(page)

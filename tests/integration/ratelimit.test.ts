@@ -1,10 +1,10 @@
-// Rate-Limits (sign-in, /oauth2/register, Einladungsinfo) und TRUST_PROXY (Review H-B, Spec P0-10).
-// Der Harness startet sonst mit TRUST_PROXY=true (der Test-Client spielt den Reverse-Proxy); hier wird das gezielt ueberschrieben.
+// Rate limits (sign-in, /oauth2/register, invitation info) and TRUST_PROXY (review H-B, spec P0-10).
+// The harness otherwise starts with TRUST_PROXY=true (the test client plays the reverse proxy); this is overridden deliberately here.
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { registerClient } from '../helpers/oauth-client'
 import { api, createInstance, startServer, type TestInstance, type TestServer } from './harness'
 
-const attempt = (c: ReturnType<typeof api>) => c.request('/api/auth/sign-in/email', { body: { email: 'a@example.com', password: 'falsch-falsch-123' } })
+const attempt = (c: ReturnType<typeof api>) => c.request('/api/auth/sign-in/email', { body: { email: 'a@example.com', password: 'wrong-wrong-123' } })
 
 describe('TRUST_PROXY unset: X-Forwarded-For is never trusted (direct exposure)', () => {
   let inst: TestInstance
@@ -37,11 +37,11 @@ describe('TRUST_PROXY unset: X-Forwarded-For is never trusted (direct exposure)'
     expect(codes).toContain(429)
   })
   it('a client-supplied internal client-ip header is ignored', async () => {
-    // eigener Bucket je (erfundener) Wert waere die Umgehung; die Socket-Adresse ist bereits erschoepft
+    // an own bucket per (forged) value would be the bypass; the socket address is already exhausted
     const r = await fetch(`${srv.url}/api/auth/sign-in/email`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'origin': srv.url, 'x-mcpw-client-ip': '192.0.2.250' },
-      body: JSON.stringify({ email: 'a@example.com', password: 'falsch-falsch-123' }),
+      body: JSON.stringify({ email: 'a@example.com', password: 'wrong-wrong-123' }),
     })
     expect(r.status).toBe(429)
   })
@@ -62,7 +62,7 @@ describe('TRUST_PROXY=true: the right-most X-Forwarded-For hop is the client', (
   const withXff = (xff: string) => fetch(`${srv.url}/api/auth/sign-in/email`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', 'origin': srv.url, 'x-forwarded-for': xff },
-    body: JSON.stringify({ email: 'a@example.com', password: 'falsch-falsch-123' }),
+    body: JSON.stringify({ email: 'a@example.com', password: 'wrong-wrong-123' }),
   }).then(r => r.status)
 
   it('a spoofed left value does not shift the bucket; the proxy-appended hop does', async () => {

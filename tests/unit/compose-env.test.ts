@@ -1,5 +1,5 @@
-// Spec P0-10: das Beispiel-Compose reicht die dokumentierten Variablen an den Container durch (sonst bleibt SMTP_URL im Host haengen,
-// der Mailer ist im Container nie aktiv) und die Slim-Pruefung laeuft in der CI.
+// Spec P0-10: the example compose passes the documented variables through to the container (otherwise SMTP_URL stays stuck on the host,
+// the mailer is never active in the container) and the slim check runs in CI.
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 

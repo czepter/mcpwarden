@@ -1,5 +1,5 @@
-// Minimaler OAuth-Testclient (fetch-basiert): simuliert Browser und MCP-Client, damit jede HTTP-Stufe
-// pruefbar bleibt. Nutzt den Cookie-Jar des Harness (`ApiClient`) als "Browser".
+// Minimal OAuth test client (fetch-based): simulates browser and MCP client so that every HTTP stage
+// stays checkable. Uses the harness cookie jar (`ApiClient`) as the "browser".
 import { createHash, randomBytes } from 'node:crypto'
 import type { ApiClient } from '../integration/harness'
 
@@ -25,7 +25,7 @@ async function json(res: Response) {
   try { return { status: res.status, json: JSON.parse(text) as any, text, headers: res.headers } } catch { return { status: res.status, json: undefined as any, text, headers: res.headers } } // eslint-disable-line @typescript-eslint/no-explicit-any
 }
 
-/** Anonyme DCR (RFC 7591), wie ein MCP-Client sie ausfuehrt. */
+/** Anonymous DCR (RFC 7591), as an MCP client performs it. */
 export async function registerClient(baseUrl: string, meta: RegisterMeta = {}, ip = '198.51.100.9') {
   const res = await fetch(`${baseUrl}/api/auth/oauth2/register`, {
     method: 'POST',
@@ -46,13 +46,13 @@ export function cookieHeader(c: ApiClient): string {
   return [...c.jar].map(([k, v]) => `${k}=${v}`).join('; ')
 }
 
-/** GET ohne Redirect-Folgen, mit den Cookies des "Browsers". */
+/** GET without following redirects, with the "browser's" cookies. */
 export async function getRaw(c: ApiClient, url: string) {
   const res = await fetch(url, { redirect: 'manual', headers: { cookie: cookieHeader(c), accept: 'text/html' } })
   const text = await res.text()
-  // Browser (Accept: text/html) bekommen 302; ohne diesen Header liefert das Plugin 200 `{ redirect, url }`.
+  // Browsers (Accept: text/html) get 302; without this header the plugin returns 200 `{ redirect, url }`.
   let location = res.headers.get('location')
-  if (!location && res.status === 200) { try { location = JSON.parse(text).url ?? null } catch { /* kein JSON */ } }
+  if (!location && res.status === 200) { try { location = JSON.parse(text).url ?? null } catch { /* no JSON */ } }
   return { status: res.status, location, text }
 }
 
@@ -78,9 +78,9 @@ export function authorizeUrl(baseUrl: string, p: AuthorizeParams): string {
 }
 
 /**
- * Authorize + Consent, so wie das Frontend es tut: `authorize` leitet (mit Session) auf die
- * Consent-Seite mit signierter Query; das Frontend ruft `consent-info`, dann `oauth2/consent`
- * mit `oauth_query` (= unveraenderte Query der Consent-Seite) und folgt der `url` der Antwort.
+ * Authorize + consent, the way the frontend does it: `authorize` redirects (with a session) to the
+ * consent page with a signed query; the frontend calls `consent-info`, then `oauth2/consent`
+ * with `oauth_query` (= unchanged query of the consent page) and follows the `url` of the response.
  */
 export async function authorizeAndConsent(user: ApiClient, baseUrl: string, p: AuthorizeParams & { consentScope?: string, accept?: boolean }) {
   const a = await getRaw(user, authorizeUrl(baseUrl, p))
@@ -126,14 +126,14 @@ export function decodeJwt(token: string): Record<string, unknown> {
   return JSON.parse(Buffer.from(token.split('.')[1]!, 'base64url').toString())
 }
 
-/** Kompletter Durchlauf bis zum Token-Paar. */
+/** Complete run through to the token pair. */
 export async function fullFlow(user: ApiClient, baseUrl: string, o: { resource?: string | null, scope?: string, meta?: RegisterMeta } = {}) {
   const reg = await registerClient(baseUrl, o.meta)
   const clientId = reg.json.client_id as string
   const { verifier, challenge } = pkce()
   const resource = o.resource === null ? null : (o.resource ?? `${baseUrl}/mcp`)
   const r = await authorizeAndConsent(user, baseUrl, { clientId, challenge, resource, scope: o.scope })
-  if (r.step !== 'done' || !r.code) throw new Error(`Authorize fehlgeschlagen: ${JSON.stringify(r)}`)
+  if (r.step !== 'done' || !r.code) throw new Error(`Authorize failed: ${JSON.stringify(r)}`)
   const tok = await exchangeCode(baseUrl, { clientId, code: r.code, verifier, resource: resource ?? undefined })
   return { clientId, reg, tok, flow: r }
 }

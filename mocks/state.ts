@@ -18,7 +18,7 @@ export type MockState = {
   settings: AdminSettings
   audit: AuditItem[]
   stdioDrafts: string[]
-  /** Persoenliche Einstellung (GET/PATCH /api/me/settings); fehlt in aelteren Sitzungsstaenden = an. */
+  /** Personal setting (GET/PATCH /api/me/settings); missing in older session states = on. */
   notifyStatusMail?: boolean
 }
 
@@ -37,7 +37,7 @@ function fresh(): MockState {
 }
 
 let state: MockState | null = null
-/** Einmal-Token der laufenden Seite; nie persistiert (Secrets-Regel). */
+/** One-time token of the running page; never persisted (secrets rule). */
 export const volatileInviteTokens = new Map<string, string>()
 
 export function getState(): MockState {
@@ -52,9 +52,9 @@ export function save() { if (hasStorage() && state) sessionStorage.setItem(KEY, 
 export function resetState() { state = fresh(); volatileInviteTokens.clear(); save() }
 
 export function scenario(): MockScenario { return (store()?.getItem('mockScenario') as MockScenario) || 'default' }
-/** E-Mail-Versand im Mock: localStorage `mockMail` = `off` schaltet ihn ab (Default: an). */
+/** Email sending in the mock: localStorage `mockMail` = `off` switches it off (default: on). */
 export function mailEnabled(): boolean { return store()?.getItem('mockMail') !== 'off' }
-/** Registrierung ohne Einladung (Mock): localStorage `mockRegistration` = `open` simuliert eine frische Instanz ohne Nutzer. */
+/** Registration without invitation (mock): localStorage `mockRegistration` = `open` simulates a fresh instance without users. */
 export function registrationOpen(): boolean { return store()?.getItem('mockRegistration') === 'open' }
 export function role(): MockRole { return (store()?.getItem('mockRole') as MockRole) || 'admin' }
 export function currentUser() {

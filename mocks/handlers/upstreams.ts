@@ -27,7 +27,7 @@ export const upstreamHandlers = [
   route('get', '/api/upstreams', () => {
     const sc = scenario()
     if (sc === 'empty') return json({ items: [] })
-    // Summary: Detailfelder (env, secretNames, Timeouts ...) bleiben im Detail (kein Secret je in der Liste).
+    // Summary: detail fields (env, secretNames, timeouts ...) stay in the detail (never a secret in the list).
     return json<UpstreamList>({ items: (sc === 'huge' ? huge() : getState().upstreams).map(toSummary) })
   }),
   route('post', '/api/upstreams', async ({ request }) => {
@@ -70,7 +70,7 @@ export const upstreamHandlers = [
     const u = find(params.id); if (!u) return NF()
     const b = await body<SecretInput>(request)
     if (!b.value) return err(422, 'validation', 'Das Secret darf nicht leer sein.', 'value')
-    // Wert wird verworfen: der Mock speichert nie ein Secret (Abschnitt 10).
+    // Value is discarded: the mock never stores a secret (section 10).
     u.hasSecret = true; u.setup = 'ready'; if (b.name && !u.secretNames.includes(b.name)) u.secretNames.push(b.name)
     save(); return json({ hasSecret: true as const, setup: u.setup })
   }),

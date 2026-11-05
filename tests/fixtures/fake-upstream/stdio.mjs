@@ -1,4 +1,4 @@
-// Fake-stdio-MCP-Server (Testfixture). Marker-Datei (FAKE_MARK) protokolliert Abbrüche und Aufrufe.
+// Fake stdio MCP server (test fixture). Marker file (FAKE_MARK) records aborts and calls.
 import { appendFileSync } from 'node:fs'
 import { McpServer } from '@modelcontextprotocol/server'
 import { StdioServerTransport } from '@modelcontextprotocol/server/stdio'

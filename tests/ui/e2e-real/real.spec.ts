@@ -1,12 +1,12 @@
-// E2E gegen das echte Backend (kein MSW): Erst-Registrierung ueber die Oberflaeche, Login, Dashboard, Upstream anlegen und listen.
-// Die Tests teilen sich eine frische Instanz und laufen deshalb der Reihe nach.
+// E2E against the real backend (no MSW): first registration via the UI, login, dashboard, create and list upstream.
+// The tests share a fresh instance and therefore run one after another.
 import AxeBuilder from '@axe-core/playwright'
 import { expect, test, type Page } from '@playwright/test'
 import { startFakeHttp, type FakeHttp } from '../../fixtures/fake-upstream/http'
 
 test.describe.configure({ mode: 'serial' })
 
-const ADMIN = { name: 'Real Admin', email: 'real-admin@example.test', password: 'real-admin-passwort-1' }
+const ADMIN = { name: 'Real Admin', email: 'real-admin@example.test', password: 'real-admin-password-1' }
 let fake: FakeHttp
 const mockRequests: string[] = []
 
@@ -18,7 +18,7 @@ async function axe(page: Page) {
   const bad = r.violations.filter(v => v.impact === 'serious' || v.impact === 'critical')
   expect(bad.map(v => `${v.id}: ${v.nodes.map(n => n.target.join(' ')).slice(0, 3).join(' | ')}`)).toEqual([])
 }
-// Der echte Build rendert serverseitig: Eingaben vor der Hydration setzt Vue beim Mounten auf den Modellwert (leer) zurück.
+// The real build renders server-side: inputs before hydration are reset by Vue to the model value (empty) on mounting.
 async function hydrated(page: Page) {
   await page.waitForFunction(() => (window as unknown as { useNuxtApp?: () => { isHydrating: boolean } }).useNuxtApp?.().isHydrating === false)
 }
@@ -35,10 +35,10 @@ test.beforeEach(({ page }) => {
   page.on('request', (r) => { if (/mockServiceWorker|\/__styleguide/.test(r.url())) mockRequests.push(r.url()) })
 })
 
-test('echter Build: kein Service Worker, kein Mock-Banner, Registrierung offen auf frischer Instanz', async ({ page }) => {
+test('real build: no service worker, no mock banner, registration open on a fresh instance', async ({ page }) => {
   await page.goto('/login')
   await expect(page.getByRole('heading', { name: 'Anmelden', level: 1 })).toBeVisible()
-  // public-config.registrationOpen=true: Link zur Registrierung statt "nur mit Einladung"
+  // public-config.registrationOpen=true: link to registration instead of "nur mit Einladung"
   await expect(page.getByRole('link', { name: 'Registrieren' })).toBeVisible()
   expect(await page.evaluate(async () => (await navigator.serviceWorker.getRegistrations()).length)).toBe(0)
   await expect(page.getByText('Mock')).toHaveCount(0)
@@ -46,7 +46,7 @@ test('echter Build: kein Service Worker, kein Mock-Banner, Registrierung offen a
   await axe(page)
 })
 
-test('Erst-Registrierung ueber die Oberflaeche macht den Nutzer zum Admin und landet auf dem Dashboard', async ({ page }) => {
+test('First registration via the UI makes the user an admin and lands on the dashboard', async ({ page }) => {
   await page.goto('/login')
   await page.getByRole('link', { name: 'Registrieren' }).click()
   await expect(page).toHaveURL(/\/register$/)
@@ -57,17 +57,17 @@ test('Erst-Registrierung ueber die Oberflaeche macht den Nutzer zum Admin und la
   await page.getByRole('button', { name: 'Konto anlegen' }).click()
   await expect(page.getByRole('heading', { name: 'Dashboard', level: 1 })).toBeVisible()
   await expect(page.getByRole('link', { name: 'Admin' })).toBeVisible()
-  // Phase-2-Seiten ohne Backend-Route sind nicht in der Navigation
+  // Phase 2 pages without a backend route are not in the navigation
   await expect(page.getByRole('link', { name: 'Statistik' })).toHaveCount(0)
 })
 
-test('danach: Registrierung nur mit Einladung; falsches Passwort zeigt Fehler; Login mit richtigen Daten', async ({ page }) => {
+test('afterwards: registration only with an invitation; wrong password shows an error; login with correct credentials', async ({ page }) => {
   await page.goto('/login')
   await hydrated(page)
   await expect(page.getByText('nur mit Einladung')).toBeVisible()
   await expect(page.getByRole('link', { name: 'Registrieren' })).toHaveCount(0)
   await page.getByLabel('E-Mail').fill(ADMIN.email)
-  await page.getByLabel('Passwort').fill('falsches-passwort-123')
+  await page.getByLabel('Passwort').fill('wrong-password-123')
   await page.getByRole('button', { name: 'Anmelden' }).click()
   await expect(page.getByRole('alert').first()).toBeVisible()
   await expect(page).toHaveURL(/\/login/)
@@ -75,7 +75,7 @@ test('danach: Registrierung nur mit Einladung; falsches Passwort zeigt Fehler; L
   await axe(page)
 })
 
-test('Dashboard mit echten Daten: leer, Navigation, Seiten ohne Backend leiten um', async ({ page }) => {
+test('Dashboard with real data: empty, navigation, pages without a backend redirect', async ({ page }) => {
   await login(page)
   await expect(page.getByRole('navigation', { name: 'Hauptnavigation' })).toBeVisible()
   await page.goto('/stats')
@@ -83,7 +83,7 @@ test('Dashboard mit echten Daten: leer, Navigation, Seiten ohne Backend leiten u
   await expect(page.getByRole('heading', { name: 'Dashboard', level: 1 })).toBeVisible()
 })
 
-test('Upstream-Liste: leer; Upstream ueber die Oberflaeche anlegen (SSRF-Ausnahme durch den Admin), Verbindung ok, in der Liste', async ({ page }) => {
+test('Upstream list: empty; create upstream via the UI (SSRF exception by the admin), connection ok, in the list', async ({ page }) => {
   await login(page)
   const base = new URL(page.url()).origin
   const put = await page.request.put('/api/admin/settings', { data: { 'ssrf.allow': ['127.0.0.0/8'] }, headers: { origin: base } })
@@ -94,7 +94,7 @@ test('Upstream-Liste: leer; Upstream ueber die Oberflaeche anlegen (SSRF-Ausnahm
   await expect(page.getByText('Noch kein Upstream')).toBeVisible()
 
   await page.goto('/upstreams/new')
-  // Phase 1: nur HTTP und stdio, nur Keine/Bearer/Header (kein REST, kein OAuth)
+  // Phase 1: only HTTP and stdio, only None/Bearer/Header (no REST, no OAuth)
   await expect(page.getByText('REST')).toHaveCount(0)
   await expect(page.getByText('OAuth')).toHaveCount(0)
   await page.getByLabel('Anzeigename').fill('Fake MCP')
@@ -102,7 +102,7 @@ test('Upstream-Liste: leer; Upstream ueber die Oberflaeche anlegen (SSRF-Ausnahm
   await page.getByLabel('Server-URL').fill(fake.url)
   await page.getByRole('button', { name: 'Anlegen und verbinden' }).click()
   await expect(page.getByRole('heading', { name: /„Fake MCP“ wurde angelegt/ })).toBeVisible()
-  await expect(page.getByText(/echo/).first()).toBeVisible() // Testergebnis listet die Tools des Fake-Upstreams
+  await expect(page.getByText(/echo/).first()).toBeVisible() // test result lists the tools of the fake upstream
   expect(fake.state.calls).toBeDefined()
 
   await page.goto('/upstreams')
@@ -114,7 +114,7 @@ test('Upstream-Liste: leer; Upstream ueber die Oberflaeche anlegen (SSRF-Ausnahm
   await expect(page.getByRole('heading', { name: 'Fake MCP', level: 1 })).toBeVisible()
 })
 
-test('Admin-Seiten und Einstellungen laden gegen echte Routen', async ({ page }) => {
+test('Admin pages and settings load against real routes', async ({ page }) => {
   await login(page)
   for (const [path, h1] of [['/admin/users', 'Admin'], ['/settings/tokens', 'Tokens'], ['/settings/connections', 'Clients'], ['/audit', 'Audit']] as const) {
     await page.goto(path)

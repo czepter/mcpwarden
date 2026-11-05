@@ -6,7 +6,7 @@ const r = (p: string) => fileURLToPath(new URL(p, import.meta.url))
 
 export default defineConfig({
   plugins: [vue()],
-  // UI-Tests laufen gegen die Mocks (wie ein Mock-Build).
+  // UI tests run against the mocks (like a mock build).
   define: { __API_MOCK__: JSON.stringify('all') },
   resolve: {
     alias: { '@': r('../../app'), '~': r('../../app'), '#shared': r('../../shared'), '~~': r('../..') },

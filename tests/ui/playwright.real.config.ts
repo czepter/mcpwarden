@@ -3,8 +3,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { defineConfig } from '@playwright/test'
 
-// E2E gegen das ECHTE Backend: der Produktions-Build (`pnpm build` -> .output), eingebettetes PGlite, keine Mocks.
-// E2E_REAL_PORT: freier Port, falls 3102 belegt ist. Zustand liegt in einem Temp-Verzeichnis (Wegwerf-Testwerte, keine Geheimnisse).
+// E2E against the REAL backend: the production build (`pnpm build` -> .output), embedded PGlite, no mocks.
+// E2E_REAL_PORT: free port in case 3102 is taken. State lives in a temp directory (throwaway test values, no secrets).
 const PORT = process.env.E2E_REAL_PORT ?? '3102'
 const BASE = `http://localhost:${PORT}`
 
@@ -14,7 +14,7 @@ export default defineConfig({
   workers: 1,
   use: {
     baseURL: BASE,
-    // PW_CHROMIUM_PATH: optionaler Pfad zu einem vorinstallierten Chromium (z. B. in Sandboxes ohne `playwright install`).
+    // PW_CHROMIUM_PATH: optional path to a preinstalled Chromium (e.g. in sandboxes without `playwright install`).
     launchOptions: process.env.PW_CHROMIUM_PATH ? { executablePath: process.env.PW_CHROMIUM_PATH, args: ['--no-sandbox'] } : {},
   },
   webServer: {

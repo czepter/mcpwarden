@@ -1,4 +1,4 @@
-// Review M-G: Cookie-authentifizierte, verändernde /api/**-Routen lehnen fremde Ursprünge ab.
+// Review M-G: cookie-authenticated, state-changing /api/** routes reject foreign origins.
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { AdminUserList, PatCreated, UpstreamList } from '#shared/api-types'
 import { api, createInstance, createUser, signUpFirstAdmin, startServer, type ApiClient, type TestInstance, type TestServer } from './harness'
@@ -9,7 +9,7 @@ let admin: ApiClient
 let bId: string
 const cookie = () => [...admin.jar].map(([k, v]) => `${k}=${v}`).join('; ')
 
-/** Eine "Seite eines Angreifers": Browser sendet die Cookies mit, Origin ist die fremde Seite. */
+/** An "attacker's page": the browser sends the cookies along, the origin is the foreign page. */
 const cross = (path: string, init: { method?: string, body?: string, type?: string, origin?: string, site?: string } = {}) => fetch(srv.url + path, {
   method: init.method ?? 'POST',
   headers: {
@@ -25,7 +25,7 @@ beforeAll(async () => {
   inst = await createInstance()
   srv = await startServer(inst)
   admin = await signUpFirstAdmin(srv)
-  bId = (await createUser(admin, { name: 'B', email: 'b@example.com', password: 'passwort-b-12345' })).id
+  bId = (await createUser(admin, { name: 'B', email: 'b@example.com', password: 'password-b-12345' })).id
 })
 afterAll(async () => {
   await srv.stop()
@@ -74,7 +74,7 @@ describe('legitimate requests still work', () => {
   it('a PAT/Bearer request is exempt from the origin check', async () => {
     const pat = (await admin.request('/api/me/pats', { body: { name: 'bearer' } })).json as PatCreated
     const r = await fetch(`${srv.url}/api/me/pats`, { method: 'POST', headers: { 'authorization': `Bearer ${pat.token}`, 'origin': 'https://evil.example', 'content-type': 'application/json' }, body: '{"name":"x"}' })
-    // /api/me/pats nimmt nur Sitzungen an (401), entscheidend ist: nicht die 403 der Origin-Pruefung
+    // /api/me/pats accepts sessions only (401), what matters: not the 403 of the origin check
     expect(r.status).not.toBe(403)
   })
   it('GET from a foreign origin is not blocked by this check (read-only)', async () => {
@@ -83,6 +83,6 @@ describe('legitimate requests still work', () => {
   })
   it('Better Auth routes keep their own check (sign-in from the app origin works)', async () => {
     const c = api(srv.url)
-    expect((await c.request('/api/auth/sign-in/email', { body: { email: 'b@example.com', password: 'passwort-b-12345' } })).status).toBe(200)
+    expect((await c.request('/api/auth/sign-in/email', { body: { email: 'b@example.com', password: 'password-b-12345' } })).status).toBe(200)
   })
 })

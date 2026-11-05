@@ -1,4 +1,4 @@
-// Review L-b: /readyz prueft den Supervisor, wenn stdio aktiv ist.
+// Review L-b: /readyz checks the supervisor when stdio is active.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const state = { migrated: true, draining: false, ping: undefined as undefined | (() => Promise<boolean>) }

@@ -11,7 +11,7 @@ export async function login(page: Page, o: { role?: string, scenario?: string } 
   await prep(page, o)
   await page.goto('/login')
   await page.getByLabel('E-Mail').fill('admin@example.test')
-  await page.getByLabel('Passwort').fill('irgendeinpasswort')
+  await page.getByLabel('Passwort').fill('anypassword')
   await page.getByRole('button', { name: 'Anmelden' }).click()
   await expect(page.getByRole('heading', { name: 'Dashboard', level: 1 })).toBeVisible()
 }

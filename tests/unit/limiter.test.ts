@@ -60,13 +60,13 @@ describe('limiter', () => {
     l.blockUpstream('x', 1)
     expect(l.size()).toBe(300)
     t = 5 * 60_000
-    l.acquire({ ...base, userId: 'u0', tokenId: 'jti-0' }) // aktiv
+    l.acquire({ ...base, userId: 'u0', tokenId: 'jti-0' }) // active
     l.prune(10 * 60_000)
-    expect(l.size()).toBe(300) // noch nicht lange genug ungenutzt
+    expect(l.size()).toBe(300) // not unused for long enough yet
     t = 20 * 60_000
     l.acquire({ ...base, userId: 'u0', tokenId: 'jti-0' })
     l.prune(10 * 60_000)
-    expect(l.size()).toBe(3) // nur die Buckets von u0 (Nutzer, Token, Upstream)
+    expect(l.size()).toBe(3) // only the buckets of u0 (user, token, upstream)
     expect(l.upstreamBlockedUntil('x')).toBeNull()
   })
 

@@ -1,7 +1,7 @@
-// `pnpm smoke`: Full-Stack-Smoke als Skript.
-//  - ohne Umgebung: startet das gebaute Artefakt (`pnpm build`) auf einer frischen PGlite-Instanz (TEST_BACKEND=postgres: Postgres)
-//  - SMOKE_BASE_URL=...: laeuft gegen einen vorhandenen, FRISCHEN Server (z. B. den Container im Compose-Smoke);
-//    dann muessen SMOKE_FAKE_URL (Adresse des Fake-MCP aus Sicht des Servers; Host = SMOKE_FAKE_HOST) und SMOKE_SSRF_ALLOW gesetzt sein.
+// `pnpm smoke`: full-stack smoke as a script.
+//  - without environment: starts the built artifact (`pnpm build`) on a fresh PGlite instance (TEST_BACKEND=postgres: Postgres)
+//  - SMOKE_BASE_URL=...: runs against an existing, FRESH server (e.g. the container in the compose smoke);
+//    then SMOKE_FAKE_URL (address of the fake MCP from the server's point of view; host = SMOKE_FAKE_HOST) and SMOKE_SSRF_ALLOW must be set.
 import { startFakeHttp } from '../fixtures/fake-upstream/http'
 import { createInstance, startServer } from '../integration/harness'
 import { smokeSteps } from './flow'
@@ -15,7 +15,7 @@ let ssrfAllow = ['127.0.0.0/8']
 if (external) {
   baseUrl = external.replace(/\/$/, '')
   const host = process.env.SMOKE_FAKE_HOST
-  if (!host) throw new Error('SMOKE_FAKE_HOST fehlt (Adresse, unter der der Server das Fake-MCP erreicht)')
+  if (!host) throw new Error('SMOKE_FAKE_HOST missing (address under which the server reaches the fake MCP)')
   fakeUrl = `http://${host}:${fake.port}/mcp`
   ssrfAllow = (process.env.SMOKE_SSRF_ALLOW ?? `${host}/32`).split(',')
 } else {
@@ -35,7 +35,7 @@ try {
     } catch (e) {
       failed++
       console.error(`FAIL ${s.name}\n${e instanceof Error ? (e.stack ?? e.message) : String(e)}`)
-      break // die Schritte bauen aufeinander auf
+      break // the steps build on each other
     }
   }
 } finally {

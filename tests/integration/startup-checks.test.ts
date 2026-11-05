@@ -5,7 +5,7 @@ let inst: TestInstance
 beforeAll(async () => { inst = await createInstance() })
 afterAll(async () => { await inst?.cleanup() })
 
-const SECRET = 'GEHEIMER-WERT-NICHT-LOGGEN'
+const SECRET = 'SECRET-VALUE-DO-NOT-LOG'
 
 async function fails(env: Record<string, string | undefined>, name: string) {
   const srv = await startServer(inst, { env, noWait: true })
@@ -17,12 +17,12 @@ async function fails(env: Record<string, string | undefined>, name: string) {
   expect(srv.logs()).not.toContain(SECRET)
 }
 
-it('ohne MASTER_KEY: Exit != 0, Meldung nennt die Variable', () => fails({ MASTER_KEY: undefined }, 'MASTER_KEY'))
-it('kurzes BETTER_AUTH_SECRET', () => fails({ BETTER_AUTH_SECRET: 'kurz' }, 'BETTER_AUTH_SECRET'))
-it('http:// BASE_URL ausserhalb localhost', () => fails({ BASE_URL: 'http://example.com' }, 'BASE_URL'))
-it('falscher MASTER_KEY wird nicht geloggt', () => fails({ MASTER_KEY: SECRET }, 'MASTER_KEY'))
+it('without MASTER_KEY: exit != 0, message names the variable', () => fails({ MASTER_KEY: undefined }, 'MASTER_KEY'))
+it('short BETTER_AUTH_SECRET', () => fails({ BETTER_AUTH_SECRET: 'short' }, 'BETTER_AUTH_SECRET'))
+it('http:// BASE_URL outside localhost', () => fails({ BASE_URL: 'http://example.com' }, 'BASE_URL'))
+it('wrong MASTER_KEY is not logged', () => fails({ MASTER_KEY: SECRET }, 'MASTER_KEY'))
 
-it('SMTP_URL ohne MAIL_FROM: Exit != 0, Zugangsdaten werden nicht geloggt', () =>
+it('SMTP_URL without MAIL_FROM: exit != 0, credentials are not logged', () =>
   fails({ SMTP_URL: `smtp://user:${SECRET}@mail.example.com:587`, MAIL_FROM: undefined }, 'MAIL_FROM'))
-it('ungueltige SMTP_URL: Exit != 0, Zugangsdaten werden nicht geloggt', () =>
+it('invalid SMTP_URL: exit != 0, credentials are not logged', () =>
   fails({ SMTP_URL: `http://user:${SECRET}@mail.example.com`, MAIL_FROM: 'a@example.com' }, 'SMTP_URL'))

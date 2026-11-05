@@ -130,7 +130,7 @@ describe('ssrf with real local server (no connection reaches the target)', () =>
 describe('ssrf extended ranges and allow-list hardening (L2, L3)', () => {
   it.each([
     'http://[2001:0:4136:e378:8000:63bf:3fff:fdd2]/', // Teredo 2001::/32
-    'http://[64:ff9b:1::1]/', // NAT64 lokal
+    'http://[64:ff9b:1::1]/', // NAT64 local
     'http://[fec0::1]/', // site-local
     'http://192.88.99.1/', // 6to4-Relay-Anycast
     'http://[::ffff:0:10.0.0.1]/', // SIIT ::ffff:0:0:0/96
@@ -143,7 +143,7 @@ describe('ssrf extended ranges and allow-list hardening (L2, L3)', () => {
     for (const ip of ['169.254.169.254', '100.100.100.200', 'fd00:ec2::254', '::ffff:169.254.169.254', '169.254.1.1', 'fe80::1', '192.0.0.192']) {
       expect(() => assertAddressesAllowed('evil.example', [ip], a), ip).toThrow(SsrfBlockedError)
     }
-    expect(() => assertAddressesAllowed('evil.example', ['10.1.1.1'], a)).not.toThrow() // normale private Adresse: Hostname-Ausnahme gilt
+    expect(() => assertAddressesAllowed('evil.example', ['10.1.1.1'], a)).not.toThrow() // normal private address: hostname exception applies
   })
   it('a broad CIDR does not open metadata; only an explicit single address does', () => {
     for (const cidr of ['169.254.0.0/16', '100.64.0.0/10', '0.0.0.0/0', '::/0', 'fc00::/7']) {
@@ -155,7 +155,7 @@ describe('ssrf extended ranges and allow-list hardening (L2, L3)', () => {
     expect(() => assertUrlAllowed('http://169.254.169.254/', new AllowList(['169.254.169.254']))).not.toThrow()
     expect(() => assertUrlAllowed('http://169.254.169.254/', new AllowList(['169.254.169.254/32']))).not.toThrow()
     expect(() => assertUrlAllowed('http://169.254.169.253/', new AllowList(['169.254.169.254']))).toThrow(SsrfBlockedError)
-    // anderes Link-Local per CIDR erlaubt
+    // other link-local allowed via CIDR
     expect(() => assertUrlAllowed('http://169.254.5.5/', new AllowList(['169.254.5.0/24']))).not.toThrow()
   })
   it('malformed allow entries are rejected at config time; the lenient runtime parser skips them and opens nothing', () => {

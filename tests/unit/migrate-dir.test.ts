@@ -4,9 +4,9 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { resolveMigrationsDir } from '../../server/db/migrate'
 
-describe('Migrationsordner im Build', () => {
+describe('Migrations folder in the build', () => {
   afterEach(() => { vi.restoreAllMocks() })
-  it('wird ueber das Startskript gefunden, auch wenn weder import.meta.url noch cwd auf den Build zeigen', () => {
+  it('is found via the start script, even if neither import.meta.url nor cwd point to the build', () => {
     const out = mkdtempSync(join(tmpdir(), 'mcpw-mig-'))
     mkdirSync(join(out, 'server/migrations/meta'), { recursive: true })
     writeFileSync(join(out, 'server/migrations/meta/_journal.json'), '{}')

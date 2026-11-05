@@ -1,5 +1,5 @@
 #!/bin/sh
-# Im Container als root ausgeführt (nur SETUID/SETGID/CHOWN). Startet den Supervisor; dieser startet fake-web.mjs als Web-UID.
+# Run as root in the container (only SETUID/SETGID/CHOWN). Starts the supervisor; it starts fake-web.mjs as the web UID.
 set -e
 export DATA_DIR=/data SUP_SOCKET=/run/mcpwarden/sup.sock WEB_UID=10001 WEB_GID=10001 SUP_IDLE_UNIT_MS=1500
 export MASTER_KEY=topsecret BETTER_AUTH_SECRET=topsecret2 DATABASE_URL=postgres://x

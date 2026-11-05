@@ -1,4 +1,4 @@
-// In-Process-SMTP-Server fuer Tests (smtp-server, keine externen Dienste). Faengt Mails ab und simuliert Fehler.
+// In-process SMTP server for tests (smtp-server, no external services). Intercepts mails and simulates errors.
 import type { Socket } from 'node:net'
 import { SMTPServer } from 'smtp-server'
 
@@ -16,15 +16,15 @@ export interface FakeSmtpOptions {
   secure?: boolean
   /** STARTTLS anbieten (Default false). */
   starttls?: boolean
-  /** Anmeldung erforderlich. */
+  /** Authentication required. */
   auth?: { user: string, pass: string }
-  /** Verbindung annehmen, aber nie grüßen. */
+  /** Accept the connection but never greet. */
   silent?: boolean
-  /** DATA nie beantworten. */
+  /** Never answer DATA. */
   hangOnData?: boolean
-  /** Die ersten N DATA-Befehle mit 451 beantworten. */
+  /** Answer the first N DATA commands with 451. */
   tempFailFirst?: number
-  /** RCPT immer mit diesem Code ablehnen (z. B. 550). */
+  /** Always reject RCPT with this code (e.g. 550). */
   rejectRcpt?: number
 }
 
@@ -53,7 +53,7 @@ export async function startFakeSmtp(o: FakeSmtpOptions = {}): Promise<FakeSmtp> 
     allowInsecureAuth: true,
     onConnect(_session, cb) {
       state.connections++
-      if (o.silent) return // nie antworten: der Client muss per Timeout aufgeben
+      if (o.silent) return // never answer: the client must give up via timeout
       cb()
     },
     onAuth(auth, _session, cb) {
@@ -66,7 +66,7 @@ export async function startFakeSmtp(o: FakeSmtpOptions = {}): Promise<FakeSmtp> 
     },
     onData(stream, session, cb) {
       state.dataAttempts++
-      if (o.hangOnData) return // Stream nicht lesen, nie antworten
+      if (o.hangOnData) return // do not read the stream, never answer
       const chunks: Buffer[] = []
       stream.on('data', c => chunks.push(c as Buffer))
       stream.on('end', () => {
@@ -104,12 +104,12 @@ export async function startFakeSmtp(o: FakeSmtpOptions = {}): Promise<FakeSmtp> 
   }
 }
 
-/** Dekodiert Quoted-Printable (nodemailer kodiert Umlaute und lange Zeilen so). */
+/** Decodes quoted-printable (nodemailer encodes umlauts and long lines this way). */
 export function decodeQuotedPrintable(s: string): string {
   return s.replace(/=\r?\n/g, '').replace(/=([0-9A-F]{2})/g, (_, h: string) => String.fromCharCode(Number.parseInt(h, 16)))
 }
 
-/** Liest Header und Klartext-Teil als lesbaren String (ASCII-sicher genug fuer Assertions). */
+/** Reads headers and plaintext part as a readable string (ASCII-safe enough for assertions). */
 export function readable(m: CapturedMail): string {
   return decodeQuotedPrintable(m.raw)
 }

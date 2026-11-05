@@ -1,5 +1,5 @@
-// Review M-E: upstream_secret und upstream_tool koennen nicht mehr zu einem Upstream eines anderen Nutzers gehoeren
-// (UNIQUE(user_id, id) auf upstream, zusammengesetzte Fremdschluessel). Die Migration erhaelt vorhandene Daten.
+// Review M-E: upstream_secret and upstream_tool can no longer belong to another user's upstream
+// (UNIQUE(user_id, id) on upstream, composite foreign keys). The migration preserves existing data.
 import { cpSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -12,7 +12,7 @@ const FULL = resolve('server/db/migrations')
 let client: PGlite
 const count = async (sql: string) => ((await client.query<{ n: number }>(sql)).rows[0]!).n
 
-/** Ordner mit dem Stand vor der Migration (nur die Eintraege bis `0004_user_preference`). */
+/** Folder with the state before the migration (only the entries up to `0004_user_preference`). */
 function olderMigrations(lastTag: string): string {
   const dir = mkdtempSync(join(tmpdir(), 'mcpw-mig-old-'))
   mkdirSync(join(dir, 'meta'), { recursive: true })
@@ -29,7 +29,7 @@ beforeAll(async () => {
   client = new PGlite()
   const db = drizzle(client)
   await migrate(db as never, { migrationsFolder: olderMigrations('0004_user_preference') })
-  // Bestand vor der Migration: zwei Nutzer, je ein Upstream mit Secret und Tool
+  // State before the migration: two users, one upstream each with a secret and a tool
   await client.exec(`
     insert into "user" (id, name, email) values ('ua', 'A', 'a@x'), ('ub', 'B', 'b@x');
     insert into upstream (id, user_id, slug, name, type, url) values

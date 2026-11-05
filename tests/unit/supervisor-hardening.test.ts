@@ -92,7 +92,7 @@ describe('purgeUserDir (H3)', () => {
     chmodSync(join(u, 'sub'), 0)
     const { spawn } = await import('node:child_process')
     const run = (argv: string[]) => new Promise<number>(res => spawn(argv[0]!, argv.slice(1), { stdio: 'ignore' }).on('exit', c => res(c ?? 1)))
-    // als root verhindert chmod 000 nichts; der Test ist dort trivial, aber der Aufruf muss trotzdem gelingen
+    // as root chmod 000 prevents nothing; the test is trivial there, but the call must still succeed
     await purgeUserDir(d, 20000, run)
     const { existsSync } = await import('node:fs')
     expect(existsSync(u)).toBe(false)

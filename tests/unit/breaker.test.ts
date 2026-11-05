@@ -15,7 +15,7 @@ describe('breaker', () => {
     t = 30_000
     expect(b.allow()).toBe(true)
     expect(b.state).toBe('half-open')
-    expect(b.allow()).toBe(false) // nur ein Probeaufruf
+    expect(b.allow()).toBe(false) // only one probe call
     b.success()
     expect(b.state).toBe('closed')
   })

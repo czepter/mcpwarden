@@ -6,7 +6,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import * as auth from '../../server/db/schema/auth'
 import * as gw from '../../server/db/schema/gateway'
 
-// Schema-Test ohne Migrationsdateien (Migrationen entstehen erst mit dem 0a-Tooling): Tabellen werden direkt gepusht.
+// Schema test without migration files (migrations only arrive with the 0a tooling): tables are pushed directly.
 let client: PGlite
 let db: ReturnType<typeof drizzle>
 beforeAll(async () => {
@@ -27,7 +27,7 @@ describe('gateway schema', () => {
     await expect(db.insert(gw.upstream).values({ ...base, slug: 'nourl', url: null })).rejects.toThrow()
     await expect(db.insert(gw.upstream).values({ ...base, slug: 'nocmd', type: 'stdio' })).rejects.toThrow()
     await db.insert(auth.user).values({ id: 'u2', name: 'n', email: 'b@x' })
-    await db.insert(gw.upstream).values({ ...base, userId: 'u2', slug: 'ok' }) // gleicher Slug, anderer Nutzer
+    await db.insert(gw.upstream).values({ ...base, userId: 'u2', slug: 'ok' }) // same slug, different user
   })
   it('deleting a user cascades to upstreams, secrets, tools, limits, call_stat; audit_log stays', async () => {
     await db.insert(auth.user).values({ id: 'del', name: 'n', email: 'd@x' })

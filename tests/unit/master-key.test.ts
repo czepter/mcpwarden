@@ -5,7 +5,7 @@ describe('getMasterKey', () => {
     vi.resetModules()
     vi.unstubAllEnvs()
   })
-  it('liefert 32 Byte aus MASTER_KEY', async () => {
+  it('returns 32 bytes from MASTER_KEY', async () => {
     vi.stubEnv('BASE_URL', 'http://localhost:3000')
     vi.stubEnv('BETTER_AUTH_SECRET', 's'.repeat(32))
     vi.stubEnv('MASTER_KEY', 'cd'.repeat(32))

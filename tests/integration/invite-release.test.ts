@@ -1,5 +1,5 @@
-// Review L-i: Scheitert das Anlegen des Nutzers, nachdem die Einladung beansprucht wurde, wird sie wieder freigegeben.
-// Der Fehler kommt aus der Datenbank (Trigger), also genau nach dem Beanspruchen im Before-Hook.
+// Review L-i: If creating the user fails after the invitation was claimed, it is released again.
+// The error comes from the database (trigger), i.e. exactly after claiming in the before hook.
 import { sql } from 'drizzle-orm'
 import { afterAll, beforeAll, expect, it } from 'vitest'
 import { createInstance, type TestInstance } from './harness'
@@ -31,7 +31,7 @@ afterAll(async () => {
 })
 
 it('an invite is released when creating the user fails after it was claimed', async () => {
-  const admin = await auth.api.signUpEmail({ body: { name: 'A', email: 'a@example.com', password: 'passwort-12345' } })
+  const admin = await auth.api.signUpEmail({ body: { name: 'A', email: 'a@example.com', password: 'password-12345' } })
   const db = await dbMod.getDb()
   await db.execute(sql`
     create function mcpw_test_fail_user() returns trigger as $$
@@ -42,18 +42,18 @@ it('an invite is released when creating the user fails after it was claimed', as
   await db.execute(sql`create trigger mcpw_test_fail_user before insert on "user" for each row execute function mcpw_test_fail_user()`)
 
   const { token, row } = await repo.createInvite(admin.user.id, null)
-  const signUp = (email: string) => auth.api.signUpEmail({ body: { name: 'N', email, password: 'passwort-12345' }, headers: new Headers({ 'x-invite-token': token }) })
+  const signUp = (email: string) => auth.api.signUpEmail({ body: { name: 'N', email, password: 'password-12345' }, headers: new Headers({ 'x-invite-token': token }) })
 
   await expect(signUp('boom@example.com')).rejects.toBeDefined()
   const after = await repo.inviteByToken(token)
   expect(after && repo.inviteStatus(after)).toBe('open')
   expect(after?.usedAt).toBeNull()
 
-  // dieselbe Einladung ist weiter verwendbar und wird dann ganz normal verbraucht
+  // the same invitation remains usable and is then consumed normally
   const ok = await signUp('ok@example.com')
   const used = await repo.inviteByToken(token)
   expect(used && repo.inviteStatus(used)).toBe('used')
   expect(used?.usedBy).toBe(ok.user.id)
   expect(row.id).toBe(used?.id)
-  await expect(signUp('second@example.com')).rejects.toBeDefined() // einmalig
+  await expect(signUp('second@example.com')).rejects.toBeDefined() // one-time
 })

@@ -1,6 +1,6 @@
-// Gemeinsamer Test-Harness fuer 0a, 0b und Phase 1 (Signaturen stabil halten).
-// Startet das gebaute Artefakt als Kindprozess. Nur hier kennt der Test den Backend-Unterschied
-// (TEST_BACKEND=pglite|postgres, TEST_PG_ADMIN_URL); der Server sieht nur, ob DATABASE_URL gesetzt ist.
+// Shared test harness for 0a, 0b and phase 1 (keep signatures stable).
+// Starts the built artifact as a child process. Only here does the test know the backend difference
+// (TEST_BACKEND=pglite|postgres, TEST_PG_ADMIN_URL); the server only sees whether DATABASE_URL is set.
 import { spawn, type ChildProcess } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
 import { mkdtemp, rm } from 'node:fs/promises'
@@ -16,7 +16,7 @@ const ENTRY = fileURLToPath(new URL('../../.output/server/index.mjs', import.met
 export const backend = (process.env.TEST_BACKEND ?? 'pglite') as 'pglite' | 'postgres'
 const ADMIN_URL = process.env.TEST_PG_ADMIN_URL ?? 'postgres://postgres:test@localhost:54329/postgres'
 
-/** Persistenter Zustand (DATA_DIR bzw. Datenbank), ueberlebt Neustarts des Servers. */
+/** Persistent state (DATA_DIR or database), survives server restarts. */
 export interface TestInstance {
   dataDir: string
   databaseUrl?: string
@@ -46,7 +46,7 @@ export async function createInstance(): Promise<TestInstance> {
   }
 }
 
-/** Anzahl angewandter Migrationen (bei PGlite auf gestoppter Instanz). */
+/** Number of applied migrations (for PGlite on a stopped instance). */
 export async function countMigrations(inst: TestInstance): Promise<number> {
   const q = 'select count(*)::int as n from drizzle.__drizzle_migrations'
   if (inst.databaseUrl) {
@@ -83,17 +83,17 @@ export interface TestServer {
   proc: ChildProcess
   logs: () => string
   exited: Promise<number | null>
-  /** SIGTERM, wartet auf Exit, liefert den Exit-Code. */
+  /** SIGTERM, waits for exit, returns the exit code. */
   stop: () => Promise<number | null>
   waitReady: (timeoutMs?: number) => Promise<void>
 }
 
 export interface StartOptions {
-  /** Ueberschreibt/loescht (undefined) Umgebungsvariablen. Default-Satz siehe unten. */
+  /** Overrides/removes (undefined) environment variables. Default set see below. */
   env?: Record<string, string | undefined>
   /** Default: RATE_LIMIT=off. */
   rateLimit?: boolean
-  /** Ohne Warten auf /readyz zurueckgeben (Race-Tests). */
+  /** Return without waiting for /readyz (race tests). */
   noWait?: boolean
   port?: number
 }
@@ -109,9 +109,9 @@ export async function startServer(inst: TestInstance, opts: StartOptions = {}): 
     BETTER_AUTH_SECRET: 'test-secret-test-secret-test-secret-0123',
     MASTER_KEY: 'ab'.repeat(32),
     DATA_DIR: inst.dataDir,
-    MCPW_DUMMY_UPSTREAM: '1', // 0b-Tests nutzen den Dummy-Upstream neben dem echten Gateway
+    MCPW_DUMMY_UPSTREAM: '1', // 0b tests use the dummy upstream next to the real gateway
     DATABASE_URL: inst.databaseUrl,
-    // Der Test-Client spielt den Reverse-Proxy: sein X-Forwarded-For (ein Eintrag) gilt als Client-IP. Tests zu TRUST_PROXY ueberschreiben das.
+    // The test client plays the reverse proxy: its X-Forwarded-For (one entry) counts as the client IP. Tests on TRUST_PROXY override this.
     TRUST_PROXY: 'true',
     ...(opts.rateLimit ? {} : { RATE_LIMIT: 'off' }),
     ...opts.env,
@@ -136,20 +136,20 @@ export async function startServer(inst: TestInstance, opts: StartOptions = {}): 
     waitReady: async (timeoutMs = 30_000) => {
       const end = Date.now() + timeoutMs
       while (Date.now() < end) {
-        if (proc.exitCode !== null) throw new Error(`Server beendet (${proc.exitCode}): ${out}`)
+        if (proc.exitCode !== null) throw new Error(`Server exited (${proc.exitCode}): ${out}`)
         try {
           if ((await fetch(`${url}/readyz`)).status === 200) return
-        } catch { /* noch nicht erreichbar */ }
+        } catch { /* not reachable yet */ }
         await new Promise(r => setTimeout(r, 50))
       }
-      throw new Error(`Server nicht bereit: ${out}`)
+      throw new Error(`Server not ready: ${out}`)
     },
   }
   if (!opts.noWait) await srv.waitReady()
   return srv
 }
 
-/** HTTP-Client mit Cookie-Jar; sendet Origin und eine feste Client-IP (fuer Rate-Limit-Tests). */
+/** HTTP client with cookie jar; sends Origin and a fixed client IP (for rate-limit tests). */
 export function api(baseUrl: string, ip = '203.0.113.7') {
   const jar = new Map<string, string>()
   async function request(path: string, init: { method?: string, body?: unknown } = {}) {
@@ -181,9 +181,9 @@ export function api(baseUrl: string, ip = '203.0.113.7') {
 export type ApiClient = ReturnType<typeof api>
 
 /**
- * POST, dessen Header sofort gesendet werden, dessen Body aber zurueckgehalten wird, bis `release()` aufgerufen wird.
- * So lassen sich mehrere Anfragen deterministisch gleichzeitig "in der Luft" halten: der Server hat jeden Aufrufer angemeldet,
- * bevor irgendeine Aktion committet (Tests auf Gleichzeitigkeit duerfen nicht von Ankunftszeiten abhaengen).
+ * POST whose headers are sent immediately but whose body is held back until `release()` is called.
+ * This keeps several requests "in flight" deterministically at the same time: the server has admitted every caller
+ * before any action commits (concurrency tests must not depend on arrival times).
  */
 export function heldPost(baseUrl: string, client: ApiClient, path: string, body: unknown, ip = '203.0.113.7') {
   const u = new URL(baseUrl + path)
@@ -210,28 +210,28 @@ export function heldPost(baseUrl: string, client: ApiClient, path: string, body:
   return { release: () => { req.end(payload); return done } }
 }
 
-export const ADMIN = { name: 'Admin', email: 'admin@example.com', password: 'admin-passwort-123' }
+export const ADMIN = { name: 'Admin', email: 'admin@example.com', password: 'admin-password-123' }
 
-/** Registriert den ersten Nutzer (wird Admin) und liefert den angemeldeten Client. */
+/** Registers the first user (becomes admin) and returns the signed-in client. */
 export async function signUpFirstAdmin(srv: TestServer, user = ADMIN): Promise<ApiClient> {
   const c = api(srv.url)
   const r = await c.request('/api/auth/sign-up/email', { body: user })
-  if (r.status !== 200) throw new Error(`Erst-Registrierung fehlgeschlagen: ${r.status} ${r.text}`)
+  if (r.status !== 200) throw new Error(`First registration failed: ${r.status} ${r.text}`)
   return c
 }
 
 let signUpIp = 0
 
 /**
- * Legt einen weiteren Nutzer an, wie es ein Admin im Betrieb tut: Einladung ueber die mcpwarden-Admin-Route, Registrierung mit dem Token.
- * Die Better-Auth-Admin-Endpunkte sind per HTTP gesperrt (server/auth/http-guard.ts) und dienen nie als Testhilfe.
+ * Creates another user the way an admin does in operation: invitation via the mcpwarden admin route, registration with the token.
+ * The Better Auth admin endpoints are blocked via HTTP (server/auth/http-guard.ts) and never serve as a test helper.
  */
 export async function createUser(
   admin: ApiClient,
   user: { name: string, email: string, password: string },
 ) {
   const inv = await admin.request('/api/admin/invites', { body: { email: user.email } })
-  if (inv.status !== 201) throw new Error(`createUser: Einladung fehlgeschlagen: ${inv.status} ${inv.text}`)
+  if (inv.status !== 201) throw new Error(`createUser: invitation failed: ${inv.status} ${inv.text}`)
   const token = (inv.json.link as string).split('/invite/')[1]!
   const ip = `198.18.${Math.floor(signUpIp / 250) % 250}.${(signUpIp++ % 250) + 1}`
   const res = await fetch(`${admin.baseUrl}/api/auth/sign-up/email`, {
@@ -240,15 +240,15 @@ export async function createUser(
     body: JSON.stringify(user),
   })
   const text = await res.text()
-  if (res.status !== 200) throw new Error(`createUser fehlgeschlagen: ${res.status} ${text}`)
+  if (res.status !== 200) throw new Error(`createUser failed: ${res.status} ${text}`)
   const u = JSON.parse(text).user as { id: string, email: string }
   return { id: u.id, email: u.email, role: 'user' }
 }
 
 /**
- * Macht einen Nutzer zum Admin. Im Produkt gibt es dafuer keine Route (nur der erste Nutzer wird Admin), Tests mit mehreren Admins
- * schreiben die Rolle deshalb direkt in die Datenbank. PGlite erlaubt nur einen Prozess: der Server wird dafuer gestoppt und
- * auf demselben Port mit denselben Optionen neu gestartet (Sitzungen liegen in der Datenbank und bleiben gueltig).
+ * Makes a user an admin. There is no route for this in the product (only the first user becomes admin); tests with several admins
+ * therefore write the role directly into the database. PGlite allows only one process: the server is stopped for this and
+ * restarted on the same port with the same options (sessions live in the database and stay valid).
  */
 export async function promoteToAdmin(inst: TestInstance, srv: TestServer, email: string, opts: StartOptions = {}): Promise<TestServer> {
   await srv.stop()

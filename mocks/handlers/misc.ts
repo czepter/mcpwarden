@@ -54,14 +54,14 @@ export const statsHandlers = [
 export const linkHandlers = [
   route('get', '/api/links/:token', ({ params }) => {
     const t = String(params.token)
-    const info: LinkInfo = t === 'abgelaufen' ? { state: 'expired' } : t === 'verbraucht' ? { state: 'used' } : t === 'fremd' ? { state: 'forbidden' }
+    const info: LinkInfo = t === 'expired' ? { state: 'expired' } : t === 'used' ? { state: 'used' } : t === 'foreign' ? { state: 'forbidden' }
       : { state: 'open', kind: t === 'header' ? 'header' : t === 'oauth' ? 'oauth' : 'token', upstream: { slug: 'duckdb', url: 'https://mcp.duckdb.example/mcp' }, headerName: t === 'header' ? 'X-Api-Key' : undefined, expiresAt: new Date(Date.now() + 14 * 60_000).toISOString() }
     if (info.state === 'forbidden') return err(403, 'forbidden', 'Dieser Link gehört einem anderen Nutzer.')
     return json(info)
   }, { public: true }),
   route('post', '/api/links/:token/test', async ({ request }) => {
     const b = await request.json().catch(() => ({})) as { value?: string }
-    return json(b.value === 'falsch' ? { ok: false, message: 'Der Upstream hat das Token abgelehnt.' } : { ok: true, toolCount: 14 })
+    return json(b.value === 'wrong' ? { ok: false, message: 'Der Upstream hat das Token abgelehnt.' } : { ok: true, toolCount: 14 })
   }),
   route('post', '/api/links/:token/submit', () => json({ ok: true })),
 ]

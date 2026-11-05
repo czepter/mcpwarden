@@ -1,8 +1,8 @@
 #!/bin/sh
-# Slim-Smoke: das Image-Ziel `slim` (nur Web-App) startet ohne Capabilities, /healthz und /readyz antworten, die Web-App läuft als UID 10001,
-# stdio ist fest aus (auch nach "stdio.enabled" durch den Admin) und ein stdio-Upstream wird abgelehnt.
-# Aufruf: sh tests/e2e/slim-smoke.sh   (Docker nötig; SMOKE_NO_BUILD=1 nutzt ein vorhandenes Image mcpwarden:slim;
-#          NODE_IMAGE=<Basis> baut mit eigener Basis, z. B. mit Proxy-CA)
+# Slim smoke: the image target `slim` (web app only) starts without capabilities, /healthz and /readyz answer, the web app runs as UID 10001,
+# stdio is fixed off (even after "stdio.enabled" by the admin) and a stdio upstream is rejected.
+# Usage: sh tests/e2e/slim-smoke.sh   (Docker required; SMOKE_NO_BUILD=1 uses an existing image mcpwarden:slim;
+#          NODE_IMAGE=<base> builds with your own base, e.g. with a proxy CA)
 set -eu
 cd "$(dirname "$0")/../.."
 NAME=mcpw-slim-smoke
@@ -26,7 +26,7 @@ if [ "${SMOKE_NO_BUILD:-}" != 1 ]; then
 fi
 
 docker rm -f "$NAME" >/dev/null 2>&1 || true
-# Ohne jede Capability und ohne Rechtegewinn: das Ziel slim braucht nichts davon
+# Without any capability and without privilege gain: the slim target needs none of that
 docker run -d --name "$NAME" -p "$PORT:3000" --cap-drop ALL --security-opt no-new-privileges:true -v "$NAME-data:/data" \
   -e BASE_URL="http://localhost:$PORT" -e BETTER_AUTH_SECRET="$(openssl rand -base64 32)" -e MASTER_KEY="$(openssl rand -base64 32)" \
   mcpwarden:slim >/dev/null || fail "docker run"
@@ -34,25 +34,25 @@ wait_http "http://localhost:$PORT/healthz" 200 || fail "healthz"
 wait_http "http://localhost:$PORT/readyz" 200 || fail "readyz"
 echo "ok: slim healthz/readyz (cap-drop ALL, no-new-privileges)"
 
-[ "$(docker exec "$NAME" awk '/^Uid:/ {print $2}' /proc/1/status)" = 10001 ] || fail "Web-App läuft nicht als UID 10001"
-[ "$(docker exec "$NAME" awk '/^CapEff:/ {print $2}' /proc/1/status)" = 0000000000000000 ] || fail "Web-App hat Capabilities"
-docker exec "$NAME" sh -c 'test ! -e dist/supervisor' || fail "Supervisor-Bundle im Slim-Image"
-echo "ok: uid 10001, CapEff=0, kein Supervisor-Bundle"
+[ "$(docker exec "$NAME" awk '/^Uid:/ {print $2}' /proc/1/status)" = 10001 ] || fail "web app does not run as UID 10001"
+[ "$(docker exec "$NAME" awk '/^CapEff:/ {print $2}' /proc/1/status)" = 0000000000000000 ] || fail "web app has capabilities"
+docker exec "$NAME" sh -c 'test ! -e dist/supervisor' || fail "supervisor bundle in the slim image"
+echo "ok: uid 10001, CapEff=0, no supervisor bundle"
 
-post POST /api/auth/sign-up/email '{"name":"Admin","email":"admin@example.com","password":"admin-passwort-123"}' | grep -q '"role":"admin"' || fail "Erst-Registrierung"
+post POST /api/auth/sign-up/email '{"name":"Admin","email":"admin@example.com","password":"admin-password-123"}' | grep -q '"role":"admin"' || fail "first registration"
 caps=$(post GET /api/me/capabilities)
-echo "$caps" | grep -q '"stdio":{"allowed":false,"reason":"image_slim"}' || fail "stdio muss im Slim-Image gesperrt sein (image_slim): $caps"
-# Auch die Admin-Einstellung öffnet stdio hier nicht
+echo "$caps" | grep -q '"stdio":{"allowed":false,"reason":"image_slim"}' || fail "stdio must be blocked in the slim image (image_slim): $caps"
+# The admin setting does not open stdio here either
 post PUT /api/admin/settings '{"stdio.enabled":true}' | grep -q '"stdio.enabled":true' || fail "settings"
 caps=$(post GET /api/me/capabilities)
-echo "$caps" | grep -q '"stdio":{"allowed":false,"reason":"image_slim"}' || fail "stdio nach stdio.enabled nicht gesperrt: $caps"
+echo "$caps" | grep -q '"stdio":{"allowed":false,"reason":"image_slim"}' || fail "stdio not blocked after stdio.enabled: $caps"
 code=$(curl -s -o "$J.out" -w '%{http_code}' -b "$J" -c "$J" -H 'content-type: application/json' -H "origin: http://localhost:$PORT" -X POST "http://localhost:$PORT/api/upstreams" \
   -d '{"name":"Local","slug":"local","type":"stdio","command":"echo"}')
-[ "$code" = 403 ] && grep -q 'stdio_not_allowed' "$J.out" || fail "stdio-Upstream hätte abgelehnt werden müssen (HTTP $code): $(cat "$J.out")"
+[ "$code" = 403 ] && grep -q 'stdio_not_allowed' "$J.out" || fail "stdio upstream should have been rejected (HTTP $code): $(cat "$J.out")"
 rm -f "$J.out"
 echo "ok: stdio locked (image_slim), stdio upstream refused"
 
 docker stop -t 40 "$NAME" >/dev/null || fail "stop"
-[ "$(docker inspect -f '{{.State.ExitCode}}' "$NAME")" = 0 ] || fail "Exit-Code $(docker inspect -f '{{.State.ExitCode}}' "$NAME")"
+[ "$(docker inspect -f '{{.State.ExitCode}}' "$NAME")" = 0 ] || fail "exit code$(docker inspect -f '{{.State.ExitCode}}' "$NAME")"
 echo "ok: graceful stop (exit 0)"
 echo "SLIM SMOKE OK"

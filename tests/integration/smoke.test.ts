@@ -1,5 +1,5 @@
-// Full-Stack-Smoke gegen das gebaute Artefakt (PGlite oder Postgres je TEST_BACKEND): ein Server, ein Fake-MCP-Upstream im
-// Testprozess, alles nur ueber HTTP. Die Schritte stehen in tests/smoke/flow.ts und laufen hier der Reihe nach.
+// Full-stack smoke against the built artifact (PGlite or Postgres per TEST_BACKEND): one server, one fake MCP upstream in the
+// test process, everything over HTTP only. The steps are in tests/smoke/flow.ts and run here one after another.
 import { afterAll, beforeAll, describe, it } from 'vitest'
 import { startFakeHttp, type FakeHttp } from '../fixtures/fake-upstream/http'
 import { smokeSteps } from '../smoke/flow'
@@ -21,7 +21,7 @@ afterAll(async () => {
 })
 
 describe(`full-stack smoke (${backend})`, () => {
-  // Die Schritte bauen aufeinander auf: der Server existiert erst nach beforeAll, daher die Liste lazy erzeugen.
+  // The steps build on each other: the server exists only after beforeAll, hence create the list lazily.
   const names = smokeSteps({ baseUrl: 'http://placeholder', fake: { url: '', state: undefined as never }, ssrfAllow: [] }).map(s => s.name)
   let steps: ReturnType<typeof smokeSteps>
   names.forEach((name, i) => {

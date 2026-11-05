@@ -1,5 +1,5 @@
-// Review L-e: Aendert sich authHeaderName, passt das gespeicherte Header-Secret nicht mehr (es ist an den Namen gebunden).
-// Es wird entfernt und der Upstream wartet auf neue Zugangsdaten, statt still ohne Auth-Header zu verbinden.
+// Review L-e: If authHeaderName changes, the stored header secret no longer fits (it is bound to the name).
+// It is removed and the upstream waits for new credentials instead of silently connecting without an auth header.
 import { afterAll, beforeAll, expect, it } from 'vitest'
 import type { UpstreamDetail, UpstreamTestResult } from '#shared/api-types'
 import { startFakeHttp, type FakeHttp } from '../fixtures/fake-upstream/http'

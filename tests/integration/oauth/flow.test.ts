@@ -1,6 +1,6 @@
-// Aufgabe 9 / A3: kompletter OAuth-Durchlauf gegen das gebaute Artefakt (DCR -> Authorize -> Consent -> Token ->
-// /mcp) und sofortiger Widerruf. Die Frontend-Seiten fehlen noch: Authorize/Consent werden wie im Frontend ueber die
-// API angesprochen (Redirect auf /consent?<signierte Query>, consent-info, POST oauth2/consent mit oauth_query).
+// Task 9 / A3: complete OAuth run against the built artifact (DCR -> authorize -> consent -> token ->
+// /mcp) and immediate revocation. The frontend pages are still missing: authorize/consent are addressed via the
+// API like the frontend does (redirect to /consent?<signed query>, consent-info, POST oauth2/consent with oauth_query).
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import type { ConnectionList } from '#shared/api-types'
@@ -39,9 +39,9 @@ beforeAll(async () => {
   srv = await startServer(inst)
   mcpUrl = new URL(`${srv.url}/mcp`)
   admin = await signUpFirstAdmin(srv)
-  userBId = (await createUser(admin, { name: 'B', email: 'b@example.com', password: 'passwort-b-12345' })).id
+  userBId = (await createUser(admin, { name: 'B', email: 'b@example.com', password: 'password-b-12345' })).id
   userB = api(srv.url)
-  expect((await userB.request('/api/auth/sign-in/email', { body: { email: 'b@example.com', password: 'passwort-b-12345' } })).status).toBe(200)
+  expect((await userB.request('/api/auth/sign-in/email', { body: { email: 'b@example.com', password: 'password-b-12345' } })).status).toBe(200)
 })
 afterAll(async () => {
   await srv.stop()
@@ -50,7 +50,7 @@ afterAll(async () => {
 
 describe('happy path, step by step (scenario 1)', () => {
   it('401 challenge -> protected resource -> AS metadata -> DCR -> authorize -> consent -> token -> tools/list -> tools/call', async () => {
-    // 1. ohne Token
+    // 1. without token
     const challenge = await toolsList()
     expect(challenge.status).toBe(401)
     const www = challenge.headers.get('www-authenticate')!
@@ -63,7 +63,7 @@ describe('happy path, step by step (scenario 1)', () => {
     const prm = await prmRes.json()
     expect(prm).toMatchObject({ resource: `${srv.url}/mcp`, authorization_servers: [`${srv.url}/api/auth`], bearer_methods_supported: ['header'] })
     expect(prm.scopes_supported).toContain('mcp:tools')
-    // 3. AS metadata (RFC 8414, Pfad-Einfuegung)
+    // 3. AS metadata (RFC 8414, path insertion)
     const issuer = new URL(prm.authorization_servers[0])
     const as = await (await fetch(`${issuer.origin}/.well-known/oauth-authorization-server${issuer.pathname}`)).json()
     expect(as).toMatchObject({
@@ -74,7 +74,7 @@ describe('happy path, step by step (scenario 1)', () => {
     const reg = await registerClient(srv.url, { client_name: 'Claude Code' })
     expect(reg.status).toBe(201)
     const clientId = reg.json.client_id as string
-    // 5. Authorize + Consent (mit Login-Session, wie das Frontend)
+    // 5. Authorize + consent (with login session, like the frontend)
     const { verifier, challenge: cc } = pkce()
     const r = await authorizeAndConsent(admin, srv.url, { clientId, challenge: cc, resource: prm.resource, state: 'xyz' })
     expect(r.step).toBe('done')
@@ -155,12 +155,12 @@ describe('refresh and audience (scenarios 5 and 6)', () => {
     expect(r1.json.refresh_token).not.toBe(rt)
     expect(r1.json.access_token).not.toBe(access)
     expect((await toolsList(r1.json.access_token)).status).toBe(200)
-    expect((await toolsList(access)).status).toBe(200) // altes JWT lebt bis Ablauf, solange der Nutzer-Zustand stimmt
-    // Wiederholung des alten Refresh-Tokens innerhalb des Fensters (30 s, mcp()-Default) liefert dieselbe Antwort.
+    expect((await toolsList(access)).status).toBe(200) // old JWT lives until expiry as long as the user state is valid
+    // Replaying the old refresh token within the window (30 s, mcp() default) returns the same response.
     const retry = await refresh(srv.url, { clientId, refreshToken: rt, resource: `${srv.url}/mcp` })
     expect(retry.status).toBe(200)
     expect(retry.json.refresh_token).toBe(r1.json.refresh_token)
-    // Ein fremder Client kann den Token nicht einloesen.
+    // A foreign client cannot redeem the token.
     const other = (await registerClient(srv.url)).json.client_id as string
     const stolen = await refresh(srv.url, { clientId: other, refreshToken: r1.json.refresh_token })
     expect(stolen.status).toBeGreaterThanOrEqual(400)
@@ -168,7 +168,7 @@ describe('refresh and audience (scenarios 5 and 6)', () => {
   it('only tokens for this resource exist: a foreign resource is refused, a tampered audience fails the signature', async () => {
     const reg = await registerClient(srv.url)
     const r = await authorizeAndConsent(admin, srv.url, { clientId: reg.json.client_id, challenge: pkce().challenge, resource: `${srv.url}/other` })
-    expect((r as { code?: string | null }).code ?? null).toBeNull() // kein Code fuer eine nicht registrierte Resource
+    expect((r as { code?: string | null }).code ?? null).toBeNull() // no code for an unregistered resource
     const { access } = await flowFor(admin)
     const [h, p, s] = access.split('.') as [string, string, string]
     const claims = JSON.parse(Buffer.from(p, 'base64url').toString())
@@ -212,7 +212,7 @@ describe('instant revocation (scenario 7): the still valid JWT is refused on the
     const rev = await revokeToken(srv.url, { clientId: f.clientId, token: f.refresh, hint: 'refresh_token' })
     expect(rev.status).toBe(200)
     const consents = ((await userB.request('/api/me/connections')).json as ConnectionList).items.filter(i => i.clientId === f.clientId)
-    expect(consents).toHaveLength(1) // Consent besteht weiter
+    expect(consents).toHaveLength(1) // consent persists
     expect((await toolsList(f.access)).status).toBe(401)
     const again = await refresh(srv.url, { clientId: f.clientId, refreshToken: f.refresh })
     expect(again.status).toBeGreaterThanOrEqual(400)
@@ -226,17 +226,17 @@ describe('instant revocation (scenario 7): the still valid JWT is refused on the
     expect((await toolsList(f.access)).status).toBe(401)
     expect((await toolsList(pat)).status).toBe(401)
     expect((await admin.request(`/api/admin/users/${userBId}/unban`, { body: {} })).status).toBe(204)
-    // Entsperren erweckt alte Zugangsdaten nicht wieder (Spec P0-4: Sperre beendet OAuth-Tokens und PATs)
+    // Unbanning does not revive old credentials (spec P0-4: banning ends OAuth tokens and PATs)
     expect((await toolsList(f.access)).status).toBe(401)
     expect((await toolsList(pat)).status).toBe(401)
     expect((await refresh(srv.url, { clientId: f.clientId, refreshToken: f.refresh })).status).toBeGreaterThanOrEqual(400)
-    // Sitzung des Nutzers B nach dem Sperren neu aufbauen
+    // Rebuild the session of user B after the ban
     userB = api(srv.url)
-    expect((await userB.request('/api/auth/sign-in/email', { body: { email: 'b@example.com', password: 'passwort-b-12345' } })).status).toBe(200)
+    expect((await userB.request('/api/auth/sign-in/email', { body: { email: 'b@example.com', password: 'password-b-12345' } })).status).toBe(200)
     const pats = (await userB.request('/api/me/pats')).json as { items: Array<{ name: string, revokedAt: string | null }> }
     expect(pats.items.find(p => p.name === 'ban-test')?.revokedAt).not.toBeNull()
     expect(((await userB.request('/api/me/connections')).json as ConnectionList).items.filter(i => i.clientId === f.clientId)).toHaveLength(0)
-    // neue Zugangsdaten funktionieren
+    // new credentials work
     const fresh = await userB.request('/api/me/pats', { body: { name: 'after-unban' } })
     expect((await toolsList(fresh.json.token as string)).status).toBe(200)
     expect((await toolsList((await flowFor(userB)).access)).status).toBe(200)

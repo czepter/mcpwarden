@@ -1,11 +1,11 @@
 import { expect, test } from '@playwright/test'
 import { login, prep } from './helpers'
 
-// Strukturelle Pruefungen aus dem Mockup-Abgleich (docs/ui-mockup-review.md). Bewusst keine Pixel-Snapshots:
-// sie waeren zwischen Rechnern nicht stabil. Geprueft werden Massangaben des Entwurfs (44 px, Unterstreichung, Textlabels).
+// Structural checks from the mockup comparison (docs/ui-mockup-review.md). Deliberately no pixel snapshots:
+// they would not be stable between machines. What is checked are the draft's dimensions (44 px, underline, text labels).
 test.use({ viewport: { width: 1440, height: 900 } })
 
-test('Upstream-Liste: bei 1440 px laufen die Spalten ohne Querscrollen, Aktionen sind erreichbar', async ({ page }) => {
+test('Upstream list: at 1440 px the columns fit without horizontal scrolling, actions are reachable', async ({ page }) => {
   await login(page)
   await page.goto('/upstreams')
   await expect(page.getByRole('table', { name: 'Upstream-Liste' })).toBeVisible()
@@ -19,7 +19,7 @@ test('Upstream-Liste: bei 1440 px laufen die Spalten ohne Querscrollen, Aktionen
   await expect(page.getByText('7 Upstreams', { exact: true })).toBeVisible()
 })
 
-test('Reiter und Zeilenaktionen: mindestens 44 px, Reiter mit Unterstreichung in der Akzentfarbe', async ({ page }) => {
+test('Tabs and row actions: at least 44 px, tabs with underline in the accent color', async ({ page }) => {
   await login(page)
   await page.goto('/upstreams/up_4')
   for (const name of ['Übersicht', 'Tools', 'Auth']) {
@@ -32,11 +32,11 @@ test('Reiter und Zeilenaktionen: mindestens 44 px, Reiter mit Unterstreichung in
   await page.goto('/settings/connections')
   const revoke = page.getByRole('button', { name: /widerrufen/i }).first()
   expect((await revoke.boundingBox())!.height).toBeGreaterThanOrEqual(44)
-  // Rahmen wie im Entwurf (Widerrufen ist eine umrandete Schaltflaeche, kein Textlink)
+  // Border like in the draft (revoke is an outlined button, not a text link)
   expect(await revoke.evaluate(e => getComputedStyle(e).borderTopWidth)).toBe('1px')
 })
 
-test('Audit: Ergebnis traegt Punkt und Text, Kategorien sind Reiter mit 44 px', async ({ page }) => {
+test('Audit: result carries dot and text, categories are tabs with 44 px', async ({ page }) => {
   await login(page)
   await page.goto('/audit')
   await expect(page.getByRole('heading', { name: 'Audit-Log', level: 1 })).toBeVisible()
@@ -46,7 +46,7 @@ test('Audit: Ergebnis traegt Punkt und Text, Kategorien sind Reiter mit 44 px', 
   expect((await page.getByRole('radio', { name: 'Verwaltung' }).or(page.getByRole('button', { name: 'Verwaltung' })).first().boundingBox())!.height).toBeGreaterThanOrEqual(44)
 })
 
-test('Statistik: Diagramm hat Zeitachse, Ergebnisbalken tragen Text je Zeile', async ({ page }) => {
+test('Statistics: chart has a time axis, result bars carry text per row', async ({ page }) => {
   await login(page)
   await page.goto('/stats')
   const fig = page.getByRole('img', { name: /Aufrufe pro Stunde/ })
@@ -56,7 +56,7 @@ test('Statistik: Diagramm hat Zeitachse, Ergebnisbalken tragen Text je Zeile', a
   await expect(page.getByText('Gesamtdauer in Millisekunden.')).toBeVisible()
 })
 
-test('Auth-Link: Kopf wie im Entwurf mit Upstream, URL, Auth und Restzeit', async ({ page }) => {
+test('Auth link: header like the draft with upstream, URL, auth and remaining time', async ({ page }) => {
   await login(page)
   await page.goto('/link/abc')
   await expect(page.getByRole('heading', { level: 1 })).toContainText('eingeben')
@@ -67,7 +67,7 @@ test('Auth-Link: Kopf wie im Entwurf mit Upstream, URL, Auth und Restzeit', asyn
   await expect(page.getByText(/Dieser Link läuft in .* min ab und gilt nur einmal\./)).toBeVisible()
 })
 
-test('Upstream anlegen: Typ-Kacheln mit Beschreibung, Erweitert benannt', async ({ page }) => {
+test('Create upstream: type tiles with description, Advanced named', async ({ page }) => {
   await prep(page)
   await login(page)
   await page.goto('/upstreams/new')
@@ -76,7 +76,7 @@ test('Upstream anlegen: Typ-Kacheln mit Beschreibung, Erweitert benannt', async 
   await expect(page.getByRole('button', { name: /Erweitert: Limits und Timeouts/ })).toBeVisible()
 })
 
-test('Token-Seite und Dashboard: Seitentitel wie im Entwurf', async ({ page }) => {
+test('Token page and dashboard: page titles like the draft', async ({ page }) => {
   await login(page)
   await page.goto('/settings/tokens')
   await expect(page.getByRole('heading', { name: 'Personal Access Tokens', level: 1 })).toBeVisible()

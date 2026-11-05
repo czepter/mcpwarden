@@ -1,8 +1,8 @@
 #!/bin/sh
-# Compose-Smoke: das Beispiel-Compose (compose.yaml, Ziel full) startet frisch, /healthz und /readyz antworten,
-# Erst-Registrierung -> Admin, Einladung, Upstream anlegen, Neustart behält die Daten, Härtung im laufenden Container.
-# Aufruf: sh tests/e2e/compose-smoke.sh   (Docker nötig; SMOKE_NO_BUILD=1 nutzt ein vorhandenes Image mcpwarden:full;
-#          SMOKE_PG=1 startet zusätzlich das Compose-Profil `pg` und nutzt Postgres statt PGlite)
+# Compose smoke: the example compose (compose.yaml, target full) starts fresh, /healthz and /readyz answer,
+# first registration -> admin, invitation, create upstream, restart keeps the data, hardening in the running container.
+# Usage: sh tests/e2e/compose-smoke.sh   (Docker required; SMOKE_NO_BUILD=1 uses an existing image mcpwarden:full;
+#          SMOKE_PG=1 additionally starts the compose profile `pg` and uses Postgres instead of PGlite)
 set -eu
 cd "$(dirname "$0")/../.."
 P=mcpw-smoke
@@ -33,7 +33,7 @@ J="$ENVF.jar"
 post() { curl -s -b "$J" -c "$J" -H 'content-type: application/json' -H "origin: http://localhost:$PORT" -X "$1" "http://localhost:$PORT$2" -d "$3"; }
 
 if [ "${SMOKE_NO_BUILD:-}" = 1 ]; then
-  # Image `mcpwarden:full` wurde vorher gebaut (z. B. in Umgebungen, in denen der Build ein eigenes Netz/CA braucht)
+  # Image `mcpwarden:full` was built beforehand (e.g. in environments where the build needs its own network/CA)
   dc up -d --no-build >/dev/null || fail "up"
 else
   dc up -d --build >/dev/null || fail "up"
@@ -42,50 +42,50 @@ wait_http "http://localhost:$PORT/healthz" 200 || fail "healthz"
 wait_http "http://localhost:$PORT/readyz" 200 || fail "readyz"
 echo "ok: healthz/readyz"
 
-# Härtung im laufenden Container
+# Hardening in the running container
 CID=$(dc ps -q mcpwarden)
-[ "$(docker inspect -f '{{.HostConfig.SecurityOpt}}' "$CID")" = "[no-new-privileges:true]" ] || fail "no-new-privileges fehlt"
+[ "$(docker inspect -f '{{.HostConfig.SecurityOpt}}' "$CID")" = "[no-new-privileges:true]" ] || fail "no-new-privileges missing"
 CAPS=$(docker inspect -f '{{.HostConfig.CapDrop}} {{.HostConfig.CapAdd}}' "$CID")
-echo "$CAPS" | grep -q '^\[ALL\]' || fail "cap_drop ALL fehlt: $CAPS"
-for c in SETUID SETGID CHOWN; do echo "$CAPS" | grep -q "$c" || fail "cap_add $c fehlt: $CAPS"; done
-[ "$(docker inspect -f '{{len .HostConfig.CapAdd}}' "$CID")" = 3 ] || fail "genau drei Capabilities erwartet: $CAPS"
+echo "$CAPS" | grep -q '^\[ALL\]' || fail "cap_drop ALL missing: $CAPS"
+for c in SETUID SETGID CHOWN; do echo "$CAPS" | grep -q "$c" || fail "cap_add $c missing: $CAPS"; done
+[ "$(docker inspect -f '{{len .HostConfig.CapAdd}}' "$CID")" = 3 ] || fail "exactly three capabilities expected: $CAPS"
 WEBPID=$(docker exec "$CID" sh -c "for p in /proc/[0-9]*; do grep -q '.output/server/index.mjs' \$p/cmdline 2>/dev/null && basename \$p; done | head -1")
-[ "$(docker exec "$CID" awk '/^Uid:/ {print $2}' /proc/"$WEBPID"/status)" = 10001 ] || fail "Web-App läuft nicht als UID 10001"
-[ "$(docker exec "$CID" awk '/^CapEff:/ {print $2}' /proc/"$WEBPID"/status)" = 0000000000000000 ] || fail "Web-App hat Capabilities"
+[ "$(docker exec "$CID" awk '/^Uid:/ {print $2}' /proc/"$WEBPID"/status)" = 10001 ] || fail "web app does not run as UID 10001"
+[ "$(docker exec "$CID" awk '/^CapEff:/ {print $2}' /proc/"$WEBPID"/status)" = 0000000000000000 ] || fail "web app has capabilities"
 echo "ok: web uid 10001, CapEff=0, caps SETUID/SETGID/CHOWN, no-new-privileges"
 
-# Full-Stack-Smoke (tests/smoke/flow.ts) gegen den Container: Erst-Registrierung, Login, Einladung, PAT, OAuth 2.1 (DCR, PKCE,
-# Consent, Refresh), /mcp tools/list + tools/call ueber ein Fake-MCP auf dem Host, Mandantentrennung, Audience, Widerruf.
-# Der Container erreicht das Fake-MCP ueber das Gateway seines Compose-Netzes (Admin gibt es per ssrf.allow frei).
+# Full-stack smoke (tests/smoke/flow.ts) against the container: first registration, login, invitation, PAT, OAuth 2.1 (DCR, PKCE,
+# consent, refresh), /mcp tools/list + tools/call via a fake MCP on the host, tenant isolation, audience, revocation.
+# The container reaches the fake MCP via the gateway of its compose network (the admin allows it via ssrf.allow).
 NET=$(docker inspect -f '{{range $k, $v := .NetworkSettings.Networks}}{{$k}}{{end}}' "$CID")
 GW=$(docker network inspect -f '{{(index .IPAM.Config 0).Gateway}}' "$NET")
-[ -n "$GW" ] || fail "Gateway des Compose-Netzes nicht gefunden"
+[ -n "$GW" ] || fail "gateway of the compose network not found"
 SMOKE_BASE_URL="http://localhost:$PORT" SMOKE_FAKE_HOST="$GW" SMOKE_FAKE_LISTEN=0.0.0.0 SMOKE_SSRF_ALLOW="$GW/32" \
-  pnpm exec tsx tests/smoke/run.ts || fail "Full-Stack-Smoke"
+  pnpm exec tsx tests/smoke/run.ts || fail "full-stack smoke"
 echo "ok: full-stack smoke (register, invite, PAT, OAuth+PKCE, /mcp via fake upstream, isolation, revocation)"
 
-# Fachlicher Durchlauf (der Admin existiert durch den Smoke)
-post POST /api/auth/sign-in/email '{"email":"admin@example.com","password":"admin-passwort-123"}' >/dev/null
+# Functional run (the admin exists through the smoke)
+post POST /api/auth/sign-in/email '{"email":"admin@example.com","password":"admin-password-123"}' >/dev/null
 caps=$(post GET /api/me/capabilities '')
 echo "$caps" | grep -q '"role":"admin"' || fail "capabilities: $caps"
-echo "$caps" | grep -q '"stdio":{"allowed":false,"reason":"instance_disabled"}' || fail "stdio-Grund: $caps"
+echo "$caps" | grep -q '"stdio":{"allowed":false,"reason":"instance_disabled"}' || fail "stdio reason: $caps"
 post PUT /api/admin/settings '{"stdio.enabled":true}' | grep -q '"stdio.enabled":true' || fail "settings"
 caps=$(post GET /api/me/capabilities '')
-echo "$caps" | grep -q '"stdio":{"allowed":true}' || fail "stdio für Admin erlaubt (Supervisor erreichbar): $caps"
+echo "$caps" | grep -q '"stdio":{"allowed":true}' || fail "stdio allowed for admin (supervisor reachable): $caps"
 inv=$(post POST /api/admin/invites '{}')
-echo "$inv" | grep -q '/invite/' || fail "Einladung: $inv"
-post POST /api/upstreams '{"name":"Demo","slug":"demo","type":"http","url":"https://example.com/mcp"}' | grep -q '"slug":"demo"' || fail "Upstream anlegen"
+echo "$inv" | grep -q '/invite/' || fail "invitation: $inv"
+post POST /api/upstreams '{"name":"Demo","slug":"demo","type":"http","url":"https://example.com/mcp"}' | grep -q '"slug":"demo"' || fail "create upstream"
 echo "ok: registration, capabilities, settings, invite, upstream"
 
-# Neustart: Daten bleiben (Volume)
+# Restart: data stays (volume)
 dc restart >/dev/null || fail "restart"
-wait_http "http://localhost:$PORT/readyz" 200 || fail "readyz nach Neustart"
-post POST /api/auth/sign-in/email '{"email":"admin@example.com","password":"admin-passwort-123"}' >/dev/null
-post GET /api/upstreams '' | grep -q '"slug":"demo"' || fail "Daten nach Neustart weg"
+wait_http "http://localhost:$PORT/readyz" 200 || fail "readyz after restart"
+post POST /api/auth/sign-in/email '{"email":"admin@example.com","password":"admin-password-123"}' >/dev/null
+post GET /api/upstreams '' | grep -q '"slug":"demo"' || fail "data gone after restart"
 echo "ok: restart keeps data"
 
-# SIGTERM: sauberes Ende innerhalb der Frist (Exit 0)
+# SIGTERM: clean shutdown within the deadline (exit 0)
 dc stop -t 40 >/dev/null || fail "stop"
-[ "$(docker inspect -f '{{.State.ExitCode}}' "$CID")" = 0 ] || fail "Exit-Code $(docker inspect -f '{{.State.ExitCode}}' "$CID")"
+[ "$(docker inspect -f '{{.State.ExitCode}}' "$CID")" = 0 ] || fail "exit code$(docker inspect -f '{{.State.ExitCode}}' "$CID")"
 echo "ok: graceful stop (exit 0)"
 echo "SMOKE OK"

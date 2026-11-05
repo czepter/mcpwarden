@@ -1,4 +1,4 @@
-// Aufgabe 3: DCR-Policy (drei Modi), Allowlist, Client-Verwaltung und Zugriffsschutz der Admin-Routen.
+// Task 3: DCR policy (three modes), allowlist, client management and access protection of the admin routes.
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { AllowlistEntry, AllowlistList, DcrPolicy, OAuthClientAdmin, OAuthClientAdminList } from '#shared/api-types'
 import { api, createInstance, createUser, signUpFirstAdmin, startServer, type ApiClient, type TestInstance, type TestServer } from '../harness'
@@ -14,9 +14,9 @@ beforeAll(async () => {
   inst = await createInstance()
   srv = await startServer(inst)
   admin = await signUpFirstAdmin(srv)
-  await createUser(admin, { name: 'B', email: 'b@example.com', password: 'passwort-b-12345' })
+  await createUser(admin, { name: 'B', email: 'b@example.com', password: 'password-b-12345' })
   userB = api(srv.url)
-  const r = await userB.request('/api/auth/sign-in/email', { body: { email: 'b@example.com', password: 'passwort-b-12345' } })
+  const r = await userB.request('/api/auth/sign-in/email', { body: { email: 'b@example.com', password: 'password-b-12345' } })
   expect(r.status).toBe(200)
 })
 afterAll(async () => {
@@ -160,7 +160,7 @@ describe('DCR rate limit (own server with the limiter on)', () => {
       for (let n = 0; n < 7; n++) codes.push((await registerClient(s2.url, {}, ip)).status)
       expect(codes.slice(0, 5)).toEqual([201, 201, 201, 201, 201])
       expect(codes.slice(5)).toEqual([429, 429])
-      expect((await registerClient(s2.url, {}, '203.0.113.51')).status).toBe(201) // anderer Absender
+      expect((await registerClient(s2.url, {}, '203.0.113.51')).status).toBe(201) // different sender
     } finally {
       await s2.stop()
       await i2.cleanup()

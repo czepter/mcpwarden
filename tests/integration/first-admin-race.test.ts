@@ -13,10 +13,10 @@ afterAll(async () => {
   await inst?.cleanup()
 })
 
-it('10 parallele Erst-Registrierungen ergeben genau einen Admin (A9)', async () => {
+it('10 parallel first registrations yield exactly one admin (A9)', async () => {
   const rs = await Promise.all(Array.from({ length: 10 }, (_, i) =>
     api(srv.url, `203.0.113.${i + 1}`).request('/api/auth/sign-up/email', {
-      body: { name: `U${i}`, email: `u${i}@example.com`, password: 'passwort-12345' },
+      body: { name: `U${i}`, email: `u${i}@example.com`, password: 'password-12345' },
     })))
   expect(rs.filter(r => r.status === 200)).toHaveLength(1)
   const closed = rs.filter(r => r.status === 403)
@@ -24,7 +24,7 @@ it('10 parallele Erst-Registrierungen ergeben genau einen Admin (A9)', async () 
   expect(closed.every(r => r.json.code === INVITE_REQUIRED)).toBe(true)
   const winner = rs.findIndex(r => r.status === 200)
   const c = api(srv.url)
-  await c.request('/api/auth/sign-in/email', { body: { email: `u${winner}@example.com`, password: 'passwort-12345' } })
+  await c.request('/api/auth/sign-in/email', { body: { email: `u${winner}@example.com`, password: 'password-12345' } })
   const list = await c.request('/api/admin/users')
   expect(list.json.items).toHaveLength(1)
   expect(list.json.items[0].role).toBe('admin')

@@ -1,7 +1,7 @@
-// Gemeinsame Vertrags-Schemas (strikt: fehlende UND unbekannte Felder fallen auf).
-// `satisfies z.ZodType<T>` bindet jedes Schema an den Vertragstyp in shared/api-types.ts.
-// Dieselben Schemas pruefen (1) die MSW-Mocks (tests/ui/contract) und (2) die ECHTEN Backend-Antworten
-// des gebauten Servers (tests/integration/contract.test.ts). Driftet eine Seite, faellt der Test aus.
+// Shared contract schemas (strict: missing AND unknown fields stand out).
+// `satisfies z.ZodType<T>` binds each schema to the contract type in shared/api-types.ts.
+// The same schemas check (1) the MSW mocks (tests/ui/contract) and (2) the REAL backend responses
+// of the built server (tests/integration/contract.test.ts). If one side drifts, the test fails.
 import { z } from 'zod'
 import type {
   AdminSettingsResult, AdminUserList, AllowlistList, AuditList, AuthSession, Capabilities, ConnectionList, ConsentInfo, Dashboard, DcrPolicy,
@@ -65,7 +65,7 @@ export const schemas = {
     z.strictObject({ valid: z.literal(true), email: nstr, expiresAt: str() }),
     z.strictObject({ valid: z.literal(false), reason: z.enum(['expired', 'used', 'revoked', 'unknown']) }),
   ]) satisfies z.ZodType<InviteInfo>,
-  /** GET und PUT /api/admin/settings liefern dieselbe Form (inkl. Warnungen). */
+  /** GET and PUT /api/admin/settings return the same shape (incl. warnings). */
   settings: z.strictObject({
     'stdio.enabled': bool(), 'ssrf.allow': z.array(str()),
     warnings: z.array(z.strictObject({ key: str(), entry: str(), code: z.literal('covers_metadata_ip') })),
@@ -93,6 +93,6 @@ export const schemas = {
   }) satisfies z.ZodType<AuditList>,
   meSettings: z.strictObject({ notifyStatusMail: bool() }) satisfies z.ZodType<MeSettings>,
   publicConfig: z.strictObject({ mail: bool(), registrationOpen: bool() }) satisfies z.ZodType<PublicConfig>,
-  /** Nitro-Fehlerform (`ApiErrorBody`), nicht `/api/auth/*`. */
+  /** Nitro error shape (`ApiErrorBody`), not `/api/auth/*`. */
   apiError: z.looseObject({ statusCode: num(), statusMessage: str(), data: z.looseObject({ code: str().optional(), field: str().optional(), message: str().optional() }).optional() }),
 }

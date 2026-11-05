@@ -1,5 +1,5 @@
 {
-  // Eigenständig, damit Vitest/oxc für Tests nie eine tsconfig aus einem Elternverzeichnis (z. B. ein anderes Checkout) auflöst.
+  // Self-contained, so that Vitest/oxc never resolves a tsconfig for tests from a parent directory (e.g. another checkout).
   "compilerOptions": {
     "target": "ES2023",
     "module": "ESNext",

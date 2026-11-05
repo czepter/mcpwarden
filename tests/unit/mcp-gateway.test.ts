@@ -125,7 +125,7 @@ describe('push, tenancy, abort (modern clients)', () => {
     expect(gotB).not.toHaveBeenCalled()
     expect((await a.listTools()).tools.map(t => t.name)).not.toContain('dummy__echo')
     expect((await b.listTools()).tools.map(t => t.name)).toContain('dummy__echo')
-    // 2025er-Client: kein Push, sieht die Aenderung beim naechsten tools/list
+    // 2025 client: no push, sees the change on the next tools/list
     expect((await legacy.listTools()).tools.map(t => t.name)).not.toContain('dummy__echo')
 
     await a.callTool({ name: 'dummy__toggle_tool', arguments: {} }) // zuruecksetzen

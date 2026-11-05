@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import type { GatewayStore, SecretRow, UpstreamRow, UserLimits } from '../../server/gateway/upstream/types'
 import { DEFAULT_LIMITS } from '../../server/gateway/config'
 
-/** In-Memory-Ersatz für das Drizzle-Repository (wartet auf 0a/0b). userId überall zuerst, wie im echten Repo. */
+/** In-memory replacement for the Drizzle repository (waits for 0a/0b). userId first everywhere, like in the real repo. */
 export class MemoryStore implements GatewayStore {
   upstreams: UpstreamRow[] = []
   secrets: Array<SecretRow & { userId: string }> = []

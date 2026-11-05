@@ -1,4 +1,4 @@
-// Review L-e (Tiefenverteidigung): Eine Auth-Art ohne passendes Secret verbindet nie still ohne Auth-Header.
+// Review L-e (defense in depth): an auth kind without a matching secret never connects silently without an auth header.
 import { describe, expect, it, vi } from 'vitest'
 import { connectUpstream } from '../../server/gateway/upstream/connect'
 import { classifyError } from '../../server/gateway/upstream/errors'

@@ -1,5 +1,5 @@
-// Phase 1 gegen das gebaute Artefakt: Einladungen, Nutzerverwaltung, Upstream-CRUD, Secrets, Tool-Filter,
-// Durchstich über /mcp, Dashboard, Audit, Einstellungen, Isolation.
+// Phase 1 against the built artifact: invitations, user management, upstream CRUD, secrets, tool filter,
+// end-to-end slice via /mcp, dashboard, audit, settings, isolation.
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type {
@@ -15,7 +15,7 @@ let srv: TestServer
 let fake: FakeHttp
 let admin: ApiClient
 let adminId: string
-const PW = 'passwort-1234567'
+const PW = 'password-1234567'
 
 const text = (r: { content: unknown }) => (r.content as { text: string }[])[0]!.text
 async function mcp(token: string) {
@@ -24,7 +24,7 @@ async function mcp(token: string) {
   return c
 }
 
-/** Einladung anlegen, registrieren, anmelden. */
+/** Create an invitation, register, sign in. */
 async function invitedUser(email: string): Promise<ApiClient> {
   const inv = await admin.request('/api/admin/invites', { body: { email } })
   expect(inv.status).toBe(201)
@@ -50,7 +50,7 @@ beforeAll(async () => {
   fake = await startFakeHttp()
   admin = await signUpFirstAdmin(srv)
   adminId = (await admin.request('/api/auth/get-session')).json.user.id
-  // Fake-Upstream läuft auf 127.0.0.1: per Admin-Ausnahmeliste freigeben (CIDR, keine Metadatenadresse)
+  // Fake upstream runs on 127.0.0.1: allow via the admin exception list (CIDR, no metadata address)
   const put = await admin.request('/api/admin/settings', { method: 'PUT', body: { 'ssrf.allow': ['127.0.0.0/8'] } })
   expect(put.status).toBe(200)
 })
@@ -79,7 +79,7 @@ describe('invites (P0-4)', () => {
     expect((list.json as InviteList).items.find(i => i.id === created.id)?.status).toBe('open')
     const info = await fetch(`${srv.url}/api/invites/${token}`).then(x => x.json()) as InviteInfo
     expect(info).toMatchObject({ valid: true, email: 'bound@example.com' })
-    // falsche Adresse -> INVITE_INVALID, Einladung bleibt offen
+    // wrong address -> INVITE_INVALID, the invitation stays open
     const wrong = await fetchSignUp(token, 'other@example.com')
     expect(wrong.json.code).toBe(INVITE_INVALID)
     const ok = await fetchSignUp(token, 'bound@example.com')
@@ -164,7 +164,7 @@ describe('upstreams, secrets, tools and the proxy path', () => {
   it('awaiting_auth: test answers awaiting_auth; secret is stored encrypted, never returned, setup becomes ready', async () => {
     const t = (await userA.request(`/api/upstreams/${up.id}/test`, { method: 'POST', body: {} })).json as UpstreamTestResult
     expect(t).toMatchObject({ ok: false, errorCode: 'awaiting_auth' })
-    // P0-16: ein Upstream, der auf Zugangsdaten wartet, steht in der Aufmerksamkeitsliste (mit setup und Grund)
+    // P0-16: an upstream waiting for credentials appears in the attention list (with setup and reason)
     const waiting = ((await userA.request('/api/dashboard')).json as Dashboard).attention.find(a => a.upstreamId === up.id)
     expect(waiting).toMatchObject({ setup: 'awaiting_auth', slug: 'fake' })
     expect(waiting?.statusReason).toBeTruthy()
@@ -178,7 +178,7 @@ describe('upstreams, secrets, tools and the proxy path', () => {
     expect((detail.json as UpstreamDetail)).toMatchObject({ hasSecret: true, setup: 'ready', secretNames: ['bearer'] })
     for (const body of [put.text, detail.text, (await userA.request('/api/upstreams')).text]) expect(body).not.toContain(SECRET)
     expect(srv.logs()).not.toContain(SECRET)
-    // Chiffrat in der Datenbank ist nicht der Klartext
+    // Ciphertext in the database is not the plaintext
     expect((await userA.request('/api/audit')).text).not.toContain(SECRET)
   })
 
@@ -196,7 +196,7 @@ describe('upstreams, secrets, tools and the proxy path', () => {
 
   it('SSRF: an upstream URL pointing at an unlisted private address fails the test with ssrf_blocked and no detail', async () => {
     const r = await userA.request('/api/upstreams', { body: { name: 'Priv', slug: 'priv', type: 'http', url: 'http://10.255.255.1:9/mcp' } })
-    expect(r.status).toBe(422) // Literal wird schon beim Anlegen abgelehnt
+    expect(r.status).toBe(422) // literal is rejected already on creation
     const dns = await userA.request('/api/upstreams', { body: { name: 'Loc', slug: 'loc', type: 'http', url: 'http://localtest.invalid:9/mcp' } })
     expect(dns.status).toBe(201)
     const t = (await userA.request(`/api/upstreams/${dns.json.id}/test`, { method: 'POST', body: {} })).json as UpstreamTestResult
@@ -263,7 +263,7 @@ describe('upstreams, secrets, tools and the proxy path', () => {
     const c = await mcp(patA.token)
     await c.listTools()
     await c.close()
-    await new Promise(r => setTimeout(r, 5500)) // Stats-Puffer schreibt alle 5 s
+    await new Promise(r => setTimeout(r, 5500)) // the stats buffer writes every 5 s
     const d = (await userA.request('/api/dashboard')).json as Dashboard
     expect(Object.keys(d).sort()).toEqual(['attention', 'attentionCount', 'clients'])
     const pat = d.clients.find(x => x.kind === 'pat')
@@ -280,7 +280,7 @@ describe('upstreams, secrets, tools and the proxy path', () => {
     expect(theirs.items.some(i => i.targetLabel === 'fake')).toBe(false)
     const adm = (await admin.request('/api/audit')).json as AuditList
     expect(adm.items.some(i => i.scope === 'instance' && i.action === 'invite.create')).toBe(true)
-    expect(adm.items.some(i => i.targetLabel === 'fake')).toBe(false) // Nutzereinträge anderer bleiben auch dem Admin verborgen
+    expect(adm.items.some(i => i.targetLabel === 'fake')).toBe(false) // other users' entries stay hidden from the admin too
     expect(mine.items.some(i => i.action === 'invite.create')).toBe(false)
     const authCat = (await userA.request('/api/audit?category=auth')).json as AuditList
     expect(authCat.items).toEqual([])
@@ -300,13 +300,13 @@ describe('admin: users, limits, settings (P0-4)', () => {
     const v = list.items.find(u => u.email === 'victim@example.com')!
     expect(v).toMatchObject({ role: 'user', banned: false, upstreamCount: 0 })
     expect((await admin.request(`/api/admin/users/${v.id}/ban`, { body: { reason: 'test' } })).status).toBe(204)
-    expect([401, 403]).toContain((await victim.request('/api/me/pats')).status) // Sitzungen sind mit dem Sperren widerrufen
+    expect([401, 403]).toContain((await victim.request('/api/me/pats')).status) // sessions are revoked with the ban
     const rej = await fetch(`${srv.url}/mcp`, { method: 'POST', headers: { authorization: `Bearer ${pat.token}`, 'content-type': 'application/json', accept: 'application/json, text/event-stream' }, body: '{}' })
     expect(rej.status).toBe(401)
     expect((await admin.request(`/api/admin/users/${v.id}/unban`, { body: {} })).status).toBe(204)
     expect((await admin.request(`/api/admin/users/${v.id}`, { method: 'DELETE' })).status).toBe(204)
     expect(((await admin.request('/api/admin/users')).json as AdminUserList).items.some(u => u.id === v.id)).toBe(false)
-    // Instanzereignisse tragen weder E-Mail noch Namen
+    // Instance events carry neither email nor names
     const ev = (await admin.request('/api/audit?limit=200')).text
     expect(ev).not.toContain('victim@example.com')
   })
@@ -315,27 +315,27 @@ describe('admin: users, limits, settings (P0-4)', () => {
     expect(self.status).toBe(409)
     expect(self.json.data.code).toBe('self_target')
     expect((await admin.request(`/api/admin/users/${adminId}`, { method: 'DELETE' })).json.data.code).toBe('self_target')
-    // zweiter Admin: Löschen des ersten durch den zweiten ist erlaubt, solange einer übrig bleibt; der letzte nie
+    // second admin: deleting the first by the second is allowed as long as one remains; the last never
     const a2 = await invitedUser('admin2@example.com')
-    srv = await promoteToAdmin(inst, srv, 'admin2@example.com') // keine Route macht Nutzer zu Admins: Rolle direkt in der Datenbank
+    srv = await promoteToAdmin(inst, srv, 'admin2@example.com') // no route makes users admins: role directly in the database
     const ban1 = await a2.request(`/api/admin/users/${adminId}/ban`, { body: {} })
-    expect(ban1.status).toBe(204) // admin2 bleibt aktiv
-    // jetzt ist admin2 der letzte aktive Admin; ein Dritter kann ihn nicht sperren: simuliert über Selbstziel + Zählung
+    expect(ban1.status).toBe(204) // admin2 stays active
+    // now admin2 is the last active admin; a third party cannot ban them: simulated via self-target + count
     const list = (await a2.request('/api/admin/users')).json as AdminUserList
     expect(list.items.filter(u => u.role === 'admin' && !u.banned)).toHaveLength(1)
     await a2.request(`/api/admin/users/${adminId}/unban`, { body: {} })
-    await admin.request('/api/auth/sign-in/email', { body: { email: ADMIN.email, password: ADMIN.password } }) // Sperren hat die Sitzungen widerrufen
+    await admin.request('/api/auth/sign-in/email', { body: { email: ADMIN.email, password: ADMIN.password } }) // the ban revoked the sessions
   })
   it('two admins banning each other at the same time: exactly one succeeds, an active admin remains (last_admin)', async () => {
     const a3 = await invitedUser('admin3@example.com')
     const id3 = (await a3.request('/api/auth/get-session')).json.user.id as string
     srv = await promoteToAdmin(inst, srv, 'admin3@example.com')
-    // Ausgangslage: nur admin und admin3 aktiv (admin2 sperren)
+    // Starting point: only admin and admin3 active (ban admin2)
     const list = (await admin.request('/api/admin/users')).json as AdminUserList
     const a2 = list.items.find(u => u.email === 'admin2@example.com')!
     expect((await admin.request(`/api/admin/users/${a2.id}/ban`, { body: {} })).status).toBe(204)
-    // Beide Anfragen sind beim Server angemeldet (Header da, Body zurueckgehalten), bevor eine von ihnen eine Sperre committet; erst dann
-    // werden die Bodys freigegeben. Damit haengt das Ergebnis nicht von Ankunftszeiten ab: keine der beiden darf an einer 401 scheitern.
+    // Both requests are registered with the server (header there, body held back) before either of them commits a ban; only then
+    // the bodies are released. So the result does not depend on arrival times: neither of the two may fail on a 401.
     const h1 = heldPost(srv.url, admin, `/api/admin/users/${id3}/ban`, {})
     const h2 = heldPost(srv.url, a3, `/api/admin/users/${adminId}/ban`, {})
     await new Promise(r => setTimeout(r, 500))
@@ -345,10 +345,10 @@ describe('admin: users, limits, settings (P0-4)', () => {
     expect(loser.json.data.code).toBe('last_admin')
     const after = (await a3.request('/api/admin/users')).json as AdminUserList | undefined
     void after
-    // aufräumen: Zustand für die folgenden Tests wiederherstellen
+    // clean up: restore state for the following tests
     await admin.request('/api/auth/sign-in/email', { body: { email: ADMIN.email, password: ADMIN.password } })
     await a3.request('/api/auth/sign-in/email', { body: { email: 'admin3@example.com', password: PW } })
-    const act = r1.status === 204 ? admin : a3 // der Sieger ist aktiv und darf entsperren; der Verlierer ist gesperrt
+    const act = r1.status === 204 ? admin : a3 // the winner is active and may unban; the loser is banned
     for (const id of [adminId, id3, a2.id]) expect((await act.request(`/api/admin/users/${id}/unban`, { body: {} })).status, `unban ${id}`).toBe(204)
     expect((await admin.request('/api/auth/sign-in/email', { body: { email: ADMIN.email, password: ADMIN.password } })).status).toBe(200)
   })

@@ -8,15 +8,15 @@ export type FakeHttp = {
   url: string
   port: number
   state: FakeState
-  /** Offene Sockets (Leck-Nachweis). */
+  /** Open sockets (leak proof). */
   openSockets: () => number
-  /** Auth erzwingen: 401 ohne passenden Header. */
+  /** Enforce auth: 401 without a matching header. */
   requireHeader: (name: string, value: string) => void
   close: () => Promise<void>
 }
 
-/** Streamable HTTP, Revision 2026-07-28 (zustandslos, Legacy `stateless`). */
-export async function startFakeHttp(opts: { toolNames?: string[], /** Listen-Adresse (Default Loopback; im Compose-Smoke 0.0.0.0). */ host?: string } = {}): Promise<FakeHttp> {
+/** Streamable HTTP, revision 2026-07-28 (stateless, legacy `stateless`). */
+export async function startFakeHttp(opts: { toolNames?: string[], /** Listen address (default loopback; 0.0.0.0 in the compose smoke). */ host?: string } = {}): Promise<FakeHttp> {
   const state = newState()
   const handler = createMcpHandler(() => buildFakeServer(state, opts), { legacy: 'stateless' })
   const node = toNodeHandler(handler)
@@ -26,7 +26,7 @@ export async function startFakeHttp(opts: { toolNames?: string[], /** Listen-Adr
     state.requests.push({ method: req.method ?? '', headers: { ...req.headers } })
     res.on('close', () => { if (!res.writableFinished) state.aborted++ })
     if (required && req.headers[required[0].toLowerCase()] !== required[1]) { res.writeHead(401, { 'content-type': 'text/plain' }).end('unauthorized'); return }
-    if (state.mode === 'hang-http') return // Antwort nie senden
+    if (state.mode === 'hang-http') return // never send a response
     if (state.mode === 'status500' && req.method === 'POST') { res.writeHead(500).end('boom'); return }
     if (state.mode === 'retry429' && req.method === 'POST') { res.writeHead(429, { 'retry-after': '30' }).end('slow down'); return }
     void node(req, res)

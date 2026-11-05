@@ -1,11 +1,11 @@
-// Einladungsmails und Statusbenachrichtigungen gegen den echten Server mit Fake-SMTP und Fake-Upstream.
+// Invitation mails and status notifications against the real server with fake SMTP and fake upstream.
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { InviteCreated, MeSettings, UpstreamDetail, UpstreamTestResult } from '#shared/api-types'
 import { startFakeHttp, type FakeHttp } from '../fixtures/fake-upstream/http'
 import { readable, startFakeSmtp, type FakeSmtp } from '../helpers/fake-smtp'
 import { api, createInstance, createUser, signUpFirstAdmin, startServer, type ApiClient, type TestInstance, type TestServer } from './harness'
 
-const PW = 'passwort-1234567'
+const PW = 'password-1234567'
 const SECRET = 'sk-notify-secret-value-123'
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
 async function until<T>(fn: () => T | undefined, ms = 8000): Promise<T> {
@@ -27,7 +27,7 @@ async function login(srv: TestServer, email: string, ip: string): Promise<ApiCli
   return c
 }
 
-describe('Mailbenachrichtigungen mit SMTP', () => {
+describe('Mail notifications with SMTP', () => {
   let inst: TestInstance
   let srv: TestServer
   let smtp: FakeSmtp
@@ -75,20 +75,20 @@ describe('Mailbenachrichtigungen mit SMTP', () => {
   })
 
   describe('Einladungsmail', () => {
-    it('sendet den Link an die gebundene Adresse; der Admin bekommt ihn weiterhin; das Token steht nicht im Log', async () => {
-      const r = await admin.request('/api/admin/invites', { body: { email: 'neu@example.com', sendMail: true } })
+    it('sends the link to the bound address; the admin still gets it; the token is not in the log', async () => {
+      const r = await admin.request('/api/admin/invites', { body: { email: 'new@example.com', sendMail: true } })
       expect(r.status, r.text).toBe(201)
       const inv = r.json as InviteCreated
       expect(inv.mailQueued).toBe(true)
       expect(inv.link).toMatch(/\/invite\/[A-Za-z0-9_-]{20,}$/)
-      const m = await until(() => mailsTo(smtp, 'neu@example.com')[0])
+      const m = await until(() => mailsTo(smtp, 'new@example.com')[0])
       const raw = readable(m)
       expect(raw).toContain(inv.link)
       expect(raw).toContain(`${srv.url}/invite/`)
       const token = inv.link.split('/invite/')[1]!
       expect(srv.logs()).not.toContain(token)
     })
-    it('ohne sendMail kein Versand; sendMail ohne Adresse oder mit Nicht-Boolean ist 422', async () => {
+    it('without sendMail no sending; sendMail without an address or with a non-boolean is 422', async () => {
       const before = smtp.mails.length
       expect((await admin.request('/api/admin/invites', { body: { email: 'still@example.com' } })).status).toBe(201)
       const noMail = await admin.request('/api/admin/invites', { body: { sendMail: true } })
@@ -98,14 +98,14 @@ describe('Mailbenachrichtigungen mit SMTP', () => {
       await sleep(300)
       expect(smtp.mails.length).toBe(before)
     })
-    it('Header-Injection in der Adresse wird abgelehnt, nichts wird gesendet', async () => {
+    it('Header injection in the address is rejected, nothing is sent', async () => {
       const before = smtp.mails.length
       const r = await admin.request('/api/admin/invites', { body: { email: 'a@example.com\r\nBcc: evil@example.com', sendMail: true } })
       expect(r.status).toBe(422)
       await sleep(300)
       expect(smtp.mails.length).toBe(before)
     })
-    it('Empfaengerlimit gilt: ab der vierten Einladung je Adresse und Stunde keine Mail, das Anlegen klappt trotzdem', async () => {
+    it('Recipient limit applies: from the fourth invitation per address and hour no mail, creating still works', async () => {
       for (let i = 0; i < 4; i++) {
         const r = await admin.request('/api/admin/invites', { body: { email: 'viel@example.com', sendMail: true } })
         expect(r.status).toBe(201)
@@ -114,7 +114,7 @@ describe('Mailbenachrichtigungen mit SMTP', () => {
       await sleep(500)
       expect(mailsTo(smtp, 'viel@example.com')).toHaveLength(3)
     })
-    it('Nicht-Admins koennen keine Einladungsmail ausloesen', async () => {
+    it('Non-admins cannot trigger an invitation mail', async () => {
       const before = smtp.mails.length
       expect((await a.request('/api/admin/invites', { body: { email: 'q@example.com', sendMail: true } })).status).toBe(403)
       expect(smtp.mails.length).toBe(before)
@@ -122,9 +122,9 @@ describe('Mailbenachrichtigungen mit SMTP', () => {
   })
 
   describe('Statusbenachrichtigung', () => {
-    it('Standard ist an; PATCH ist validiert und wirkt nur auf den eigenen Nutzer', async () => {
+    it('Default is on; PATCH is validated and affects only the own user', async () => {
       expect((await a.request('/api/me/settings')).json satisfies MeSettings).toEqual({ notifyStatusMail: true })
-      expect((await a.request('/api/me/settings', { method: 'PATCH', body: { notifyStatusMail: 'nein' } })).status).toBe(422)
+      expect((await a.request('/api/me/settings', { method: 'PATCH', body: { notifyStatusMail: 'no' } })).status).toBe(422)
       expect((await a.request('/api/me/settings', { method: 'PATCH', body: { role: 'admin' } })).status).toBe(422)
       expect((await api(srv.url).request('/api/me/settings')).status).toBe(401)
       const off = await a.request('/api/me/settings', { method: 'PATCH', body: { notifyStatusMail: false } })
@@ -133,27 +133,27 @@ describe('Mailbenachrichtigungen mit SMTP', () => {
       expect((await a.request('/api/me/settings', { method: 'PATCH', body: { notifyStatusMail: true } })).json).toEqual({ notifyStatusMail: true })
     })
 
-    it('Opt-out: kein Statusmail an Anna, solange sie widersprochen hat', async () => {
+    it('Opt-out: no status mail to Anna as long as she has opted out', async () => {
       await a.request('/api/me/settings', { method: 'PATCH', body: { notifyStatusMail: false } })
-      fake.requireHeader('authorization', 'Bearer falsch')
+      fake.requireHeader('authorization', 'Bearer wrong')
       expect((await test(a, upA.id)).ok).toBe(false)
       expect((await a.request(`/api/upstreams/${upA.id}`)).json.status).toBe('auth_expired')
       await sleep(600)
       expect(statusMailsTo(smtp, 'anna@example.com')).toHaveLength(0)
-      // zurueck auf gesund und wieder an, fuer die folgenden Tests
+      // back to healthy and on again, for the following tests
       fake.requireHeader('authorization', `Bearer ${SECRET}`)
       expect((await test(a, upA.id)).ok).toBe(true)
-      // Die Erholung (auth_expired -> healthy) loest ebenfalls eine Benachrichtigung aus, deren Opt-out-Lookup bewusst erst im
-      // Hintergrund nach der Antwort laeuft (notify.ts). Erst abwarten, bis er mit "widersprochen" entschieden hat; sonst liest er
-      // auf einem langsamen Postgres schon den wieder eingeschalteten Wert und sendet die Mail zu Recht.
+      // The recovery (auth_expired -> healthy) also triggers a notification whose opt-out lookup deliberately runs only in the
+      // background after the response (notify.ts). First wait until it has decided "opted out"; otherwise on a slow Postgres it
+      // already reads the re-enabled value and rightly sends the mail.
       await sleep(1000)
       await a.request('/api/me/settings', { method: 'PATCH', body: { notifyStatusMail: true } })
       await sleep(300)
       expect(statusMailsTo(smtp, 'anna@example.com')).toHaveLength(0)
     })
 
-    it('echter Wechsel nach auth_expired: genau eine Mail an den Besitzer, mit Namen, Zustand und Link; escaped; ohne Secret', async () => {
-      fake.requireHeader('authorization', 'Bearer falsch')
+    it('real change to auth_expired: exactly one mail to the owner, with name, state and link; escaped; without secret', async () => {
+      fake.requireHeader('authorization', 'Bearer wrong')
       expect((await test(a, upA.id)).ok).toBe(false)
       expect((await a.request(`/api/upstreams/${upA.id}`)).json.status).toBe('auth_expired')
       const m = await until(() => statusMailsTo(smtp, 'anna@example.com')[0])
@@ -163,17 +163,17 @@ describe('Mailbenachrichtigungen mit SMTP', () => {
       expect(raw).toContain('&lt;b&gt;Wiki')
       expect(raw.split('text/html')[1]).not.toContain('<b>Wiki')
       expect(raw).not.toContain(SECRET)
-      expect(raw).not.toContain('falsch')
+      expect(raw).not.toContain('wrong')
       expect(m.to).toEqual(['anna@example.com'])
     })
 
-    it('Flapping: erneuter Wechsel in das Fenster erzeugt keine zweite Mail; die Erholung genau eine', async () => {
+    it('Flapping: another change into the window produces no second mail; the recovery exactly one', async () => {
       fake.requireHeader('authorization', `Bearer ${SECRET}`)
       expect((await test(a, upA.id)).ok).toBe(true)
       const rec = await until(() => statusMailsTo(smtp, 'anna@example.com')[1])
       expect(readable(rec)).toMatch(/^Subject: mcpwarden: .* wieder erreichbar/m)
       for (let i = 0; i < 3; i++) {
-        fake.requireHeader('authorization', 'Bearer falsch')
+        fake.requireHeader('authorization', 'Bearer wrong')
         await test(a, upA.id)
         fake.requireHeader('authorization', `Bearer ${SECRET}`)
         await test(a, upA.id)
@@ -182,8 +182,8 @@ describe('Mailbenachrichtigungen mit SMTP', () => {
       expect(statusMailsTo(smtp, 'anna@example.com')).toHaveLength(2)
     })
 
-    it('Mandanten: Bert bekommt nur Mails zu seinen Upstreams, Anna und der Admin nie zu fremden', async () => {
-      fakeB.requireHeader('authorization', 'Bearer falsch')
+    it('Tenants: Bert gets only mails about his upstreams, Anna and the admin never about foreign ones', async () => {
+      fakeB.requireHeader('authorization', 'Bearer wrong')
       expect((await test(b, upB.id)).ok).toBe(false)
       const m = await until(() => statusMailsTo(smtp, 'bert@example.com')[0])
       const raw = readable(m)
@@ -196,11 +196,11 @@ describe('Mailbenachrichtigungen mit SMTP', () => {
         expect(readable(x)).not.toContain('Wiki')
         expect(readable(x)).not.toContain(upA.id)
       }
-      // Anna kann Berts Einstellung nicht beeinflussen, und der Wechsel von Anna ist nicht in Berts Postfach
+      // Anna cannot influence Bert's setting, and Anna's change is not in Bert's mailbox
       expect(smtp.mails.every(x => x.to.length === 1)).toBe(true)
     })
 
-    it('die Aufrufe selbst bleiben unbeeintraechtigt, wenn der SMTP-Server weg ist', async () => {
+    it('the calls themselves stay unaffected when the SMTP server is gone', async () => {
       await smtp.close()
       fakeB.requireHeader('authorization', `Bearer ${SECRET}`)
       const t0 = Date.now()
@@ -213,7 +213,7 @@ describe('Mailbenachrichtigungen mit SMTP', () => {
   })
 })
 
-describe('ohne SMTP_URL', () => {
+describe('without SMTP_URL', () => {
   let inst: TestInstance
   let srv: TestServer
   let admin: ApiClient
@@ -228,7 +228,7 @@ describe('ohne SMTP_URL', () => {
     await inst?.cleanup()
   })
 
-  it('sendMail ist 422 (nicht eingerichtet), die Einladung ohne Versand funktioniert unveraendert', async () => {
+  it('sendMail is 422 (not set up), the invitation without sending works unchanged', async () => {
     const r = await admin.request('/api/admin/invites', { body: { email: 'x@example.com', sendMail: true } })
     expect(r.status).toBe(422)
     expect(r.json.data.field).toBe('sendMail')
@@ -236,7 +236,7 @@ describe('ohne SMTP_URL', () => {
     expect(ok.status).toBe(201)
     expect((ok.json as InviteCreated).mailQueued).toBe(false)
   })
-  it('die Einstellung ist les- und schreibbar (ohne Wirkung)', async () => {
+  it('the setting is readable and writable (without effect)', async () => {
     expect((await admin.request('/api/me/settings')).json).toEqual({ notifyStatusMail: true })
     expect((await admin.request('/api/me/settings', { method: 'PATCH', body: { notifyStatusMail: false } })).json).toEqual({ notifyStatusMail: false })
   })

@@ -1,5 +1,5 @@
-// Läuft im Container als Web-UID (vom Supervisor gestartet) und spielt die Szenarien durch.
-// Ausgabe: eine JSON-Zeile "RESULT {...}" je Prüfung, am Ende "DONE".
+// Runs in the container as the web UID (started by the supervisor) and plays through the scenarios.
+// Output: one JSON line "RESULT {...}" per check, at the end "DONE".
 import net from 'node:net'
 import fs from 'node:fs'
 
@@ -46,7 +46,7 @@ rec('webCapEff', fs.readFileSync('/proc/self/status', 'utf8').match(/CapEff:\s+(
 rec('webUid', process.getuid())
 rec('ping', (await control({ v: 1, cmd: 'ping' })).ok)
 
-// gefälschte Befehle
+// forged commands
 rec('forge_uid', (await control({ v: 1, cmd: 'attach', userId: 'x', uid: 0 })).error)
 rec('forge_cwd', (await control({ v: 1, cmd: 'attach', userId: 'x', cwd: '../..' })).error)
 rec('forge_userId_slash', (await control({ v: 1, cmd: 'attach', userId: '../etc' })).error)
@@ -74,7 +74,7 @@ let w2 = 'ok'; try { fs.renameSync(`/data/stdio/${uidA}`, '/data/stdio/moved') }
 let w3 = 'ok'; try { fs.readdirSync(`/data/stdio/${uidA}`) } catch (e) { w3 = e.code }
 rec('web_mkdir_stdio', w1); rec('web_rename', w2); rec('web_reads_user_dir', w3)
 
-// Symlink-Angriff: A legt Symlinks an, danach Stop + erneutes Attach (ensureUserDir läuft erneut)
+// Symlink attack: A creates symlinks, afterwards stop + attach again (ensureUserDir runs again)
 const before = { etc: stat('/etc'), b: stat(`/data/stdio/${idB.uid}`) }
 const atk = `const fs=require('fs');for(const [t,l] of [['/etc','home2'],['../${idB.uid}','tmp2'],['/etc/passwd','pw']]){try{fs.symlinkSync(t,l)}catch(e){console.log('ERR',e.code)}};console.log('done')`
 await runChild(A, 'c4', 'node', ['-e', atk])
@@ -85,7 +85,7 @@ const after = { etc: stat('/etc'), b: stat(`/data/stdio/${idB.uid}`) }
 rec('symlink_untouched', JSON.stringify(before) === JSON.stringify(after))
 rec('symlink_stat', { before, after })
 
-// Kindlimit (maxProcs 5)
+// Child limit (maxProcs 5)
 for (let i = 0; i < 6; i++) A2.s.write(enc({ t: 'start', childId: 'k' + i, command: 'sleep', args: ['30'], env: {} }))
 const seen = []; for (let i = 0; i < 8; i++) { const m = await A2.r.next(1500); if (m.timeout) break; seen.push(m.t === 'error' ? m.code : m.t) }
 rec('child_limit', seen.filter(x => x === 'limit').length)
@@ -96,7 +96,7 @@ await new Promise(r => setTimeout(r, 500))
 rec('cwd_escape', (await runChild(A2, 'cw', 'pwd', [], {}, '../../..')).error?.code)
 rec('cwd_abs', (await runChild(A2, 'cw2', 'pwd', [], {}, '/etc')).error?.code)
 
-// Fork-Bombe: begrenzt, B bleibt arbeitsfähig
+// Fork bomb: bounded, B stays operational
 const bomb = `const {spawn}=require('child_process');let err=0,ok=0;for(let i=0;i<700;i++){const p=spawn('sleep',['5'],{stdio:'ignore'});p.on('error',()=>{err++});p.on('spawn',()=>{ok++})}setTimeout(()=>{console.log(JSON.stringify({ok,err}));process.exit(0)},1500)`
 const bm = await runChild(A2, 'bomb', 'node', ['-e', bomb])
 rec('forkbomb', bm.lines ? JSON.parse(bm.lines[0]) : bm)
@@ -104,14 +104,14 @@ rec('B_after_bomb', (await runChild(B, 'c5', 'echo', ['alive'])).lines?.[0])
 
 rec('busy', (await attach('userA')).ack.error)
 
-// Worker beendet => Web sieht EOF
+// Worker ends => web sees EOF
 B.s.write(enc({ t: 'start', childId: 'x', command: 'sleep', args: ['30'], env: {} }))
 await B.r.next()
 await control({ v: 1, cmd: 'stopWorker', userId: 'userB' })
 let eof; for (let i = 0; i < 5; i++) { eof = await B.r.next(5000); if (eof.closed) break }
 rec('worker_exit_eof', eof.closed === true)
 
-// Absturz -> Backoff: Frame über dem Limit => Worker beendet sich mit Code 1
+// Crash -> backoff: frame over the limit => worker ends itself with code 1
 const C = await attach('userC')
 C.s.write(Buffer.concat([Buffer.from([0x7f, 0xff, 0xff, 0xff]), Buffer.alloc(16)]))
 await C.r.next(3000)
@@ -120,12 +120,12 @@ rec('backoff', (await attach('userC')).ack.error)
 await new Promise(r => setTimeout(r, 1300))
 rec('after_backoff', (await attach('userC')).ack?.ok === true)
 
-// Idle (SUP_IDLE_UNIT_MS klein): Worker beendet sich selbst
+// Idle (SUP_IDLE_UNIT_MS small): worker ends itself
 const D = await attach('userD', { idleMin: 1 })
 let idle; for (let i = 0; i < 4; i++) { idle = await D.r.next(3000); if (idle.closed) break }
 rec('idle_exit', idle.closed === true)
 
-// Purge entfernt das Verzeichnis
+// Purge removes the directory
 await control({ v: 1, cmd: 'stopWorker', userId: 'userA', purge: true })
 rec('purged', fs.existsSync(`/data/stdio/${uidA}`) === false)
 

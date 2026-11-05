@@ -1,5 +1,5 @@
-// Review H-A (Sicherheitsnetz): Sperren/Loeschen ueber einen Better-Auth-Pfad (hier: serverseitige Direktaufrufe ohne die
-// mcpwarden-Admin-Routen) stoesst dieselbe Aufraeumkette an (user.update.after / user.delete.before).
+// Review H-A (safety net): banning/deleting via a Better Auth path (here: direct server-side calls without the
+// mcpwarden admin routes) triggers the same cleanup chain (user.update.after / user.delete.before).
 import { afterAll, beforeAll, expect, it } from 'vitest'
 import { createInstance, type TestInstance } from './harness'
 
@@ -30,11 +30,11 @@ afterAll(async () => {
 })
 
 it('banning or deleting through Better Auth runs the user-disabled cleanup chain', async () => {
-  await auth.api.signUpEmail({ body: { name: 'A', email: 'a@example.com', password: 'passwort-12345' } })
-  const res = await auth.api.signInEmail({ body: { email: 'a@example.com', password: 'passwort-12345' }, asResponse: true })
+  await auth.api.signUpEmail({ body: { name: 'A', email: 'a@example.com', password: 'password-12345' } })
+  const res = await auth.api.signInEmail({ body: { email: 'a@example.com', password: 'password-12345' }, asResponse: true })
   const headers = new Headers({ cookie: res.headers.getSetCookie().map(c => c.split(';')[0]).join('; ') })
-  const b = await auth.api.createUser({ headers, body: { name: 'B', email: 'b@example.com', password: 'passwort-12345', role: 'user' } })
-  const c = await auth.api.createUser({ headers, body: { name: 'C', email: 'c@example.com', password: 'passwort-12345', role: 'user' } })
+  const b = await auth.api.createUser({ headers, body: { name: 'B', email: 'b@example.com', password: 'password-12345', role: 'user' } })
+  const c = await auth.api.createUser({ headers, body: { name: 'C', email: 'c@example.com', password: 'password-12345', role: 'user' } })
 
   const seen: string[] = []
   lifecycle.registerLifecycleHandler({ name: 'probe', onUserDisabled: (id) => { seen.push(id) } })
@@ -43,7 +43,7 @@ it('banning or deleting through Better Auth runs the user-disabled cleanup chain
   expect(seen).toEqual([b.user.id])
 
   await auth.api.unbanUser({ headers, body: { userId: b.user.id } })
-  expect(seen).toEqual([b.user.id]) // Entsperren raeumt nichts auf
+  expect(seen).toEqual([b.user.id]) // unbanning cleans up nothing
 
   await auth.api.removeUser({ headers, body: { userId: c.user.id } })
   expect(seen).toEqual([b.user.id, c.user.id])

@@ -5,7 +5,7 @@ import { currentUser, getState, mailEnabled, registrationOpen, role, save, volat
 import { body, err, json, nid, noContent, route } from '../util'
 import { HttpResponse } from 'msw'
 
-/** Better-Auth-Fehlerform (`AuthErrorBody`) wie vom echten Backend unter `/api/auth/*`. */
+/** Better Auth error shape (`AuthErrorBody`) like the real backend under `/api/auth/*`. */
 const authErr = (status: number, code: string, message: string) => HttpResponse.json({ code, message }, { status })
 
 export function inviteState(token: string): InviteInfo {
@@ -30,8 +30,8 @@ export const authHandlers = [
   }, { public: true }),
   route('post', '/api/auth/sign-in/email', async ({ request }) => {
     const b = await body<{ email?: string, password?: string }>(request)
-    if (!b.email || !b.password || b.password === 'falsch') return err(401, 'invalid_credentials', 'E-Mail oder Passwort stimmt nicht.')
-    if (b.email.startsWith('gesperrt@')) return err(403, 'banned', 'Dieses Konto ist gesperrt.')
+    if (!b.email || !b.password || b.password === 'wrong') return err(401, 'invalid_credentials', 'E-Mail oder Passwort stimmt nicht.')
+    if (b.email.startsWith('banned@')) return err(403, 'banned', 'Dieses Konto ist gesperrt.')
     getState().signedIn = true; save()
     return json({ ok: true })
   }, { public: true }),
@@ -58,7 +58,7 @@ export const authHandlers = [
   }),
   route('post', '/api/auth/change-password', async ({ request }) => {
     const b = await body<{ currentPassword: string, newPassword: string }>(request)
-    if (b.currentPassword === 'falsch') return err(400, 'invalid_password', 'Das aktuelle Passwort stimmt nicht.', 'currentPassword')
+    if (b.currentPassword === 'wrong') return err(400, 'invalid_password', 'Das aktuelle Passwort stimmt nicht.', 'currentPassword')
     if ((b.newPassword ?? '').length < 12) return err(422, 'validation', 'Mindestens 12 Zeichen.', 'newPassword')
     return json({ ok: true })
   }),
@@ -68,17 +68,17 @@ export const authHandlers = [
   ])),
   route('post', '/api/auth/revoke-session', () => json({ ok: true })),
   route('get', '/api/public-config', () => json<PublicConfig>({ mail: mailEnabled(), registrationOpen: registrationOpen() }), { public: true }),
-  // Wie Better Auth: gleiche Antwort fuer jede Adresse (keine Kontoenumeration); ohne Mail 400 RESET_PASSWORD_DISABLED.
+  // Like Better Auth: same response for every address (no account enumeration); without mail 400 RESET_PASSWORD_DISABLED.
   route('post', '/api/auth/request-password-reset', async ({ request }) => {
     if (!mailEnabled()) return err(400, 'RESET_PASSWORD_DISABLED', 'Reset password isn\'t enabled')
     const b = await body<{ email?: string }>(request)
     if (!b.email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(b.email)) return err(400, 'VALIDATION_ERROR', 'Invalid email')
     return json({ status: true, message: 'If this email exists in our system, check your email for the reset link' })
   }, { public: true }),
-  // Mock: nur das Token `abgelaufen` ist ungueltig; er merkt sich keine Tokens.
+  // Mock: only the token `expired` is invalid; it does not remember tokens.
   route('post', '/api/auth/reset-password', async ({ request }) => {
     const b = await body<{ token?: string, newPassword?: string }>(request)
-    if (!b.token || b.token === 'abgelaufen') return err(400, 'INVALID_TOKEN', 'Invalid token')
+    if (!b.token || b.token === 'expired') return err(400, 'INVALID_TOKEN', 'Invalid token')
     if ((b.newPassword ?? '').length < 12) return err(400, 'PASSWORD_TOO_SHORT', 'Password too short', 'password')
     return json({ status: true })
   }, { public: true }),

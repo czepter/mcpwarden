@@ -22,7 +22,7 @@ describe('resilience', () => {
     expect(Date.now() - t).toBeLessThan(1500)
     expect(r).toMatchObject({ isError: true, _meta: { code: 'timeout' } })
     expect(a.state.calls.create_order).toBe(1)
-    expect(await waitFor(() => a.state.aborted >= 1)).toBe(true) // HTTP-2026: Stream geschlossen = Abbruch
+    expect(await waitFor(() => a.state.aborted >= 1)).toBe(true) // HTTP-2026: stream closed = abort
     await new Promise(r => setTimeout(r, 300))
     expect(a.state.calls.create_order).toBe(1)
   })
@@ -69,10 +69,10 @@ describe('resilience', () => {
     const n = a.state.requests.length
     const r = await h.gw.toolSource.callTool(ctx, 'one__add', { a: 1, b: 1 }, { signal: sig() })
     expect(r._meta).toMatchObject({ code: 'breaker_open' })
-    expect(a.state.requests.length).toBe(n) // kein Request
+    expect(a.state.requests.length).toBe(n) // no request
     expect(hl.snapshot().nextRetryAt).toBeGreaterThan(Date.now())
     expect(h.statuses.map(s => s.s.status)).toEqual(['healthy', 'degraded', 'open'])
-    // Zeit vorspulen: Breaker-Uhr ist Date.now -> wir setzen den Zustand per Probe direkt
+    // Fast-forward time: the breaker clock is Date.now -> we set the state directly via probe
     a.state.mode = 'ok'
     ;(hl.breaker as unknown as { openUntil: number }).openUntil = Date.now() - 1
     const ok = await h.gw.toolSource.callTool(ctx, 'one__add', { a: 1, b: 1 }, { signal: sig() })

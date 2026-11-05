@@ -1,4 +1,4 @@
-// DB-nahe Logik gegen In-Memory-PGlite mit den echten Migrationen.
+// DB-near logic against in-memory PGlite with the real migrations.
 import { PGlite } from '@electric-sql/pglite'
 import { drizzle } from 'drizzle-orm/pglite'
 import { eq } from 'drizzle-orm'

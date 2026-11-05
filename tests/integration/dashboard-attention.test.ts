@@ -1,5 +1,5 @@
-// Spec P0-16: die Aufmerksamkeitsliste enthaelt degraded, open, auth_expired, awaiting_auth und awaiting_approval, jeweils mit
-// setup und statusReason; gesunde, bereite Upstreams nicht. Gegen die echte Datenbank (PGlite/Postgres).
+// Spec P0-16: the attention list contains degraded, open, auth_expired, awaiting_auth and awaiting_approval, each with
+// setup and statusReason; healthy, ready upstreams do not. Against the real database (PGlite/Postgres).
 import { afterAll, beforeAll, expect, it } from 'vitest'
 import { createInstance, type TestInstance } from './harness'
 
@@ -30,7 +30,7 @@ it('attention covers all five states and nothing else', async () => {
   const { GatewayRepo } = await import('../../server/gateway/upstream/repo')
   const { dashboard } = await import('../../server/gateway/service')
   await db.insert(user).values({ id: 'u1', name: 'U', email: 'u@example.com' })
-  const mk = (slug: string, status: string, setup: string) => ({ userId: 'u1', slug, name: slug, type: 'http', url: 'https://x.example/mcp', status, setup, statusReason: ['healthy', 'unknown'].includes(status) ? null : `Grund ${slug}` })
+  const mk = (slug: string, status: string, setup: string) => ({ userId: 'u1', slug, name: slug, type: 'http', url: 'https://x.example/mcp', status, setup, statusReason: ['healthy', 'unknown'].includes(status) ? null : `reason ${slug}` })
   await db.insert(upstream).values([
     mk('ok', 'healthy', 'ready'), mk('fresh', 'unknown', 'ready'), mk('degr', 'degraded', 'ready'), mk('open', 'open', 'ready'),
     mk('expired', 'auth_expired', 'ready'), mk('needauth', 'unknown', 'awaiting_auth'), mk('needok', 'unknown', 'awaiting_approval'),
@@ -38,13 +38,13 @@ it('attention covers all five states and nothing else', async () => {
   const repo = new GatewayRepo(db)
   expect((await repo.attention('u1')).map(r => r.slug).sort()).toEqual(['degr', 'expired', 'needauth', 'needok', 'open'])
 
-  // Dienst: setup im Eintrag, Wartegrund als statusReason (Health-Zustand ohne eigenen Grund)
+  // Service: setup in the entry, waiting reason as statusReason (health state without its own reason)
   const rt = { repo, gw: { healthFor: () => ({ breaker: { nextRetryAt: null } }), limiter: { hitsLast5m: () => 0 } } } as never
   const d = await dashboard(rt, { id: 'u1', role: 'user' }, { connections: [] })
   const by = Object.fromEntries(d.attention.map(a => [a.slug, a]))
   expect(d.attentionCount).toBe(5)
   expect(by.needauth).toMatchObject({ setup: 'awaiting_auth', status: 'unknown', statusReason: expect.stringContaining('Zugangsdaten') })
   expect(by.needok).toMatchObject({ setup: 'awaiting_approval', statusReason: expect.stringContaining('Freigabe') })
-  expect(by.open).toMatchObject({ setup: 'ready', statusReason: 'Grund open' })
+  expect(by.open).toMatchObject({ setup: 'ready', statusReason: 'reason open' })
   for (const a of d.attention) expect(a.statusReason).toBeTruthy()
 })

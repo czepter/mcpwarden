@@ -3,11 +3,11 @@ import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-// @ts-expect-error reines JS-Modul
+// @ts-expect-error pure JS module
 import { findMock } from '../check-no-mock.mjs'
 
 describe('check-no-mock', () => {
-  it('meldet Mock-Dateien und -Code, ignoriert sauberen Build', () => {
+  it('reports mock files and code, ignores a clean build', () => {
     const clean = mkdtempSync(join(tmpdir(), 'clean-')); mkdirSync(join(clean, 'public'))
     writeFileSync(join(clean, 'public', 'a.js'), 'console.log(1)')
     expect(findMock(clean)).toEqual([])
@@ -16,13 +16,13 @@ describe('check-no-mock', () => {
     writeFileSync(join(dirty, 'x.mjs'), 'startMock()')
     expect(findMock(dirty)).toHaveLength(2)
   })
-  it('meldet Steuerungs-Schluessel und Styleguide-Route des Mock-Builds', () => {
+  it('reports control keys and styleguide route of the mock build', () => {
     const d = mkdtempSync(join(tmpdir(), 'keys-'))
     writeFileSync(join(d, 'a.js'), 'localStorage.getItem("mockRole")')
     writeFileSync(join(d, 'b.js'), '{path:"/__styleguide"}')
     expect(findMock(d)).toHaveLength(2)
   })
-  it('Skript scheitert mit Exit-Code 1 bei Mock-Code und 2 ohne Build-Verzeichnis', () => {
+  it('Script fails with exit code 1 on mock code and 2 without a build directory', () => {
     const run = (dir: string) => spawnSync(process.execPath, ['tests/ui/check-no-mock.mjs', dir], { encoding: 'utf8' })
     const dirty = mkdtempSync(join(tmpdir(), 'cli-dirty-'))
     writeFileSync(join(dirty, 'mockServiceWorker.js'), '//')

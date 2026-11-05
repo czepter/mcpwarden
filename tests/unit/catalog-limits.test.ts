@@ -1,4 +1,4 @@
-// Review M-F: Catalog.list folgt nextCursor nicht mehr unbegrenzt.
+// Review M-F: Catalog.list no longer follows nextCursor without bound.
 import type { Tool } from '@modelcontextprotocol/client'
 import { describe, expect, it } from 'vitest'
 import { Catalog, CatalogLimitError } from '../../server/gateway/upstream/catalog'
@@ -32,17 +32,17 @@ describe('Catalog.list bounds', () => {
   })
   it('a repeating cursor is cut off', async () => {
     const { cat } = make(async () => ({ tools: [tool('a')], nextCursor: 'same' }))
-    await expect(cat.list(up())).rejects.toThrow(/Cursor/)
+    await expect(cat.list(up())).rejects.toThrow(/cursor/)
   })
   it('too many tools', async () => {
     const { cat, synced } = make(async c => ({ tools: Array.from({ length: 60 }, (_, i) => tool(`${c ?? 'x'}-${i}`)), nextCursor: `${(c ?? '') + 'y'}` }), { maxTools: 100 })
-    await expect(cat.list(up())).rejects.toThrow(/Tools/)
+    await expect(cat.list(up())).rejects.toThrow(/tools/)
     expect(synced).toHaveLength(0)
   })
   it('too many bytes (huge descriptions)', async () => {
     let n = 0
     const { cat } = make(async () => ({ tools: [tool(`big${n}`, 'x'.repeat(20_000))], nextCursor: `n${n++}` }), { maxBytes: 50_000 })
-    await expect(cat.list(up())).rejects.toThrow(/Bytes/)
+    await expect(cat.list(up())).rejects.toThrow(/bytes/)
   })
   it('one time budget for the whole list: slow pages cannot add up past listMs', async () => {
     let n = 0
@@ -58,7 +58,7 @@ describe('Catalog.list bounds', () => {
     expect(Date.now() - t0).toBeLessThan(1500)
   })
   it('the limit error is classified as a protocol problem that counts for the breaker, without leaking details', () => {
-    const c = classifyError(new CatalogLimitError('mehr als 5 Seiten'))
+    const c = classifyError(new CatalogLimitError('more than 5 pages'))
     expect(c).toMatchObject({ code: 'protocol', counts: true, auth: false })
     expect(c.message).not.toMatch(/Seiten/)
   })

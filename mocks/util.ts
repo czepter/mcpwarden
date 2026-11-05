@@ -4,7 +4,7 @@ import { getState, role, scenario } from './state'
 
 export type Domain = 'auth' | 'oauth' | 'me' | 'admin-oauth' | 'upstreams' | 'admin' | 'audit' | 'dashboard' | 'stats' | 'links'
 export const ALL_DOMAINS: Domain[] = ['auth', 'oauth', 'me', 'admin-oauth', 'upstreams', 'admin', 'audit', 'dashboard', 'stats', 'links']
-/** Mock-Latenz abschaltbar (Tests): window.__mockNoDelay oder globalThis. */
+/** Mock latency can be switched off (tests): window.__mockNoDelay or globalThis. */
 export const noDelay = () => (globalThis as { __mockNoDelay?: boolean }).__mockNoDelay === true
 
 export const err = (status: number, code: string, message: string, field?: string) =>
@@ -13,7 +13,7 @@ export const err = (status: number, code: string, message: string, field?: strin
 type Method = 'get' | 'post' | 'put' | 'patch' | 'delete'
 export type Ctx = { params: PathParams, request: Request }
 
-/** Ein Handler mit Szenarien (slow, error, forbidden) und Zufallsverzoegerung. */
+/** A handler with scenarios (slow, error, forbidden) and random delay. */
 export function route(method: Method, path: string, fn: (c: Ctx) => Response | Promise<Response>, opts: { admin?: boolean, public?: boolean } = {}) {
   const resolver: HttpResponseResolver = async ({ params, request }) => {
     const sc = scenario()

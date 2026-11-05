@@ -1,7 +1,7 @@
 import { execFileSync, spawnSync } from 'node:child_process'
 import { beforeAll, describe, expect, it } from 'vitest'
 
-// Linux-spezifisch (UID-Wechsel, Capabilities, /proc): läuft nur im Container (`pnpm test:container`, Docker nötig).
+// Linux-specific (UID switch, capabilities, /proc): runs only in the container (`pnpm test:container`, Docker required).
 const IMAGE = 'node:24-bookworm-slim'
 const dockerOk = spawnSync('docker', ['info'], { stdio: 'ignore' }).status === 0
 const R: Record<string, unknown> = {}
@@ -30,10 +30,10 @@ describe.skipIf(!dockerOk)('supervisor in container (root, caps SETUID/SETGID/CH
     const c = R.childA as { uid: number, uidOk: boolean, groupsHaveZero: boolean, hasMy: boolean, leaksMaster: boolean, envKeys: string[], cwd: string }
     expect(c.uidOk).toBe(true)
     expect(c.groupsHaveZero).toBe(false)
-    expect(R.idG).toBe(String(c.uid)) // `id -G`: nur die eigene Gruppe
+    expect(R.idG).toBe(String(c.uid)) // `id -G`: only the own group
     expect(c.leaksMaster).toBe(false)
     expect(c.hasMy).toBe(true)
-    expect(c.envKeys.filter(k => k !== 'SHLVL')).toEqual(['HOME', 'MY_SECRET', 'PATH', 'PWD', 'TMPDIR']) // SHLVL setzt bash
+    expect(c.envKeys.filter(k => k !== 'SHLVL')).toEqual(['HOME', 'MY_SECRET', 'PATH', 'PWD', 'TMPDIR']) // SHLVL is set by bash
     expect(R.uidDiffers).toBe(true)
   })
   it('isolation: A cannot read B or pgdata; web cannot touch stdio', () => {

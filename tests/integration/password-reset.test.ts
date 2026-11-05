@@ -3,8 +3,8 @@ import type { PublicConfig } from '../../shared/api-types'
 import { readable, startFakeSmtp, type FakeSmtp } from '../helpers/fake-smtp'
 import { ADMIN, api, createInstance, createUser, signUpFirstAdmin, startServer, type TestInstance, type TestServer } from './harness'
 
-const USER = { name: 'Bea', email: 'bea@example.com', password: 'bea-altes-passwort-1' }
-const NEW_PW = 'bea-neues-passwort-2'
+const USER = { name: 'Bea', email: 'bea@example.com', password: 'bea-altes-password-1' }
+const NEW_PW = 'bea-neues-password-2'
 const wait = async <T>(fn: () => T | undefined, ms = 8000): Promise<T> => {
   const end = Date.now() + ms
   while (Date.now() < end) {
@@ -19,7 +19,7 @@ const tokenOf = (smtp: FakeSmtp, to: string) => {
   return m ? /reset-password#token=([A-Za-z0-9_-]+)/.exec(readable(m))?.[1] : undefined
 }
 
-describe('Passwort-Reset mit SMTP (Fake-Server)', () => {
+describe('Password reset with SMTP (fake server)', () => {
   let inst: TestInstance
   let srv: TestServer
   let smtp: FakeSmtp
@@ -37,13 +37,13 @@ describe('Passwort-Reset mit SMTP (Fake-Server)', () => {
     await inst?.cleanup()
   })
 
-  it('/api/public-config meldet mail: true (ohne Sitzung)', async () => {
+  it('/api/public-config reports mail: true (without a session)', async () => {
     const r = await api(srv.url).request('/api/public-config')
     expect(r.status).toBe(200)
     expect(r.json satisfies PublicConfig).toEqual({ mail: true, registrationOpen: false })
   })
 
-  it('Antwort ist fuer bekannte und unbekannte Adressen identisch; nur die bekannte bekommt eine Mail', async () => {
+  it('Response is identical for known and unknown addresses; only the known one gets a mail', async () => {
     const known = await api(srv.url, '203.0.113.21').request('/api/auth/request-password-reset', { body: { email: USER.email } })
     const unknown = await api(srv.url, '203.0.113.22').request('/api/auth/request-password-reset', { body: { email: 'niemand@example.com' } })
     expect(known.status).toBe(200)
@@ -55,7 +55,7 @@ describe('Passwort-Reset mit SMTP (Fake-Server)', () => {
     expect(smtp.mails[0]!.to).toEqual([USER.email])
   })
 
-  it('Link zeigt auf BASE_URL (auch bei gefaelschtem Host) und das Token steht im Fragment', async () => {
+  it('Link points to BASE_URL (also with a forged host) and the token is in the fragment', async () => {
     const r = await api(srv.url, '203.0.113.23').request('/api/auth/request-password-reset', { body: { email: ADMIN.email } })
     expect(r.status).toBe(200)
     await wait(() => smtp.mails.find(m => m.to.includes(ADMIN.email)))
@@ -72,13 +72,13 @@ describe('Passwort-Reset mit SMTP (Fake-Server)', () => {
     for (const m of smtp.mails) expect(readable(m)).not.toContain('evil.example')
   })
 
-  it('redirectTo auf fremde Origin wird abgelehnt', async () => {
+  it('redirectTo to a foreign origin is rejected', async () => {
     const r = await api(srv.url, '203.0.113.25').request('/api/auth/request-password-reset', { body: { email: USER.email, redirectTo: 'https://evil.example/x' } })
     expect(r.status).toBeGreaterThanOrEqual(400)
     expect(r.status).toBeLessThan(500)
   })
 
-  it('Zuruecksetzen: zu kurzes Passwort 400, gueltiges 200, Token nur einmal, altes Passwort ungueltig, Sitzungen beendet', async () => {
+  it('Reset: too short password 400, valid 200, token only once, old password invalid, sessions ended', async () => {
     const bea = api(srv.url, '203.0.113.30')
     expect((await bea.request('/api/auth/sign-in/email', { body: { email: USER.email, password: USER.password } })).status).toBe(200)
     expect((await bea.request('/api/auth/get-session')).json?.user?.email).toBe(USER.email)
@@ -91,18 +91,18 @@ describe('Passwort-Reset mit SMTP (Fake-Server)', () => {
     const ok = await anon.request('/api/auth/reset-password', { body: { token, newPassword: NEW_PW } })
     expect(ok.status).toBe(200)
 
-    expect((await anon.request('/api/auth/reset-password', { body: { token, newPassword: 'noch-ein-passwort-3' } })).status).toBe(400)
+    expect((await anon.request('/api/auth/reset-password', { body: { token, newPassword: 'yet-another-password-3' } })).status).toBe(400)
     expect((await anon.request('/api/auth/sign-in/email', { body: { email: USER.email, password: USER.password } })).status).toBe(401)
     expect((await anon.request('/api/auth/sign-in/email', { body: { email: USER.email, password: NEW_PW } })).status).toBe(200)
     expect((await bea.request('/api/auth/get-session')).json?.user).toBeUndefined()
   })
 
-  it('unbekanntes Token: 400', async () => {
+  it('unknown token: 400', async () => {
     const r = await api(srv.url, '203.0.113.32').request('/api/auth/reset-password', { body: { token: 'gibtsnicht', newPassword: NEW_PW } })
     expect(r.status).toBe(400)
   })
 
-  it('Server-Log enthaelt weder Token noch Empfaengeradresse noch Passwort', async () => {
+  it('Server log contains neither token nor recipient address nor password', async () => {
     const logs = srv.logs()
     for (const m of smtp.mails) {
       const t = /reset-password#token=([A-Za-z0-9_-]+)/.exec(readable(m))?.[1]
@@ -114,12 +114,12 @@ describe('Passwort-Reset mit SMTP (Fake-Server)', () => {
   })
 })
 
-describe('Passwort-Reset: Fehlerpfade und Abschaltung', () => {
+describe('Password reset: error paths and shutdown', () => {
   let inst: TestInstance
   beforeAll(async () => { inst = await createInstance() })
   afterAll(async () => { await inst?.cleanup() })
 
-  it('SMTP nicht erreichbar: Anfrage antwortet normal, Server laeuft weiter, Log ohne Adresse', async () => {
+  it('SMTP unreachable: request answers normally, server keeps running, log without address', async () => {
     const dead = await startFakeSmtp()
     const port = dead.port
     await dead.close()
@@ -129,7 +129,7 @@ describe('Passwort-Reset: Fehlerpfade und Abschaltung', () => {
       await createUser(admin, USER)
       const r = await api(srv.url, '203.0.113.40').request('/api/auth/request-password-reset', { body: { email: USER.email } })
       expect(r.status).toBe(200)
-      await wait(() => (srv.logs().includes('mail: Passwort-Reset nicht gesendet') ? true : undefined), 15_000)
+      await wait(() => (srv.logs().includes('mail: password reset not sent') ? true : undefined), 15_000)
       expect((await fetch(`${srv.url}/readyz`)).status).toBe(200)
       expect(srv.logs()).not.toContain(USER.email)
     } finally {
@@ -137,7 +137,7 @@ describe('Passwort-Reset: Fehlerpfade und Abschaltung', () => {
     }
   })
 
-  it('ohne SMTP_URL: mail: false, Reset ist abgeschaltet, nichts aendert sich', async () => {
+  it('without SMTP_URL: mail: false, reset is switched off, nothing changes', async () => {
     const srv = await startServer(inst, { env: { SMTP_URL: undefined, MAIL_FROM: undefined } })
     try {
       const cfg = await api(srv.url).request('/api/public-config')

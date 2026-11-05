@@ -1,6 +1,6 @@
-// Umstiegstest PGlite -> Postgres (P0-11, Abnahme 14): Dump der eingebetteten Datenbank, Import in Postgres,
-// App startet mit DATABASE_URL und gleichem MASTER_KEY: Login, Upstreams, Tool-Filter, entschlüsselbares Secret,
-// laufende Sequenzen, unveränderte Migrationstabelle. Läuft im Postgres-Lauf (`pnpm test:pg`, Docker nötig).
+// Switch test PGlite -> Postgres (P0-11, acceptance 14): dump of the embedded database, import into Postgres,
+// app starts with DATABASE_URL and the same MASTER_KEY: login, upstreams, tool filter, decryptable secret,
+// running sequences, unchanged migrations table. Runs in the Postgres run (`pnpm test:pg`, Docker required).
 import { execFileSync, spawnSync } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
@@ -41,7 +41,7 @@ describe.skipIf(backend !== 'postgres')('PGlite -> Postgres switch', () => {
   })
 
   it('dump -> import -> app starts on DATABASE_URL with login, upstream, filter, decryptable secret', async () => {
-    // 1. Quelle: PGlite (kein DATABASE_URL), befüllt über die echte API
+    // 1. Source: PGlite (no DATABASE_URL), filled via the real API
     src = { dataDir: await mkdtemp(join(tmpdir(), 'mcpw-src-')), cleanup: async () => {} }
     const s1 = await startServer(src, { env: { MASTER_KEY: KEY, DATABASE_URL: undefined } })
     const admin = await signUpFirstAdmin(s1)
@@ -54,16 +54,16 @@ describe.skipIf(backend !== 'postgres')('PGlite -> Postgres switch', () => {
     await new Promise(r => setTimeout(r, 5500)) // Stats flushen
     expect(await s1.stop()).toBe(0)
 
-    // 2. Dump mit dem mitgelieferten Werkzeug
+    // 2. Dump with the bundled tool
     execFileSync('node', ['scripts/build-supervisor.mjs'], { stdio: 'ignore' })
     const dump = spawnSync('node', ['dist/tools/pglite-dump.mjs', src.dataDir], { encoding: 'utf8', maxBuffer: 256 * 1024 * 1024 })
     expect(dump.status, dump.stderr).toBe(0)
     const sqlFile = join(dir.path, 'dump.sql')
     await writeFile(sqlFile, dump.stdout)
     expect(dump.stdout).toContain('upstream_secret')
-    expect(dump.stdout).not.toContain('sekret-upstream-token') // Secrets liegen nur verschlüsselt im Dump
+    expect(dump.stdout).not.toContain('secret-upstream-token') // secrets are only in the dump encrypted
 
-    // 3. Import in leere Postgres-Datenbank
+    // 3. Import into an empty Postgres database
     dbName = `mcpwarden_sw_${randomBytes(4).toString('hex')}`
     const root = new pg.Client({ connectionString: ADMIN_URL })
     await root.connect()
@@ -74,7 +74,7 @@ describe.skipIf(backend !== 'postgres')('PGlite -> Postgres switch', () => {
     expect(imp.status, imp.stderr).toBe(0)
     const before = await new pg.Client({ connectionString: dbUrl }).connect().then(async (c) => { const r = await c.query('select count(*)::int n from drizzle.__drizzle_migrations'); await c.end(); return r.rows[0].n as number })
 
-    // 4. App auf Postgres, gleicher MASTER_KEY, neue DATA_DIR
+    // 4. App on Postgres, same MASTER_KEY, new DATA_DIR
     const target: TestInstance = { dataDir: await mkdtemp(join(tmpdir(), 'mcpw-dst-')), databaseUrl: dbUrl, cleanup: async () => {} }
     const s2 = await startServer(target, { env: { MASTER_KEY: KEY } })
     try {
@@ -84,8 +84,8 @@ describe.skipIf(backend !== 'postgres')('PGlite -> Postgres switch', () => {
       expect(list.items.map(x => x.slug)).toEqual(['fake'])
       expect(list.items[0]).toMatchObject({ hasSecret: true, setup: 'ready' })
       const tools = (await c.request(`/api/upstreams/${up.id}/tools`)).json as { items: Array<{ name: string, enabled: boolean }> }
-      expect(tools.items.find(t => t.name === 'add')?.enabled).toBe(false) // Tool-Filter überlebt
-      // Secret ist mit dem gleichen Master-Key entschlüsselbar: der Fake-Upstream verlangt den Bearer
+      expect(tools.items.find(t => t.name === 'add')?.enabled).toBe(false) // tool filter survives
+      // Secret can be decrypted with the same master key: the fake upstream requires the bearer
       expect(((await c.request(`/api/upstreams/${up.id}/test`, { method: 'POST', body: {} })).json as { ok: boolean }).ok).toBe(true)
       const pat = (await c.request('/api/me/pats', { body: { name: 'after' } })).json as PatCreated
       const mcp = new Client({ name: 't', version: '1' })
@@ -94,17 +94,17 @@ describe.skipIf(backend !== 'postgres')('PGlite -> Postgres switch', () => {
       expect((r.content as Array<{ text: string }>)[0]!.text).toBe('migriert')
       await mcp.close()
       await new Promise(r => setTimeout(r, 5500))
-      // Sequenzen laufen weiter: neue Stats-/Audit-Zeilen ohne Schlüsselkonflikt
+      // Sequences keep running: new stats/audit rows without a key conflict
       const pc = new pg.Client({ connectionString: dbUrl })
       await pc.connect()
       const stats = await pc.query('select count(*)::int n from call_stat')
       expect(stats.rows[0].n).toBeGreaterThan(0)
       const mig = await pc.query('select count(*)::int n from drizzle.__drizzle_migrations')
-      expect(mig.rows[0].n).toBe(before) // kein Migrationslauf
+      expect(mig.rows[0].n).toBe(before) // no migration run
       await pc.end()
-      // neue Registrierung per Einladung möglich
+      // new registration via invitation possible
       const inv = (await c.request('/api/admin/invites', { body: {} })).json as { link: string }
-      const res = await fetch(`${s2.url}/api/auth/sign-up/email`, { method: 'POST', headers: { 'content-type': 'application/json', origin: s2.url, 'x-invite-token': inv.link.split('/invite/')[1]! }, body: JSON.stringify({ name: 'N', email: 'n@example.com', password: 'passwort-1234567' }) })
+      const res = await fetch(`${s2.url}/api/auth/sign-up/email`, { method: 'POST', headers: { 'content-type': 'application/json', origin: s2.url, 'x-invite-token': inv.link.split('/invite/')[1]! }, body: JSON.stringify({ name: 'N', email: 'n@example.com', password: 'password-1234567' }) })
       expect(res.status).toBe(200)
     } finally {
       expect(await s2.stop()).toBe(0)

@@ -6,13 +6,13 @@ import { adminHandlers } from './handlers/admin'
 import { upstreamHandlers } from './handlers/upstreams'
 import { auditHandlers, dashboardHandlers, linkHandlers, statsHandlers } from './handlers/misc'
 
-/** Domaene -> Handler. admin-oauth gehoert zu den Admin-Handlern (/api/admin/oauth/*). */
+/** Domain -> handlers. admin-oauth belongs to the admin handlers (/api/admin/oauth/*). */
 const BY_DOMAIN: Record<Domain, unknown[]> = {
   'auth': authHandlers, 'oauth': oauthHandlers, 'me': meHandlers, 'admin-oauth': [], 'admin': adminHandlers,
   'upstreams': upstreamHandlers, 'audit': auditHandlers, 'dashboard': dashboardHandlers, 'stats': statsHandlers, 'links': linkHandlers,
 }
 
-/** `all` oder Liste wie `auth,oauth,me`. Einzige Stelle, die Domaenen auswaehlt. */
+/** `all` or a list like `auth,oauth,me`. The only place that selects domains. */
 export function activeDomains(spec: string | undefined): Domain[] {
   if (!spec) return []
   if (spec === 'all' || spec === 'true') return ALL_DOMAINS
@@ -20,7 +20,7 @@ export function activeDomains(spec: string | undefined): Domain[] {
 }
 export function handlersFor(spec: string | undefined) {
   const d = activeDomains(spec)
-  // admin-oauth und admin teilen eine Datei; "admin" schliesst /api/admin/oauth ein, "admin-oauth" allein liefert alle Admin-Routen.
+  // admin-oauth and admin share a file; "admin" includes /api/admin/oauth, "admin-oauth" alone delivers all admin routes.
   const set = new Set<unknown>()
   d.forEach(x => (x === 'admin-oauth' ? adminHandlers : BY_DOMAIN[x]).forEach(h => set.add(h)))
   return [...set] as never[]

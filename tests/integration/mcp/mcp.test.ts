@@ -1,4 +1,4 @@
-// Aufgaben 5, 6, 7, 8 gegen das gebaute Artefakt: PAT-Routen, /mcp-Gate, SDK-Client, Push und Abbruch.
+// Tasks 5, 6, 7, 8 against the built artifact: PAT routes, /mcp gate, SDK client, push and abort.
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import type { ConnectionList, PatCreated, PatList } from '#shared/api-types'
@@ -29,9 +29,9 @@ beforeAll(async () => {
   srv = await startServer(inst)
   mcpUrl = new URL(`${srv.url}/mcp`)
   admin = await signUpFirstAdmin(srv)
-  await createUser(admin, { name: 'B', email: 'b@example.com', password: 'passwort-b-12345' })
+  await createUser(admin, { name: 'B', email: 'b@example.com', password: 'password-b-12345' })
   userB = api(srv.url)
-  await userB.request('/api/auth/sign-in/email', { body: { email: 'b@example.com', password: 'passwort-b-12345' } })
+  await userB.request('/api/auth/sign-in/email', { body: { email: 'b@example.com', password: 'password-b-12345' } })
   patA = (await admin.request('/api/me/pats', { body: { name: 'A-token' } })).json
   patB = (await userB.request('/api/me/pats', { body: { name: 'B-token' } })).json
 })
@@ -99,9 +99,9 @@ describe('PAT routes (task 5)', () => {
       expect(r.json.data).toMatchObject({ code: 'invalid_name', field: 'name' })
     }
     const c = api(srv.url)
-    await c.request('/api/auth/sign-in/email', { body: { email: 'b@example.com', password: 'passwort-b-12345' } })
+    await c.request('/api/auth/sign-in/email', { body: { email: 'b@example.com', password: 'password-b-12345' } })
     const made: PatCreated[] = []
-    for (let n = 0; n < 19; n++) made.push((await c.request('/api/me/pats', { body: { name: `t${n}` } })).json) // 1 vorhanden + 19 = 20
+    for (let n = 0; n < 19; n++) made.push((await c.request('/api/me/pats', { body: { name: `t${n}` } })).json) // 1 existing + 19 = 20
     const over = await c.request('/api/me/pats', { body: { name: 'one-too-many' } })
     expect(over.status).toBe(409)
     expect(over.json.data.code).toBe('pat_limit_reached')

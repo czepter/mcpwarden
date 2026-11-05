@@ -1,4 +1,4 @@
-// requireUser/requireAdmin gegen echte Auth-Instanz (in-process, kein Testcode im Produktbundle).
+// requireUser/requireAdmin against a real auth instance (in-process, no test code in the product bundle).
 import { afterAll, beforeAll, expect, it } from 'vitest'
 import type { H3Event } from 'h3'
 import { eq } from 'drizzle-orm'
@@ -36,24 +36,24 @@ afterAll(async () => {
   await inst?.cleanup()
 })
 
-it('requireUser/requireAdmin: 401 ohne Session, 403 fuer user, ok fuer admin', async () => {
+it('requireUser/requireAdmin: 401 without session, 403 for user, ok for admin', async () => {
   await expect(session.requireUser(ev())).rejects.toMatchObject({ statusCode: 401 })
-  await auth.api.signUpEmail({ body: { name: 'A', email: 'a@example.com', password: 'passwort-12345' } })
-  const adminCookie = await login('a@example.com', 'passwort-12345')
+  await auth.api.signUpEmail({ body: { name: 'A', email: 'a@example.com', password: 'password-12345' } })
+  const adminCookie = await login('a@example.com', 'password-12345')
   const admin = await session.requireAdmin(ev(adminCookie))
   expect(admin.user.role).toBe('admin')
 
   const created = await auth.api.createUser({
-    body: { name: 'B', email: 'b@example.com', password: 'passwort-12345', role: 'user' },
+    body: { name: 'B', email: 'b@example.com', password: 'password-12345', role: 'user' },
     headers: new Headers({ cookie: adminCookie }),
   })
-  const userCookie = await login('b@example.com', 'passwort-12345')
+  const userCookie = await login('b@example.com', 'password-12345')
   expect((await session.requireUser(ev(userCookie))).user.id).toBe(created.user.id)
   await expect(session.requireAdmin(ev(userCookie))).rejects.toMatchObject({ statusCode: 403 })
 })
 
 it('requireUser honours banExpires: an active ban refuses, an expired one does not (review L-g)', async () => {
-  const cookie = await login('b@example.com', 'passwort-12345')
+  const cookie = await login('b@example.com', 'password-12345')
   const id = (await session.requireUser(ev(cookie))).user.id
   const db = await dbMod.getDb()
   await db.update(user).set({ banned: true, banExpires: new Date(Date.now() + 3_600_000) }).where(eq(user.id, id))

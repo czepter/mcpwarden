@@ -1,4 +1,4 @@
-// Aufgabe 4: consent-info (Datenform, Allowlist-Status, Signatur) und Consent-Verhalten des Plugins.
+// Task 4: consent-info (data shape, allowlist status, signature) and consent behavior of the plugin.
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { ConsentInfo } from '#shared/api-types'
 import { api, createInstance, signUpFirstAdmin, startServer, type ApiClient, type TestInstance, type TestServer } from '../harness'

@@ -1,5 +1,5 @@
-// Review H-A / M-A: Better-Auth-Endpunkte, die an mcpwarden-Pruefungen (letzter Admin, Selbstziel, Lifecycle, Audit, DCR-Policy)
-// vorbeifuehren, sind per HTTP nicht erreichbar, auch nicht fuer eine Admin-Sitzung.
+// Review H-A / M-A: Better Auth endpoints that bypass mcpwarden checks (last admin, self-target, lifecycle, audit, DCR policy)
+// are not reachable via HTTP, not even for an admin session.
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { AdminUserList, OAuthClientAdminList } from '#shared/api-types'
 import { ADMIN, api, createInstance, createUser, signUpFirstAdmin, startServer, type ApiClient, type TestInstance, type TestServer } from './harness'
@@ -9,7 +9,7 @@ let srv: TestServer
 let admin: ApiClient
 let userB: ApiClient
 let userBId: string
-const B_PW = 'passwort-b-12345'
+const B_PW = 'password-b-12345'
 
 beforeAll(async () => {
   inst = await createInstance()
@@ -27,13 +27,13 @@ afterAll(async () => {
 const ADMIN_ENDPOINTS: Array<[method: 'GET' | 'POST', path: string, body?: unknown]> = [
   ['POST', '/api/auth/admin/impersonate-user', { userId: '$B' }],
   ['POST', '/api/auth/admin/stop-impersonating', {}],
-  ['POST', '/api/auth/admin/set-user-password', { userId: '$B', newPassword: 'angreifer-passwort-1' }],
+  ['POST', '/api/auth/admin/set-user-password', { userId: '$B', newPassword: 'attacker-password-1' }],
   ['POST', '/api/auth/admin/set-role', { userId: '$B', role: 'admin' }],
   ['POST', '/api/auth/admin/update-user', { userId: '$B', data: { role: 'admin', name: 'x' } }],
   ['POST', '/api/auth/admin/remove-user', { userId: '$B' }],
   ['POST', '/api/auth/admin/ban-user', { userId: '$B' }],
   ['POST', '/api/auth/admin/unban-user', { userId: '$B' }],
-  ['POST', '/api/auth/admin/create-user', { name: 'E', email: 'evil@example.com', password: 'angreifer-passwort-1', role: 'admin' }],
+  ['POST', '/api/auth/admin/create-user', { name: 'E', email: 'evil@example.com', password: 'attacker-password-1', role: 'admin' }],
   ['GET', '/api/auth/admin/list-users?limit=10'],
   ['GET', '/api/auth/admin/get-user?id=$B'],
   ['POST', '/api/auth/admin/list-user-sessions', { userId: '$B' }],
@@ -42,7 +42,7 @@ const ADMIN_ENDPOINTS: Array<[method: 'GET' | 'POST', path: string, body?: unkno
   ['POST', '/api/auth/admin/has-permission', { permissions: { user: ['list'] } }],
   ['POST', '/api/auth/admin/oauth2/create-client', { redirect_uris: ['https://evil.example/cb'], client_name: 'Evil' }],
   ['POST', '/api/auth/admin/oauth2/update-client', { client_id: 'x', update: { disabled: false } }],
-  // Schreibweisen, die der Router ebenfalls auf den Admin-Endpunkt abbilden koennte
+  // Spellings that the router could also map to the admin endpoint
   ['POST', '/api/auth/admin/ban-user/', { userId: '$B' }],
   ['POST', '/api/auth/admin//ban-user', { userId: '$B' }],
   ['POST', '/api/auth/ADMIN/ban-user', { userId: '$B' }],
@@ -55,7 +55,7 @@ describe('all /api/auth/admin/* endpoints are refused over HTTP, even for an adm
       const b = body ? JSON.parse(JSON.stringify(body).replace('$B', userBId)) : undefined
       const r = await admin.request(p, { method, body: b })
       expect([404, 403], r.text).toContain(r.status)
-      // Ueber die Admin-Sitzung kommt keine Identitaet eines anderen Nutzers heraus
+      // No identity of another user comes out of the admin session
       expect(r.text).not.toContain('b@example.com')
     })
   }
@@ -67,7 +67,7 @@ describe('all /api/auth/admin/* endpoints are refused over HTTP, even for an adm
     expect(list.items.some(u => u.email === 'evil@example.com')).toBe(false)
     const fresh = api(srv.url)
     expect((await fresh.request('/api/auth/sign-in/email', { body: { email: 'b@example.com', password: B_PW } })).status).toBe(200)
-    expect((await api(srv.url).request('/api/auth/sign-in/email', { body: { email: 'b@example.com', password: 'angreifer-passwort-1' } })).status).toBe(401)
+    expect((await api(srv.url).request('/api/auth/sign-in/email', { body: { email: 'b@example.com', password: 'attacker-password-1' } })).status).toBe(401)
     expect((await userB.request('/api/auth/get-session')).json.user.id).toBe(userBId)
   })
 
@@ -117,7 +117,7 @@ describe('regression: normal self-service auth routes keep working', () => {
     const c = api(srv.url)
     expect((await c.request('/api/auth/sign-in/email', { body: { email: ADMIN.email, password: ADMIN.password } })).status).toBe(200)
     expect((await c.request('/api/auth/get-session')).status).toBe(200)
-    expect((await c.request('/api/auth/update-user', { body: { name: 'Admin Neu', role: 'user' } })).status).toBeLessThan(500)
+    expect((await c.request('/api/auth/update-user', { body: { name: 'Admin New', role: 'user' } })).status).toBeLessThan(500)
     expect((await c.request('/api/auth/get-session')).json.user.role).toBe('admin')
     expect((await c.request('/api/auth/list-sessions')).status).toBe(200)
   })

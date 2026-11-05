@@ -13,17 +13,17 @@ import { execFileSync, spawn } from 'node:child_process'
 import net from 'node:net'
 import { encodeFrame, MAX_CONTROL_FRAME } from '../../supervisor/protocol'
 
-// Host-Lauf ohne Root: Supervisor im Modus "ohne Nutzerwechsel" (Worker unter der eigenen UID).
-// UID-Wechsel, Isolation und Härtung testet container-supervisor.test.ts im Linux-Container.
+// Host run without root: supervisor in "no user switch" mode (worker under its own UID).
+// UID switch, isolation and hardening are tested by container-supervisor.test.ts in the Linux container.
 let sup: Awaited<ReturnType<typeof startSupervisor>>
 let client: SupervisorClient
 let dataDir: string
 const fake = resolve('tests/fixtures/fake-upstream/stdio.mjs')
 const markDir = mkdtempSync(join(tmpdir(), 'mcpw-mark-'))
-chmodSync(markDir, 0o777) // als root wechselt der Supervisor die UID, der Worker muss hier schreiben können
+chmodSync(markDir, 0o777) // as root the supervisor switches the UID, the worker must be able to write here
 const mark = join(markDir, 'mark.txt')
 writeFileSync(mark, '', { mode: 0o666 })
-chmodSync(mark, 0o666) // Workers verschiedener Nutzer-UIDs schreiben hinein (Lauf als root mit UID-Wechsel)
+chmodSync(mark, 0o666) // workers of different user UIDs write into it (run as root with UID switch)
 const marks = () => (existsSync(mark) ? readFileSync(mark, 'utf8').trim().split('\n') : [])
 
 beforeAll(async () => {
@@ -161,7 +161,7 @@ describe('stdio upstream through supervisor + worker', () => {
     const mine = uidDir.sort().pop()!
     rmSync(mine, { recursive: true, force: true })
     writeFileSync(mine, 'not a directory anymore')
-    // lstat sieht eine Datei; der Befehl muss mit purge_failed antworten statt den Supervisor zu beenden
+    // lstat sees a file; the command must answer with purge_failed instead of ending the supervisor
     await expect(client.stopWorker('u-purgefail', true)).rejects.toMatchObject({ code: 'purge_failed' })
     expect(await client.ping()).toBe(true)
   })
@@ -183,7 +183,7 @@ describe('stdio upstream through supervisor + worker', () => {
   it('idle: the pool sweep closes the idle child, then the worker idle timer ends the worker (review M-C)', async () => {
     const dir2 = mkdtempSync(join(tmpdir(), 'mcpw-data-'))
     chmodSync(dir2, 0o755)
-    // idleUnitMs 100 x idleMin 3 = Worker-Leerlauf nach 300 ms ohne Kindprozess
+    // idleUnitMs 100 x idleMin 3 = worker idle after 300 ms without a child process
     const sup2 = await startSupervisor({ dataDir: dir2, socketPath: join(dir2, 'sup.sock'), webUid: process.getuid!(), webGid: process.getgid!(), stdioMode: 'auto', webCmd: ['sleep', '600'], workerJs: resolve('dist/supervisor/worker.mjs'), idleUnitMs: 100, log: () => {} })
     const client2 = new SupervisorClient(join(dir2, 'sup.sock'))
     try {
@@ -202,7 +202,7 @@ describe('stdio upstream through supervisor + worker', () => {
       expect((await client2.capabilities()).workers).toBe(1)
       await expect.poll(async () => (await client2.capabilities()).workers, { timeout: 10_000, interval: 100 }).toBe(0)
       expect(h.gw.pool.count('u-idle')).toBe(0)
-      // der naechste Aufruf startet transparent einen neuen Worker
+      // the next call transparently starts a new worker
       expect(text(await h.gw.toolSource.callTool(ctx, 'fs__echo', { text: 'again' }, { signal: sig() }))).toBe('again')
       await h.gw.shutdown(300)
     } finally {
@@ -226,9 +226,9 @@ describe('stdio upstream through supervisor + worker', () => {
     sessions.closeAll()
   })
 
-  // Regression: `ulimit -u` zaehlt je UID alle Prozesse/Threads. Ohne UID-Wechsel teilt der Worker die UID mit der Web-App (CI-Runner:
-  // eigener Nutzer, viele Vitest-Threads); ein festes Limit (512/128) liess dann jedes fork() mit EAGAIN scheitern. Root ist von
-  // RLIMIT_NPROC ausgenommen, der Fehler zeigt sich nur als normaler Nutzer.
+  // Regression: `ulimit -u` counts all processes/threads per UID. Without a UID switch the worker shares the UID with the web app (CI runner:
+  // own user, many Vitest threads); a fixed limit (512/128) then made every fork() fail with EAGAIN. Root is exempt from
+  // RLIMIT_NPROC, the error only shows up as a normal user.
   it.skipIf(process.getuid!() === 0)('no per-UID process limit without a UID switch: workers and children start although the UID already runs > 600 threads', async () => {
     const hogJs = join(markDir, 'hog.mjs')
     writeFileSync(hogJs, "import { Worker, isMainThread } from 'node:worker_threads'\nif (isMainThread) { for (let i = 0; i < 650; i++) new Worker(new URL(import.meta.url)); setInterval(() => {}, 1000) } else setInterval(() => {}, 1000)\n")
@@ -260,7 +260,7 @@ describe('stdio upstream through supervisor + worker', () => {
     const dir3 = mkdtempSync(join(tmpdir(), 'mcpw-data-'))
     chmodSync(dir3, 0o755)
     const stub = join(dir3, 'stuck-worker.mjs')
-    writeFileSync(stub, 'setInterval(() => {}, 1000)\n') // ignoriert den Stopp-Befehl
+    writeFileSync(stub, 'setInterval(() => {}, 1000)\n') // ignores the stop command
     chmodSync(stub, 0o644)
     const sup3 = await startSupervisor({ dataDir: dir3, socketPath: join(dir3, 'sup.sock'), webUid: process.getuid!(), webGid: process.getgid!(), stdioMode: 'auto', webCmd: ['sleep', '600'], workerJs: stub, stopTimeoutMs: 300, log: () => {} })
     const client3 = new SupervisorClient(join(dir3, 'sup.sock'))
