@@ -53,7 +53,7 @@ const daysLeft = (iso: string | null) => (iso ? Math.max(0, Math.ceil((new Date(
 </script>
 
 <template>
-  <PageHeader title="Admin" :crumbs="[{ label: 'Admin' }]" />
+  <PageHeader title="Admin" />
   <AdminTabs />
   <section class="rounded-lg border bg-card p-5" aria-labelledby="h-mode">
     <h2 id="h-mode" class="mb-1 text-base font-semibold">Dynamic Client Registration</h2>

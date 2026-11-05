@@ -100,7 +100,7 @@ const sub = (u: UpstreamSummary) => (u.url ?? u.command ?? '').replace(/^https?:
           <td class="tnum px-3">{{ u.toolsEnabled }} / {{ u.toolsTotal }}</td>
           <td v-if="hasP95" class="tnum px-3">{{ formatMs(u.p95Ms) }}</td>
           <td v-if="hasRecent" class="px-3"><SparkBars v-if="u.recent" :items="u.recent" /></td>
-          <td class="px-3 text-[13px] text-secondary-foreground">{{ message(u) }}</td>
+          <td class="min-w-56 px-3 text-[13px] text-secondary-foreground">{{ message(u) }}</td>
           <td class="px-5 text-right whitespace-nowrap">
             <Button variant="ghost" size="icon" :disabled="testing === u.id" :aria-label="`Verbindung testen: ${u.name}`" @click="runTest(u)"><RefreshCw class="size-[18px]" :class="testing === u.id && 'animate-spin'" aria-hidden="true" /></Button>
             <Button as-child variant="ghost" size="icon" :aria-label="`Bearbeiten: ${u.name}`"><NuxtLink :to="`/upstreams/${u.id}/edit`"><Pencil class="size-[18px]" aria-hidden="true" /></NuxtLink></Button>

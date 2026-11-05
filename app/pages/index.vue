@@ -35,6 +35,7 @@ const k = computed(() => data.value?.kpis)
 
 <template>
   <PageHeader title="Dashboard"><AutoRefresh v-model="rate" /></PageHeader>
+  <p v-if="useRoute().query.hinweis === 'admin'" role="status" class="rounded-sm border border-[#fcd34d] bg-[#fef3c7] px-3 py-2 text-[13px] text-[#78350f]">Dieser Bereich ist nur für Admins.</p>
   <LoadingRows v-if="status === 'pending' && !data" />
   <ErrorState v-else-if="error" :error="error" @retry="refresh()" />
   <template v-else-if="data">

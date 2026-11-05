@@ -104,6 +104,6 @@
   body { @apply bg-background text-foreground font-sans; font-size: 14px; line-height: 1.4; }
   :focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
   code, kbd, .mono { font-family: var(--font-mono); overflow-wrap: anywhere; }
-  .tnum { font-variant-numeric: tabular-nums; }
+  .tnum { font-variant-numeric: tabular-nums; white-space: nowrap; }
   @media (prefers-reduced-motion: reduce) { *, ::before, ::after { transition: none !important; animation: none !important; } }
 }

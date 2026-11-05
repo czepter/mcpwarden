@@ -1,11 +1,14 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { ApiError } from '~/api/http'
 import { Button } from '~/components/ui/button'
 
 const props = defineProps<{ error: unknown }>()
 defineEmits<{ retry: [] }>()
-const err = computed(() => (props.error instanceof ApiError ? props.error : null))
+// useAsyncData verpackt Fehler (NuxtError): daher nur statusCode, message und code auslesen.
+const err = computed(() => {
+  const e = props.error as { statusCode?: number, message?: string, code?: string, data?: { code?: string } } | null
+  return e && typeof e === 'object' ? { statusCode: e.statusCode ?? 0, message: e.message ?? '', code: e.data?.code ?? e.code ?? 'unknown' } : null
+})
 const forbidden = computed(() => err.value?.statusCode === 403)
 const notFound = computed(() => err.value?.statusCode === 404)
 </script>

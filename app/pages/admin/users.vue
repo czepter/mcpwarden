@@ -69,7 +69,7 @@ const saveLimits = lim.submit(async (v) => {
 </script>
 
 <template>
-  <PageHeader title="Admin" :crumbs="[{ label: 'Admin' }]">
+  <PageHeader title="Admin">
     <Button @click="invDialog = true">+ Einladung erzeugen</Button>
   </PageHeader>
   <AdminTabs />

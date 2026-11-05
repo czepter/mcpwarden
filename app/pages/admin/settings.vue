@@ -35,7 +35,7 @@ const removeEntry = (e: string) => put({ 'ssrf.allow': (data.value?.['ssrf.allow
 </script>
 
 <template>
-  <PageHeader title="Admin" :crumbs="[{ label: 'Admin' }]" />
+  <PageHeader title="Admin" />
   <AdminTabs />
   <LoadingRows v-if="status === 'pending' && !data" />
   <ErrorState v-else-if="error" :error="error" @retry="refresh()" />

@@ -15,7 +15,7 @@ defineProps<{ title: string, description?: string, crumbs?: Array<{ label: strin
             <BreadcrumbItem><BreadcrumbLink as-child><NuxtLink to="/">Home</NuxtLink></BreadcrumbLink></BreadcrumbItem>
             <template v-for="c in crumbs ?? []" :key="c.label">
               <BreadcrumbSeparator />
-              <BreadcrumbItem><BreadcrumbLink v-if="c.to" as-child><NuxtLink :to="c.to">{{ c.label }}</NuxtLink></BreadcrumbLink></BreadcrumbItem>
+              <BreadcrumbItem><BreadcrumbLink v-if="c.to" as-child><NuxtLink :to="c.to">{{ c.label }}</NuxtLink></BreadcrumbLink><span v-else>{{ c.label }}</span></BreadcrumbItem>
             </template>
             <BreadcrumbSeparator />
             <BreadcrumbItem><BreadcrumbPage>{{ title }}</BreadcrumbPage></BreadcrumbItem>
