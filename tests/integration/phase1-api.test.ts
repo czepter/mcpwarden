@@ -8,7 +8,7 @@ import type {
 } from '#shared/api-types'
 import { INVITE_INVALID, INVITE_REQUIRED } from '#shared/api-types'
 import { startFakeHttp, type FakeHttp } from '../fixtures/fake-upstream/http'
-import { ADMIN, api, createInstance, heldPost, signUpFirstAdmin, startServer, type ApiClient, type TestInstance, type TestServer } from './harness'
+import { ADMIN, api, createInstance, heldPost, promoteToAdmin, signUpFirstAdmin, startServer, type ApiClient, type TestInstance, type TestServer } from './harness'
 
 let inst: TestInstance
 let srv: TestServer
@@ -299,10 +299,8 @@ describe('admin: users, limits, settings (P0-4)', () => {
     expect(self.json.data.code).toBe('self_target')
     expect((await admin.request(`/api/admin/users/${adminId}`, { method: 'DELETE' })).json.data.code).toBe('self_target')
     // zweiter Admin: Löschen des ersten durch den zweiten ist erlaubt, solange einer übrig bleibt; der letzte nie
-    const created = await admin.request('/api/auth/admin/create-user', { body: { name: 'Admin2', email: 'admin2@example.com', password: PW, role: 'admin' } })
-    expect(created.status, created.text).toBe(200)
-    const a2 = api(srv.url)
-    await a2.request('/api/auth/sign-in/email', { body: { email: 'admin2@example.com', password: PW } })
+    const a2 = await invitedUser('admin2@example.com')
+    srv = await promoteToAdmin(inst, srv, 'admin2@example.com') // keine Route macht Nutzer zu Admins: Rolle direkt in der Datenbank
     const ban1 = await a2.request(`/api/admin/users/${adminId}/ban`, { body: {} })
     expect(ban1.status).toBe(204) // admin2 bleibt aktiv
     // jetzt ist admin2 der letzte aktive Admin; ein Dritter kann ihn nicht sperren: simuliert über Selbstziel + Zählung
@@ -312,10 +310,9 @@ describe('admin: users, limits, settings (P0-4)', () => {
     await admin.request('/api/auth/sign-in/email', { body: { email: ADMIN.email, password: ADMIN.password } }) // Sperren hat die Sitzungen widerrufen
   })
   it('two admins banning each other at the same time: exactly one succeeds, an active admin remains (last_admin)', async () => {
-    const created = await admin.request('/api/auth/admin/create-user', { body: { name: 'Admin3', email: 'admin3@example.com', password: PW, role: 'admin' } })
-    const id3 = created.json.user.id as string
-    const a3 = api(srv.url)
-    await a3.request('/api/auth/sign-in/email', { body: { email: 'admin3@example.com', password: PW } })
+    const a3 = await invitedUser('admin3@example.com')
+    const id3 = (await a3.request('/api/auth/get-session')).json.user.id as string
+    srv = await promoteToAdmin(inst, srv, 'admin3@example.com')
     // Ausgangslage: nur admin und admin3 aktiv (admin2 sperren)
     const list = (await admin.request('/api/admin/users')).json as AdminUserList
     const a2 = list.items.find(u => u.email === 'admin2@example.com')!

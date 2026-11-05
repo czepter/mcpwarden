@@ -44,19 +44,19 @@ describe('Auth (A1, A7, A9)', () => {
     expect(bad.json).toHaveProperty('message')
   })
 
-  it('Nutzer B ueber Admin-API: Rolle user, kein Zugriff auf Admin-Endpunkte', async () => {
+  it('Nutzer B ueber Einladung: Rolle user, kein Zugriff auf Admin-Endpunkte', async () => {
     const b = await createUser(admin, { name: 'B', email: 'b@example.com', password: 'b-passwort-1234' })
     expect(b.role).toBe('user')
     const cb = api(srv.url, '203.0.113.8')
     expect((await cb.request('/api/auth/sign-in/email', { body: { email: 'b@example.com', password: 'b-passwort-1234' } })).status).toBe(200)
     expect((await cb.request('/api/auth/get-session')).json.user.role).toBe('user')
-    expect((await cb.request('/api/auth/admin/list-users?limit=10')).status).toBe(403)
-    expect((await admin.request('/api/auth/admin/list-users?limit=10')).json.users).toHaveLength(2)
+    expect((await cb.request('/api/admin/users')).status).toBe(403)
+    expect((await admin.request('/api/admin/users')).json.items).toHaveLength(2)
   })
 
   it('Admin-Sperre: gesperrter Nutzer kann sich nicht anmelden', async () => {
     const u = await createUser(admin, { name: 'C', email: 'c@example.com', password: 'c-passwort-1234' })
-    expect((await admin.request('/api/auth/admin/ban-user', { body: { userId: u.id } })).status).toBe(200)
+    expect((await admin.request(`/api/admin/users/${u.id}/ban`, { body: {} })).status).toBe(204)
     const r = await api(srv.url, '203.0.113.9').request('/api/auth/sign-in/email', { body: { email: 'c@example.com', password: 'c-passwort-1234' } })
     expect(r.status).toBe(403)
   })

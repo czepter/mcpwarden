@@ -222,10 +222,10 @@ describe('instant revocation (scenario 7): the still valid JWT is refused on the
     const pat = (await userB.request('/api/me/pats', { body: { name: 'ban-test' } })).json.token as string
     expect((await toolsList(f.access)).status).toBe(200)
     expect((await toolsList(pat)).status).toBe(200)
-    expect((await admin.request('/api/auth/admin/ban-user', { body: { userId: userBId, banReason: 'test' } })).status).toBe(200)
+    expect((await admin.request(`/api/admin/users/${userBId}/ban`, { body: { reason: 'test' } })).status).toBe(204)
     expect((await toolsList(f.access)).status).toBe(401)
     expect((await toolsList(pat)).status).toBe(401)
-    expect((await admin.request('/api/auth/admin/unban-user', { body: { userId: userBId } })).status).toBe(200)
+    expect((await admin.request(`/api/admin/users/${userBId}/unban`, { body: {} })).status).toBe(204)
     expect((await toolsList(f.access)).status).toBe(200)
     expect((await toolsList(pat)).status).toBe(200)
     // Sitzung des Nutzers B nach dem Sperren neu aufbauen

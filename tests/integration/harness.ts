@@ -174,7 +174,7 @@ export function api(baseUrl: string, ip = '203.0.113.7') {
     try { json = JSON.parse(text) } catch { json = undefined }
     return { status: res.status, json, text }
   }
-  return { request, jar }
+  return { request, jar, baseUrl }
 }
 export type ApiClient = ReturnType<typeof api>
 
@@ -218,12 +218,46 @@ export async function signUpFirstAdmin(srv: TestServer, user = ADMIN): Promise<A
   return c
 }
 
-/** Legt einen weiteren Nutzer ueber die Admin-API an (nie ueber die oeffentliche Registrierung). */
+let signUpIp = 0
+
+/**
+ * Legt einen weiteren Nutzer an, wie es ein Admin im Betrieb tut: Einladung ueber die mcpwarden-Admin-Route, Registrierung mit dem Token.
+ * Die Better-Auth-Admin-Endpunkte sind per HTTP gesperrt (server/auth/http-guard.ts) und dienen nie als Testhilfe.
+ */
 export async function createUser(
   admin: ApiClient,
-  user: { name: string, email: string, password: string, role?: 'user' | 'admin' },
+  user: { name: string, email: string, password: string },
 ) {
-  const r = await admin.request('/api/auth/admin/create-user', { body: { role: 'user', ...user } })
-  if (r.status !== 200) throw new Error(`createUser fehlgeschlagen: ${r.status} ${r.text}`)
-  return r.json.user as { id: string, email: string, role: string }
+  const inv = await admin.request('/api/admin/invites', { body: { email: user.email } })
+  if (inv.status !== 201) throw new Error(`createUser: Einladung fehlgeschlagen: ${inv.status} ${inv.text}`)
+  const token = (inv.json.link as string).split('/invite/')[1]!
+  const ip = `198.18.${Math.floor(signUpIp / 250) % 250}.${(signUpIp++ % 250) + 1}`
+  const res = await fetch(`${admin.baseUrl}/api/auth/sign-up/email`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'origin': admin.baseUrl, 'x-forwarded-for': ip, 'x-invite-token': token },
+    body: JSON.stringify(user),
+  })
+  const text = await res.text()
+  if (res.status !== 200) throw new Error(`createUser fehlgeschlagen: ${res.status} ${text}`)
+  const u = JSON.parse(text).user as { id: string, email: string }
+  return { id: u.id, email: u.email, role: 'user' }
+}
+
+/**
+ * Macht einen Nutzer zum Admin. Im Produkt gibt es dafuer keine Route (nur der erste Nutzer wird Admin), Tests mit mehreren Admins
+ * schreiben die Rolle deshalb direkt in die Datenbank. PGlite erlaubt nur einen Prozess: der Server wird dafuer gestoppt und
+ * auf demselben Port mit denselben Optionen neu gestartet (Sitzungen liegen in der Datenbank und bleiben gueltig).
+ */
+export async function promoteToAdmin(inst: TestInstance, srv: TestServer, email: string, opts: StartOptions = {}): Promise<TestServer> {
+  await srv.stop()
+  const sql = 'update "user" set role = \'admin\' where email = $1'
+  if (inst.databaseUrl) {
+    const c = new pg.Client({ connectionString: inst.databaseUrl })
+    await c.connect()
+    try { await c.query(sql, [email]) } finally { await c.end() }
+  } else {
+    const db = await PGlite.create(join(inst.dataDir, 'pgdata'))
+    try { await db.query(sql, [email]) } finally { await db.close() }
+  }
+  return startServer(inst, { ...opts, port: srv.port })
 }

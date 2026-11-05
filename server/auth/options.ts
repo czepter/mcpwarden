@@ -6,6 +6,7 @@ import { trySendMail, type Mailer } from '../mail'
 import { RESET_TTL_MINUTES, resetPasswordMail } from '../mail/templates'
 import { canRegister, type InviteCheck } from './registration'
 import { dcrAfter, dcrBefore, type DcrDeps } from './dcr-hook'
+import { isBlockedOverHttp } from './http-guard'
 import { consentGuard, mcpPlugins, mcpResource, oauthRequestRewrite } from './mcp-plugin'
 
 export interface AuthDeps {
@@ -22,6 +23,11 @@ export interface AuthDeps {
     claim: (token: string, email: string) => Promise<string | null>
     bind: (inviteId: string, userId: string) => Promise<void>
   }
+  /**
+   * Sicherheitsnetz: Sperren/Loeschen ueber irgendeinen Better-Auth-Pfad (auch Direktaufrufe) stoesst dieselbe Aufraeumkette an
+   * wie die mcpwarden-Admin-Routen (Pool, Worker, PATs, OAuth-Grants). Muss idempotent sein.
+   */
+  lifecycle?: { onUserDisabled: (userId: string) => Promise<void> }
   /** Optional. Nur ein aktivierter Mailer schaltet Passwort-Reset per Mail ein. */
   mailer?: Mailer
 }
@@ -69,6 +75,8 @@ export function buildAuthOptions(d: AuthDeps) {
     },
     hooks: {
       before: createAuthMiddleware(async (ctx) => {
+        // Nur HTTP-Anfragen tragen einen Request; serverseitige auth.api.*-Aufrufe (Admin-Routen von mcpwarden) nicht
+        if (ctx.request && isBlockedOverHttp(ctx.path)) throw new APIError('NOT_FOUND', { message: 'Not found' })
         consentGuard(ctx.path, ctx.body)
         if (d.dcr) await dcrBefore(ctx.path, ctx.body, d.dcr)
         const oauth = oauthRequestRewrite(ctx.path, ctx.query, ctx.body, resource)
@@ -107,6 +115,16 @@ export function buildAuthOptions(d: AuthDeps) {
             const id = claimed.get(user.email.toLowerCase())
             claimed.delete(user.email.toLowerCase())
             if (id) await d.invites?.bind(id, user.id)
+          },
+        },
+        update: {
+          after: async (user) => {
+            if (user?.banned === true) await d.lifecycle?.onUserDisabled(user.id as string)
+          },
+        },
+        delete: {
+          before: async (user) => {
+            await d.lifecycle?.onUserDisabled(user.id as string)
           },
         },
       },
