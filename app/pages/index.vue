@@ -81,8 +81,10 @@ const k = computed(() => data.value?.kpis)
       <p v-if="!data.attention.length" class="px-5 pb-4 text-[13px]" data-testid="nothing-to-do">Nichts zu tun. Alle Upstreams laufen.</p>
       <ul v-else class="divide-y">
         <li v-for="a in data.attention" :key="a.upstreamId" class="flex flex-wrap items-center justify-between gap-3 px-5 py-3">
-          <div class="flex items-center gap-3"><StatusBadge :status="a.status" /><NuxtLink :to="`/upstreams/${a.upstreamId}`" class="font-semibold hover:underline">{{ a.name }}</NuxtLink><span class="text-[13px] text-secondary-foreground">{{ a.statusReason }}</span></div>
-          <Button v-if="a.status === 'auth_expired'" as-child variant="outline"><NuxtLink :to="`/upstreams/${a.upstreamId}?tab=auth`">Neu verbinden</NuxtLink></Button>
+          <div class="flex items-center gap-3"><StatusBadge :status="a.status" :setup="a.setup" /><NuxtLink :to="`/upstreams/${a.upstreamId}`" class="font-semibold hover:underline">{{ a.name }}</NuxtLink><span class="text-[13px] text-secondary-foreground">{{ a.statusReason }}</span></div>
+          <Button v-if="a.setup === 'awaiting_auth'" as-child variant="outline"><NuxtLink :to="`/upstreams/${a.upstreamId}?tab=auth`">Zugangsdaten eintragen</NuxtLink></Button>
+          <Button v-else-if="a.setup === 'awaiting_approval'" as-child variant="outline"><NuxtLink :to="`/upstreams/${a.upstreamId}/approve`">Entwurf prüfen</NuxtLink></Button>
+          <Button v-else-if="a.status === 'auth_expired'" as-child variant="outline"><NuxtLink :to="`/upstreams/${a.upstreamId}?tab=auth`">Neu verbinden</NuxtLink></Button>
         </li>
       </ul>
     </DataSection>

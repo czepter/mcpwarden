@@ -19,9 +19,12 @@ export const dashboardHandlers = [
   route('get', '/api/dashboard', () => {
     const s = getState()
     const empty = scenario() === 'empty'
-    const nothing = scenario() === 'default' && s.upstreams.every(u => !['degraded', 'open', 'auth_expired'].includes(u.status))
-    const attention = empty ? [] : s.upstreams.filter(u => ['degraded', 'open', 'auth_expired'].includes(u.status))
-      .map(u => ({ upstreamId: u.id, slug: u.slug, name: u.name, status: u.status, statusReason: u.statusReason, nextRetryAt: u.nextRetryAt }))
+    const nothing = scenario() === 'default' && s.upstreams.every(u => !['degraded', 'open', 'auth_expired'].includes(u.status) && u.setup === 'ready')
+    const attention = empty ? [] : s.upstreams.filter(u => ['degraded', 'open', 'auth_expired'].includes(u.status) || u.setup !== 'ready')
+      .map(u => ({
+        upstreamId: u.id, slug: u.slug, name: u.name, status: u.status, setup: u.setup, nextRetryAt: u.nextRetryAt,
+        statusReason: u.statusReason ?? (u.setup === 'awaiting_auth' ? 'Zugangsdaten fehlen noch' : u.setup === 'awaiting_approval' ? 'Wartet auf Freigabe' : null),
+      }))
     const clients: DashboardClient[] = empty ? [] : s.connections.map((c, i) => ({
       kind: 'oauth' as const, id: c.clientId, name: c.name, allowlisted: c.allowlisted, active: c.active, lastActiveAt: c.lastUsedAt, callsPerMin: c.active ? 4 + i : 0, contextTokensEstimate: 1800 + i * 420,
     }))

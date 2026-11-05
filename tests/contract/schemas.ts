@@ -81,7 +81,7 @@ export const schemas = {
   }) satisfies z.ZodType<ConsentInfo>,
   dashboard: z.strictObject({
     clients: z.array(z.strictObject({ kind: z.enum(['oauth', 'pat']), id: str(), name: str(), allowlisted: z.boolean().nullable(), active: bool(), lastActiveAt: nstr, callsPerMin: num(), contextTokensEstimate: num().nullable() })),
-    attention: z.array(z.strictObject({ upstreamId: str(), slug: str(), name: str(), status: health, statusReason: nstr, nextRetryAt: nstr })),
+    attention: z.array(z.strictObject({ upstreamId: str(), slug: str(), name: str(), status: health, setup: z.enum(['ready', 'awaiting_auth', 'awaiting_approval']), statusReason: nstr, nextRetryAt: nstr })),
     attentionCount: num(),
   }) satisfies z.ZodType<Dashboard>,
   audit: z.strictObject({

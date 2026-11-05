@@ -296,7 +296,7 @@ export class GatewayRepo implements GatewayStore {
     return byKey
   }
   async attention(userId: string) {
-    return await this.db.select().from(upstream).where(and(eq(upstream.userId, userId), inArray(upstream.status, ['degraded', 'open', 'auth_expired']))).orderBy(asc(upstream.name))
+    return await this.db.select().from(upstream).where(and(eq(upstream.userId, userId), or(inArray(upstream.status, ['degraded', 'open', 'auth_expired']), inArray(upstream.setup, ['awaiting_auth', 'awaiting_approval'])))).orderBy(asc(upstream.name))
   }
   async patNames(userId: string) {
     return await this.db.select({ id: personalAccessToken.id, name: personalAccessToken.name, lastUsedAt: personalAccessToken.lastUsedAt }).from(personalAccessToken).where(and(eq(personalAccessToken.userId, userId), isNull(personalAccessToken.revokedAt)))

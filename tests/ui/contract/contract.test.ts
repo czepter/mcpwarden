@@ -31,6 +31,16 @@ describe('Mock-Regeln wie das Backend', () => {
     expect((await post('/api/upstreams', { name: 'x', slug: 'Bad_Slug', type: 'http', url: 'https://a.example' })).status).toBe(422)
     expect((await post('/api/upstreams', { name: 'x', slug: 'github', type: 'http', url: 'https://a.example' })).status).toBe(409)
   })
+  it('Dashboard: Upstreams mit wartendem Setup stehen in der Aufmerksamkeitsliste, mit setup und Grund (P0-16)', async () => {
+    const created = await (await post('/api/upstreams', { name: 'Wartet', slug: 'wartet', type: 'http', url: 'https://w.example/mcp', authType: 'bearer' })).json() as { id: string }
+    const dash = schemas.dashboard.parse(await (await call('/api/dashboard')).json())
+    const a = dash.attention.find(x => x.upstreamId === created.id)
+    expect(a).toMatchObject({ setup: 'awaiting_auth', slug: 'wartet' })
+    expect(a?.statusReason).toBeTruthy()
+    expect(dash.attentionCount).toBe(dash.attention.length)
+    // gesunde, bereite Upstreams des Seeds bleiben draussen
+    expect(dash.attention.every(x => x.setup !== 'ready' || ['degraded', 'open', 'auth_expired'].includes(x.status))).toBe(true)
+  })
   it('PAT-Klartext nur in der POST-Antwort, nie im Zustand oder in der Liste', async () => {
     const created = await (await post('/api/me/pats', { name: 'canary' })).json() as { token: string }
     expect(created.token).toMatch(/^mcpw_pat_/)

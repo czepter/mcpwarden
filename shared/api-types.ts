@@ -258,7 +258,7 @@ export type AuditItem = {
 export type AuditList = { items: AuditItem[], nextCursor: string | null }
 
 export type DashboardClient = { kind: 'oauth' | 'pat', id: string, name: string, allowlisted: boolean | null, active: boolean, lastActiveAt: string | null, callsPerMin: number, contextTokensEstimate: number | null }
-export type DashboardAttention = { upstreamId: string, slug: string, name: string, status: UpstreamStatus, statusReason: string | null, nextRetryAt: string | null }
+export type DashboardAttention = { upstreamId: string, slug: string, name: string, status: UpstreamStatus, setup: UpstreamSetup, statusReason: string | null, nextRetryAt: string | null }
 export type Dashboard = {
   clients: DashboardClient[], attention: DashboardAttention[], attentionCount: number
   kpis?: { clientsActive: number, clientsTotal: number, callsPerMin: number, successRate: number, overheadP95Ms: number } // Phase 2

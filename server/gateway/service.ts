@@ -357,7 +357,9 @@ export async function dashboard(rt: Runtime, who: Who, deps: { connections: Arra
   const att = await rt.repo.attention(who.id)
   const attention = att.map((r) => {
     const s = toSummary(rt, r)
-    return { upstreamId: r.id, slug: r.slug, name: r.name, status: s.status, statusReason: s.statusReason, nextRetryAt: s.nextRetryAt }
+    // Wartende Upstreams haben noch keinen Health-Grund: der Wartegrund ist der Hinweis (P0-16: jeweils mit statusReason)
+    const waiting = s.setup === 'awaiting_auth' ? 'Zugangsdaten fehlen noch' : s.setup === 'awaiting_approval' ? 'Wartet auf Freigabe' : null
+    return { upstreamId: r.id, slug: r.slug, name: r.name, status: s.status, setup: s.setup, statusReason: s.statusReason ?? waiting, nextRetryAt: s.nextRetryAt }
   })
   return { clients, attention, attentionCount: attention.length }
 }

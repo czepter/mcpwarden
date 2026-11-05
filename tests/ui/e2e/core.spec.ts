@@ -211,6 +211,25 @@ test('Admin: Einladung erzeugen (Einmal-Link), Nutzer sperren, Allowlist-Eintrag
   await expect(page.getByRole('alert').filter({ hasText: 'Metadaten' })).toBeVisible()
 })
 
+test('Dashboard: wartende Upstreams stehen in der Aufmerksamkeitsliste mit passender Aktion', async ({ page }) => {
+  await login(page)
+  await page.evaluate(() => {
+    const k = 'mcpwarden.mock.state'
+    const s = JSON.parse(sessionStorage.getItem(k)!)
+    s.upstreams[0].setup = 'awaiting_auth'; s.upstreams[0].status = 'unknown'; s.upstreams[0].name = 'Wartet-Auth'
+    s.upstreams[1].setup = 'awaiting_approval'; s.upstreams[1].status = 'unknown'; s.upstreams[1].name = 'Wartet-Freigabe'
+    sessionStorage.setItem(k, JSON.stringify(s))
+  })
+  await page.reload()
+  const auth = page.getByRole('listitem').filter({ hasText: 'Wartet-Auth' })
+  await expect(auth.getByTestId('status-badge')).toHaveText('Wartet auf Anmeldedaten')
+  await expect(auth.getByRole('link', { name: 'Zugangsdaten eintragen' })).toHaveAttribute('href', /tab=auth/)
+  const appr = page.getByRole('listitem').filter({ hasText: 'Wartet-Freigabe' })
+  await expect(appr.getByTestId('status-badge')).toHaveText('Wartet auf Freigabe')
+  await expect(appr.getByRole('link', { name: 'Entwurf prüfen' })).toHaveAttribute('href', /\/approve$/)
+  await expect(page.getByTestId('nothing-to-do')).toHaveCount(0)
+})
+
 test('Dashboard leer, Fehler, 403 und nichts-zu-tun', async ({ page }) => {
   await login(page, { scenario: 'empty' })
   await expect(page.getByTestId('mcp-url')).toBeVisible()

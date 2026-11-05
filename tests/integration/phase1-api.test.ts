@@ -164,11 +164,16 @@ describe('upstreams, secrets, tools and the proxy path', () => {
   it('awaiting_auth: test answers awaiting_auth; secret is stored encrypted, never returned, setup becomes ready', async () => {
     const t = (await userA.request(`/api/upstreams/${up.id}/test`, { method: 'POST', body: {} })).json as UpstreamTestResult
     expect(t).toMatchObject({ ok: false, errorCode: 'awaiting_auth' })
+    // P0-16: ein Upstream, der auf Zugangsdaten wartet, steht in der Aufmerksamkeitsliste (mit setup und Grund)
+    const waiting = ((await userA.request('/api/dashboard')).json as Dashboard).attention.find(a => a.upstreamId === up.id)
+    expect(waiting).toMatchObject({ setup: 'awaiting_auth', slug: 'fake' })
+    expect(waiting?.statusReason).toBeTruthy()
     const wrongKind = await userA.request(`/api/upstreams/${up.id}/secret`, { method: 'PUT', body: { kind: 'header', value: 'x' } })
     expect(wrongKind.status).toBe(422)
     const SECRET = 'sk-very-secret-value-123'
     const put = await userA.request(`/api/upstreams/${up.id}/secret`, { method: 'PUT', body: { kind: 'bearer', value: SECRET } })
     expect(put.json).toEqual({ hasSecret: true, setup: 'ready' })
+    expect(((await userA.request('/api/dashboard')).json as Dashboard).attention.some(a => a.upstreamId === up.id)).toBe(false)
     const detail = await userA.request(`/api/upstreams/${up.id}`)
     expect((detail.json as UpstreamDetail)).toMatchObject({ hasSecret: true, setup: 'ready', secretNames: ['bearer'] })
     for (const body of [put.text, detail.text, (await userA.request('/api/upstreams')).text]) expect(body).not.toContain(SECRET)
