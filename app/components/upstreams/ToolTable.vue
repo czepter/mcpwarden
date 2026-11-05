@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { UpstreamTool } from '#shared/api-types'
+import type { UpstreamToolItem } from '#shared/api-types'
 import { ref } from 'vue'
 import { toast } from 'vue-sonner'
 import { Switch } from '~/components/ui/switch'
@@ -7,18 +7,18 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '~
 import { toolKind } from '~/lib/labels'
 
 // Optimistischer Schalter mit Rueckname bei Fehler; Beschreibungen sind untrusted und nur Text (gekuerzt).
-const props = defineProps<{ tools: UpstreamTool[], save: (name: string, enabled: boolean) => Promise<unknown> }>()
+const props = defineProps<{ tools: UpstreamToolItem[], save: (name: string, enabled: boolean) => Promise<unknown> }>()
 const emit = defineEmits<{ changed: [] }>()
 const local = ref<Record<string, boolean>>({})
-const on = (t: UpstreamTool) => local.value[t.name] ?? t.enabled
-async function toggle(t: UpstreamTool, v: boolean) {
+const on = (t: UpstreamToolItem) => local.value[t.name] ?? t.enabled
+async function toggle(t: UpstreamToolItem, v: boolean) {
   local.value = { ...local.value, [t.name]: v }
   try { await props.save(t.name, v); emit('changed') } catch {
     local.value = { ...local.value, [t.name]: !v }
     toast.error(`Tool „${t.name}“ konnte nicht gespeichert werden.`)
   }
 }
-const trim = (s: string) => (s.length > 160 ? `${s.slice(0, 160)}…` : s)
+const trim = (s: string | null) => ((s ?? '').length > 160 ? `${(s ?? '').slice(0, 160)}…` : (s ?? ''))
 </script>
 
 <template>

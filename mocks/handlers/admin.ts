@@ -1,4 +1,4 @@
-import type { AdminLimitsInput, AdminSettings, AdminSettingsResult, AllowlistInput, DcrMode } from '#shared/api-types'
+import type { AdminUserLimitsInput, AdminSettings, AdminSettingsResult, AllowlistInput, DcrMode } from '#shared/api-types'
 import { DEFAULT_LIMITS } from '../seed'
 import { getState, save, scenario, volatileInviteTokens } from '../state'
 import { body, err, json, nid, noContent, route } from '../util'
@@ -26,7 +26,7 @@ export const adminHandlers = [
   }, A),
   route('put', '/api/admin/users/:id/limits', async ({ params, request }) => {
     const u = getState().users.find(x => x.id === params.id); if (!u) return err(404, 'not_found', 'Nicht gefunden.')
-    const b = await body<AdminLimitsInput>(request)
+    const b = await body<AdminUserLimitsInput>(request)
     for (const [k, v] of Object.entries(b)) {
       if (k === 'stdioAllowed') { u.stdioAllowed = Boolean(v); continue }
       if (!Number.isInteger(v) || (v as number) < 1) return err(422, 'validation', 'Ganze Zahl ab 1 erforderlich.', k)

@@ -1,0 +1,14 @@
+.git
+node_modules
+.nuxt
+.output
+.data
+data
+dist
+.env
+.env.*
+!.env.example
+*.log
+docs
+tests
+.github

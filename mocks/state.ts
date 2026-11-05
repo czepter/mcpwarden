@@ -1,4 +1,4 @@
-import type { AdminSettings, AdminUser, AllowlistEntry, AuditItem, ConnectionSummary, DcrMode, InviteSummary, OAuthClientAdmin, PatSummary, UpstreamDetail, UpstreamTool } from '#shared/api-types'
+import type { AdminSettings, AdminUser, AllowlistEntry, AuditItem, ConnectionSummary, DcrMode, InviteSummary, OAuthClientAdmin, PatSummary, UpstreamDetail, UpstreamToolItem } from '#shared/api-types'
 import * as seed from './seed'
 
 export type MockScenario = 'default' | 'empty' | 'error' | 'slow' | 'forbidden' | 'huge'
@@ -7,7 +7,7 @@ export type MockRole = 'admin' | 'user'
 export type MockState = {
   signedIn: boolean
   upstreams: UpstreamDetail[]
-  tools: Record<string, UpstreamTool[]>
+  tools: Record<string, UpstreamToolItem[]>
   users: AdminUser[]
   invites: InviteSummary[]
   pats: PatSummary[]

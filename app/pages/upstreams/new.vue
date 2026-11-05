@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { TestResult as TestResultT, UpstreamDetail } from '#shared/api-types'
+import type { UpstreamTestResult as TestResultT, UpstreamDetail } from '#shared/api-types'
 import { meApi } from '~/api'
 import ErrorState from '~/components/common/ErrorState.vue'
 import LoadingRows from '~/components/common/LoadingRows.vue'

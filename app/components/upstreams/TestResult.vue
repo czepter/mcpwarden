@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import type { TestResult } from '#shared/api-types'
+import type { UpstreamTestResult } from '#shared/api-types'
 import { formatMs } from '~/lib/format'
 
-defineProps<{ result: TestResult }>()
+defineProps<{ result: UpstreamTestResult }>()
 const HINT: Record<string, string> = {
   ssrf_blocked: 'Ziel nicht erlaubt (SSRF-Schutz). Ein Admin kann Ausnahmen unter Admin › Instanz eintragen.',
   unauthorized: 'Die Anmeldedaten wurden abgelehnt. Ersetze das Secret im Tab „Auth“.',

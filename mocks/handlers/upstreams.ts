@@ -1,4 +1,4 @@
-import type { SecretInput, TestResult, UpstreamDetail, UpstreamInput, UpstreamList, UpstreamPatch, UpstreamSummary, UpstreamTool } from '#shared/api-types'
+import type { SecretInput, UpstreamTestResult, UpstreamDetail, UpstreamInput, UpstreamList, UpstreamPatch, UpstreamSummary, UpstreamToolItem } from '#shared/api-types'
 import { seedTools } from '../seed'
 import { getState, role, save, scenario } from '../state'
 import { body, err, json, nid, noContent, route } from '../util'
@@ -44,7 +44,7 @@ export const upstreamHandlers = [
       id: nid('up'), slug: b.slug, name: b.name.trim(), description: b.description ?? null, type: b.type,
       url: b.url ?? null, command: b.command ?? null, enabled: true, status: 'unknown', statusReason: null, statusChangedAt: null, lastError: null, lastOkAt: null,
       setup: auth !== 'none' ? 'awaiting_auth' : 'ready', toolsEnabled: 0, toolsTotal: 0, nextRetryAt: null, rateLimitHits5m: 0, hasSecret: false,
-      transport: b.transport ?? (b.type === 'http' ? 'auto' : null), authType: auth, authHeaderName: b.authHeaderName ?? null,
+      transport: b.transport ?? 'auto', authType: auth, authHeaderName: b.authHeaderName ?? null,
       ratePerMin: b.ratePerMin ?? 60, maxConcurrent: b.maxConcurrent ?? 5,
       timeouts: { connectMs: 10_000, listMs: 15_000, callMs: 60_000, ...b.timeouts },
       args: b.args ?? [], cwd: b.cwd ?? null, env: {}, secretNames: Object.keys(b.env ?? {}), version: 1, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
@@ -77,7 +77,7 @@ export const upstreamHandlers = [
   route('post', '/api/upstreams/:id/test', ({ params }) => {
     const u = find(params.id); if (!u) return NF()
     const s = getState()
-    let res: TestResult
+    let res: UpstreamTestResult
     if (u.setup === 'awaiting_auth') res = { ok: false, errorCode: 'awaiting_auth', message: 'Es fehlen noch Anmeldedaten.' }
     else if (u.slug === 'sentry') res = { ok: false, errorCode: 'unauthorized', message: 'Der Upstream hat die Anmeldung abgelehnt (401).', latencyMs: 180 }
     else if (u.slug.startsWith('postgres') || u.slug.startsWith('down')) res = { ok: false, errorCode: 'connect_failed', message: 'Verbindung nicht möglich.', latencyMs: 10_000 }
@@ -85,7 +85,7 @@ export const upstreamHandlers = [
     else {
       if (!s.tools[u.id]?.length) { s.tools[u.id] = seedTools({ ...u, toolsTotal: 5, toolsEnabled: 5 }); recount(u) }
       u.status = 'healthy'; u.statusReason = null; u.lastOkAt = new Date().toISOString(); save()
-      res = { ok: true, tools: s.tools[u.id]!.map(t => ({ name: t.name, description: t.description })), latencyMs: 142 }
+      res = { ok: true, tools: s.tools[u.id]!.map(t => ({ name: t.name, description: t.description ?? undefined })), latencyMs: 142 }
     }
     return json(res)
   }),
@@ -95,7 +95,7 @@ export const upstreamHandlers = [
   }),
   route('put', '/api/upstreams/:id/tools/:name', async ({ params, request }) => {
     const u = find(params.id); if (!u) return NF()
-    const t = getState().tools[u.id]?.find((x: UpstreamTool) => x.name === params.name)
+    const t = getState().tools[u.id]?.find((x: UpstreamToolItem) => x.name === params.name)
     if (!t) return err(404, 'not_found', 'Tool nicht gefunden.')
     const b = await body<{ enabled: boolean }>(request)
     if (u.slug === 'github' && t.name === 'create_issue') return err(500, 'internal', 'Speichern fehlgeschlagen (Mock-Fehler).')

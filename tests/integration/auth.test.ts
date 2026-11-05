@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { AuthSessionUser } from '../../shared/api-types'
-import { REGISTRATION_CLOSED } from '../../shared/api-types'
+import { INVITE_REQUIRED } from '../../shared/api-types'
 import { ADMIN, api, createInstance, createUser, signUpFirstAdmin, startServer, type ApiClient, type TestInstance, type TestServer } from './harness'
 
 let inst: TestInstance
@@ -30,10 +30,10 @@ describe('Auth (A1, A7, A9)', () => {
     expect(user).toMatchObject({ email: ADMIN.email, role: 'admin', banned: false })
   })
 
-  it('weitere oeffentliche Registrierung: 403 REGISTRATION_CLOSED', async () => {
+  it('weitere Registrierung ohne Einladung: 403 INVITE_REQUIRED', async () => {
     const r = await api(srv.url).request('/api/auth/sign-up/email', { body: { name: 'Z', email: 'z@example.com', password: 'z-passwort-1234' } })
     expect(r.status).toBe(403)
-    expect(r.json).toMatchObject({ code: REGISTRATION_CLOSED })
+    expect(r.json).toMatchObject({ code: INVITE_REQUIRED })
   })
 
   it('Login: richtig 200, falsches Passwort 401', async () => {

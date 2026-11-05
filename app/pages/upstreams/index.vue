@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { TestResult as TestResultT, UpstreamSummary } from '#shared/api-types'
+import type { UpstreamTestResult as TestResultT, UpstreamSummary } from '#shared/api-types'
 import { toast } from 'vue-sonner'
 import { upstreamApi } from '~/api'
 import AutoRefresh from '~/components/common/AutoRefresh.vue'

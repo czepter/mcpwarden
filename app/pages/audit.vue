@@ -28,7 +28,7 @@ async function load(append = false) {
 }
 onMounted(() => load())
 watch(cat, () => load())
-const CATS: Array<[AuditCategory | 'all', string]> = [['all', 'Alle'], ['admin', 'Verwaltung'], ['status', 'Status'], ['denied', 'Abgelehnt']]
+const CATS: Array<[AuditCategory | 'all', string]> = [['all', 'Alle'], ['management', 'Verwaltung'], ['status', 'Status'], ['denied', 'Abgelehnt']]
 </script>
 
 <template>

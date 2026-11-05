@@ -47,3 +47,42 @@ claude mcp add --transport http mcpwarden <BASE_URL>/mcp --header "Authorization
 ```
 
 Hinweis: Die manuelle Abnahme mit echten Clients (Claude Code, Cursor) ist noch nicht protokolliert; der automatisierte OAuth-PKCE-Flow-Test ist `tests/integration/oauth/flow.test.ts`.
+
+## Docker und Betrieb
+
+Zwei Ziele im `Dockerfile`: `full` (Standard) enthält den Supervisor, `uv`/`uvx` und die stdio-Worker, `slim` nur die Web-App (stdio fest aus, keine Capabilities nötig).
+
+```sh
+pnpm env:init                       # .env mit Zufallswerten, Modus 600
+docker compose up -d --build        # Beispiel-Compose, Ziel full
+curl http://localhost:3000/healthz  # {"ok":true}
+```
+
+- `compose.yaml` (Ziel `full`): `cap_drop: [ALL]`, `cap_add: [SETUID, SETGID, CHOWN]`, `no-new-privileges`, `init: true`, `stop_grace_period: 40s`. Der Supervisor läuft als root nur zum Wechseln der UID; die Web-App läuft als UID 10001 ohne Capabilities. Ohne die drei Capabilities startet der Container, stdio ist dann für Nicht-Admins gesperrt (`no_capabilities`).
+- `BASE_URL` muss https sein (außer `localhost`). Reverse-Proxy: für `/mcp` keine Pufferung, lange Timeouts (offene `subscriptions/listen`-Streams), `X-Forwarded-*` setzen.
+- `/healthz` = Prozess lebt, `/readyz` = Migration durch und nicht im Herunterfahren (503 `draining`); Upstream-Ausfälle beeinflussen beide nie. `/readyz` meldet auch `stats_dropped` (verworfene Messdatensätze seit Start).
+- Herunterfahren (SIGTERM): `/readyz` wird sofort 503, laufende Aufrufe laufen bis zu 30 s aus, Pool und Worker werden geschlossen, Messdaten geflusht, dann Exit 0.
+- Altvolumes: Gehört `/data/pgdata` nicht UID 10001, bricht der Supervisor ab und nennt den einmaligen `chown`-Befehl. `/data` selbst muss root gehören und darf nicht gruppen-/welt-beschreibbar sein.
+- Schlüsselmaterial (`MASTER_KEY`, `BETTER_AUTH_SECRET`, `DATABASE_URL`) reicht der Supervisor nur an die Web-App weiter und entfernt es aus dem eigenen Prozess-Env; `/proc/<pid>/environ` des Supervisors zeigt weiter das Start-Env (nur root lesbar). Vollständig lösbar nur mit Docker-Secrets/Dateien (noch nicht umgesetzt).
+
+### Backup und Umstieg PGlite nach Postgres
+
+- Backup (PGlite): App stoppen, Volume `data` sichern. Postgres: übliches `pg_dump`.
+- Umstieg (App gestoppt, **gleicher** `MASTER_KEY`, sonst sind gespeicherte Secrets verloren):
+
+```sh
+docker run --rm -v mcpwarden_data:/data mcpwarden:full node /opt/tools/pglite-dump.mjs /data > dump.sql
+psql -v ON_ERROR_STOP=1 -f dump.sql postgres://user:pass@host/leere_datenbank
+# App mit DATABASE_URL=… und unverändertem MASTER_KEY starten (kein Migrationslauf nötig)
+```
+
+Der Ablauf ist durch `tests/integration/migrate-pglite-to-pg.test.ts` belegt (Login, Upstreams, Tool-Filter, entschlüsselbares Secret, laufende Sequenzen, unveränderte Migrationstabelle, Registrierung per Einladung).
+
+### Sicherheitshinweise
+
+- Einladungslinks (`/invite/<token>`, 7 Tage, einmalig) sind Geheimnisse: nur an die gemeinte Person weitergeben. Die optionale E-Mail-Bindung wird nicht verifiziert (kein Mailversand).
+- stdio-Upstreams: Nutzer-Worker laufen unter eigener UID, teilen aber Netz und Kernel mit der Instanz; eine kompromittierte Web-App erreicht den Worker. Freigabe pro Nutzer durch den Admin, Standard aus.
+- Master-Key-Rotation gibt es nicht (`upstream_secret.key_version` ist dafür reserviert).
+- `ssrf.allow` (Admin-Einstellung): CIDR oder genauer Hostname. Cloud-Metadatenadressen (169.254.169.254, 100.100.100.200, fd00:ec2::254) öffnet nur ein ausdrücklich eingetragener Einzeladresse-Eintrag, nie ein Hostname oder Bereich; Link-Local nur per CIDR/IP.
+
+Tests: `pnpm test:container` (Supervisor im Container, Docker nötig), `pnpm test:compose` (Compose-Smoke gegen ein frisch gebautes Image).

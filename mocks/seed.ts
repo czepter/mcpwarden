@@ -1,5 +1,5 @@
 import type {
-  AdminUser, AllowlistEntry, AuditItem, ConnectionSummary, InviteSummary, OAuthClientAdmin, PatSummary, UpstreamDetail, UpstreamTool, UserLimits,
+  AdminUser, AllowlistEntry, AuditItem, ConnectionSummary, InviteSummary, OAuthClientAdmin, PatSummary, UpstreamDetail, UpstreamToolItem, UserLimits,
 } from '#shared/api-types'
 
 const ago = (min: number) => new Date(Date.now() - min * 60_000).toISOString()
@@ -25,14 +25,14 @@ export function seedUpstreams(): UpstreamDetail[] {
     enabled: status !== 'disabled', status, statusReason: reason, statusChangedAt: ago(30 + i), lastError: status === 'healthy' ? null : reason, lastOkAt: ago(5),
     setup: 'ready', toolsEnabled: en, toolsTotal: total, nextRetryAt: status === 'open' ? ahead(1) : null, rateLimitHits5m: status === 'degraded' ? 3 : 0,
     hasSecret: type === 'http' && slug !== 'local', p95Ms: p95, recent: bars(b),
-    transport: type === 'http' ? 'auto' : null, authType: slug === 'github' ? 'bearer' : slug === 'sentry' ? 'header' : 'none', authHeaderName: slug === 'sentry' ? 'X-Api-Key' : null,
+    transport: 'auto', authType: slug === 'github' ? 'bearer' : slug === 'sentry' ? 'header' : 'none', authHeaderName: slug === 'sentry' ? 'X-Api-Key' : null,
     ratePerMin: 60, maxConcurrent: 5, timeouts: { connectMs: 10_000, listMs: 15_000, callMs: 60_000 },
     args: [], cwd: null, env: {}, secretNames: [], version: 1, createdAt: ago(60 * 24 * 10), updatedAt: ago(60),
   }))
 }
 
 const BASE = ['list_issues', 'get_issue', 'create_issue', 'update_issue', 'delete_issue', 'search_code', 'get_file', 'list_projects']
-export function seedTools(u: UpstreamDetail): UpstreamTool[] {
+export function seedTools(u: UpstreamDetail): UpstreamToolItem[] {
   return Array.from({ length: u.toolsTotal }, (_, i) => {
     const base = BASE[i % BASE.length]!
     const name = i < BASE.length ? base : `${base}_${Math.floor(i / BASE.length) + 1}`
@@ -90,16 +90,16 @@ export const seedOAuthClients = (): OAuthClientAdmin[] => [
 
 export const seedAudit = (): AuditItem[] => {
   const mk = (i: number, min: number, action: string, cat: AuditItem['category'], result: AuditItem['result'], target: string | null, client: string | null, scope: 'user' | 'instance' = 'user'): AuditItem => ({
-    id: String(1000 - i), ts: ago(min), actorKind: scope === 'instance' ? 'admin' : 'user', actorIsSelf: true, clientId: null, clientName: client, action, category: cat, scope, targetType: target ? 'upstream' : null, targetId: null, targetLabel: target, result,
+    id: 1000 - i, ts: ago(min), actorKind: scope === 'instance' ? 'admin' : 'user', actorIsSelf: true, clientId: null, clientName: client, action, category: cat, scope, targetType: target ? 'upstream' : 'settings', targetId: null, targetLabel: target, result,
   })
   return [
-    mk(0, 3, 'upstream.created', 'admin', 'ok', 'sentry', 'Claude Code'),
+    mk(0, 3, 'upstream.created', 'management', 'success', 'sentry', 'Claude Code'),
     mk(1, 12, 'upstream.status_changed', 'status', 'status_change', 'postgres-prod', null),
-    mk(2, 25, 'upstream.secret_replaced', 'admin', 'ok', 'github', null),
-    mk(3, 60, 'upstream.stdio_requested', 'admin', 'pending', 'duckdb', 'Claude Code'),
+    mk(2, 25, 'upstream.secret_replaced', 'management', 'success', 'github', null),
+    mk(3, 60, 'upstream.stdio_requested', 'management', 'pending', 'duckdb', 'Claude Code'),
     mk(4, 120, 'tool.denied', 'denied', 'denied', 'github', 'Cursor'),
-    mk(5, 200, 'user.banned', 'admin', 'ok', 'jonas', null, 'instance'),
-    mk(6, 400, 'settings.changed', 'admin', 'ok', null, null, 'instance'),
-    mk(7, 900, 'upstream.deleted', 'admin', 'ok', 'altes-tool', null),
+    mk(5, 200, 'user.banned', 'management', 'success', 'jonas', null, 'instance'),
+    mk(6, 400, 'settings.changed', 'management', 'success', null, null, 'instance'),
+    mk(7, 900, 'upstream.deleted', 'management', 'success', 'altes-tool', null),
   ]
 }

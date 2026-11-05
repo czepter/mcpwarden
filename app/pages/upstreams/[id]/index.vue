@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { TestResult as TestResultT } from '#shared/api-types'
+import type { UpstreamTestResult as TestResultT } from '#shared/api-types'
 import { toast } from 'vue-sonner'
 import { upstreamApi } from '~/api'
 import ConfirmDialog from '~/components/common/ConfirmDialog.vue'

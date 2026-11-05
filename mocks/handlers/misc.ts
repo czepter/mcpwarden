@@ -7,7 +7,7 @@ export const auditHandlers = [
     const q = new URL(request.url).searchParams
     const cat = q.get('category'); const cursor = Number(q.get('cursor') ?? 0); const limit = Number(q.get('limit') ?? 50)
     let all: AuditItem[] = scenario() === 'empty' ? [] : getState().audit
-    if (scenario() === 'huge') all = Array.from({ length: 120 }, (_, i) => ({ ...getState().audit[i % 8]!, id: String(5000 - i) }))
+    if (scenario() === 'huge') all = Array.from({ length: 120 }, (_, i) => ({ ...getState().audit[i % 8]!, id: 5000 - i }))
     if (role() !== 'admin') all = all.filter(a => a.scope === 'user')
     if (cat) all = all.filter(a => a.category === cat)
     const items = all.slice(cursor, cursor + limit)

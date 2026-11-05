@@ -7,7 +7,7 @@ import SecretField from '~/components/common/SecretField.vue'
 import StatusBadge from '~/components/common/StatusBadge.vue'
 import SparkBars from '~/components/common/SparkBars.vue'
 import ToolTable from '~/components/upstreams/ToolTable.vue'
-import type { UpstreamTool } from '#shared/api-types'
+import type { UpstreamToolItem } from '#shared/api-types'
 
 vi.mock('vue-sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }))
 
@@ -56,7 +56,7 @@ describe('SparkBars', () => {
 })
 
 describe('ToolTable', () => {
-  const tool = (name: string): UpstreamTool => ({ name, title: null, description: '<b>x</b>', enabled: false, gone: false, firstSeenAt: '', lastSeenAt: '', annotations: { readOnlyHint: true } })
+  const tool = (name: string): UpstreamToolItem => ({ name, title: null, description: '<b>x</b>', enabled: false, gone: false, firstSeenAt: '', lastSeenAt: '', annotations: { readOnlyHint: true } })
   it('Schalter wirkt optimistisch und wird bei Fehler zurueckgenommen', async () => {
     const save = vi.fn().mockRejectedValue(new Error('x'))
     const w = mount(ToolTable, { props: { tools: [tool('list_issues')], save }, attachTo: document.body })

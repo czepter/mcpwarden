@@ -1,8 +1,8 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { z } from 'zod'
 import type {
-  AdminSettings, AdminUserList, AllowlistList, AuditList, AuthSession, ConnectionList, ConsentInfo, DcrPolicy, InviteCheck, InviteList,
-  LinkInfo, OAuthClientAdminList, PatList, StatsSummary, StdioDraft, TestResult, ToolList, UpstreamDetail, UpstreamList,
+  AdminSettings, AdminUserList, AllowlistList, AuditList, AuthSession, ConnectionList, ConsentInfo, DcrPolicy, InviteInfo, InviteList,
+  LinkInfo, OAuthClientAdminList, PatList, StatsSummary, StdioDraft, UpstreamTestResult, UpstreamToolList, UpstreamDetail, UpstreamList,
 } from '#shared/api-types'
 import { makeServer } from '../../../mocks/node'
 import { getState, resetState } from '../../../mocks/state'
@@ -28,18 +28,18 @@ const schemas = {
   session: z.union([z.null(), z.strictObject({ user: z.strictObject({ id: str(), name: str(), email: str(), role: z.enum(['admin', 'user']), banned: bool() }), session: z.strictObject({ id: str(), expiresAt: str() }) })]) satisfies z.ZodType<AuthSession>,
   upstreamList: z.strictObject({ items: z.array(z.strictObject(summaryShape)) }) satisfies z.ZodType<UpstreamList>,
   upstreamDetail: z.strictObject({
-    ...summaryShape, transport: z.enum(['auto', 'streamable', 'sse']).nullable(), authType: z.enum(['none', 'bearer', 'header', 'oauth']), authHeaderName: nstr,
+    ...summaryShape, transport: z.enum(['auto', 'streamable', 'sse']), authType: z.enum(['none', 'bearer', 'header', 'oauth']), authHeaderName: nstr,
     ratePerMin: num(), maxConcurrent: num(), timeouts, args: z.array(str()), cwd: nstr, env: z.record(str(), str()), secretNames: z.array(str()),
     version: num(), createdAt: str(), updatedAt: str(),
   }) satisfies z.ZodType<UpstreamDetail>,
   tools: z.strictObject({
     items: z.array(z.strictObject({ name: str(), title: nstr, description: str(), enabled: bool(), gone: bool(), firstSeenAt: str(), lastSeenAt: str(), annotations: annotations.optional() })),
     fetchedAt: str(), stale: bool(),
-  }) satisfies z.ZodType<ToolList>,
+  }) satisfies z.ZodType<UpstreamToolList>,
   testResult: z.union([
     z.strictObject({ ok: z.literal(true), tools: z.array(z.strictObject({ name: str(), description: str() })), latencyMs: num() }),
     z.strictObject({ ok: z.literal(false), errorCode: str(), message: str(), latencyMs: num().optional() }),
-  ]) as unknown as z.ZodType<TestResult>,
+  ]) as unknown as z.ZodType<UpstreamTestResult>,
   draft: z.strictObject({ id: str(), slug: str(), command: str(), args: z.array(str()), cwd: str(), envNames: z.array(str()), createdVia: z.strictObject({ client: str(), at: str() }) }) satisfies z.ZodType<StdioDraft>,
   pats: z.strictObject({ items: z.array(z.strictObject({ id: str(), name: str(), prefix: str(), createdAt: str(), lastUsedAt: nstr, revokedAt: nstr })), limit: z.strictObject({ max: num(), active: num() }) }) satisfies z.ZodType<PatList>,
   connections: z.strictObject({ items: z.array(z.strictObject({ clientId: str(), name: str(), scopes: z.array(str()), redirectHost: str(), allowlisted: bool(), grantedAt: str(), lastUsedAt: nstr, active: bool() })) }) satisfies z.ZodType<ConnectionList>,
@@ -53,7 +53,7 @@ const schemas = {
   inviteCheck: z.union([
     z.strictObject({ valid: z.literal(true), email: nstr, expiresAt: str() }),
     z.strictObject({ valid: z.literal(false), reason: z.enum(['expired', 'used', 'revoked', 'unknown']) }),
-  ]) satisfies z.ZodType<InviteCheck>,
+  ]) satisfies z.ZodType<InviteInfo>,
   settings: z.strictObject({ 'stdio.enabled': bool(), 'ssrf.allow': z.array(str()) }) satisfies z.ZodType<AdminSettings>,
   policy: z.strictObject({ mode: z.enum(['off', 'allowlist', 'open']) }) satisfies z.ZodType<DcrPolicy>,
   allowlist: z.strictObject({ items: z.array(z.strictObject({ id: str(), label: str(), namePattern: str(), redirectPatterns: z.array(str()), builtin: bool(), createdAt: str() })) }) satisfies z.ZodType<AllowlistList>,
@@ -76,8 +76,8 @@ const schemas = {
   ]) satisfies z.ZodType<LinkInfo>,
   audit: z.strictObject({
     items: z.array(z.strictObject({
-      id: str(), ts: str(), actorKind: z.enum(['user', 'admin', 'system']), actorIsSelf: bool(), clientId: nstr, clientName: nstr, action: str(), category: z.enum(['admin', 'auth', 'status', 'denied']),
-      scope: z.enum(['user', 'instance']), targetType: nstr, targetId: nstr, targetLabel: nstr, result: z.enum(['ok', 'pending', 'denied', 'status_change']),
+      id: num(), ts: str(), actorKind: z.enum(['user', 'admin', 'system']), actorIsSelf: bool(), clientId: nstr, clientName: nstr, action: str(), category: z.enum(['management', 'auth', 'status', 'denied']),
+      scope: z.enum(['user', 'instance']), targetType: str(), targetId: nstr, targetLabel: nstr, result: z.enum(['success', 'pending', 'denied', 'status_change']),
     })),
     nextCursor: nstr,
   }) satisfies z.ZodType<AuditList>,

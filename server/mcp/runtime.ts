@@ -16,9 +16,25 @@ import { resourceMetadataUrl, resourceUrl } from './discovery'
 import { createDummyUpstream } from './dummy-upstream'
 import { createGateway } from './handler'
 import { bindStreamControl, notifyToolsChanged } from './notify'
+import { getRuntime } from '../gateway/runtime'
+import type { ToolSource } from './upstream-port'
 
 type Gateway = ReturnType<typeof createGateway>
 const g = globalThis as typeof globalThis & { __mcpwGateway?: Promise<Gateway> }
+
+/**
+ * Die echte Tool-Quelle ist das Gateway (Upstreams des Nutzers). Der Dummy-Upstream aus 0b bleibt nur für die
+ * Integrationstests erreichbar (`MCPW_DUMMY_UPSTREAM=1`), nie im Produktionsbetrieb.
+ */
+async function toolSource(): Promise<ToolSource> {
+  const real = (await getRuntime()).gw.toolSource
+  if (process.env.MCPW_DUMMY_UPSTREAM !== '1') return real
+  const dummy = createDummyUpstream({ notify: notifyToolsChanged })
+  return {
+    listTools: async ctx => [...await dummy.listTools(ctx), ...await real.listTools(ctx)],
+    callTool: (ctx, name, args, o) => (name.startsWith('dummy__') ? dummy.callTool(ctx, name, args, o) : real.callTool(ctx, name, args, o)),
+  }
+}
 
 async function create(): Promise<Gateway> {
   const cfg = getConfig()
@@ -53,7 +69,7 @@ async function create(): Promise<Gateway> {
   })
   const gateway: Gateway = createGateway({
     authenticate,
-    tools: createDummyUpstream({ notify: notifyToolsChanged }),
+    tools: await toolSource(),
     cfg: { baseUrl: cfg.baseUrl, allowedOrigins: cfg.allowedOrigins },
   })
   bindStreamControl(gateway)

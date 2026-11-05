@@ -12,3 +12,4 @@ data/
 .output-mock/
 test-results/
 playwright-report/
+dist/

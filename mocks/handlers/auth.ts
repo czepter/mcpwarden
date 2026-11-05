@@ -1,9 +1,14 @@
-import type { AuthSession, InviteCheck } from '#shared/api-types'
+import type { AuthSession, InviteInfo } from '#shared/api-types'
+import { INVITE_INVALID, INVITE_REQUIRED } from '#shared/api-types'
 import { SEED_INVITE_TOKENS } from '../seed'
 import { currentUser, getState, role, save, volatileInviteTokens } from '../state'
 import { body, err, json, nid, noContent, route } from '../util'
+import { HttpResponse } from 'msw'
 
-export function inviteState(token: string): InviteCheck {
+/** Better-Auth-Fehlerform (`AuthErrorBody`) wie vom echten Backend unter `/api/auth/*`. */
+const authErr = (status: number, code: string, message: string) => HttpResponse.json({ code, message }, { status })
+
+export function inviteState(token: string): InviteInfo {
   const s = getState()
   const key = SEED_INVITE_TOKENS[token] ?? volatileInviteTokens.get(token)
   if (!key) return { valid: false, reason: 'unknown' }
@@ -32,12 +37,12 @@ export const authHandlers = [
   }, { public: true }),
   route('post', '/api/auth/sign-up/email', async ({ request }) => {
     const token = request.headers.get('x-invite-token')
-    if (!token) return err(403, 'invite_required', 'Registrierung nur mit Einladung.')
+    if (!token) return authErr(403, INVITE_REQUIRED, 'Registrierung nur mit Einladung.')
     const st = inviteState(token)
-    if (!st.valid) return err(403, 'invite_invalid', 'Die Einladung ist ungültig oder abgelaufen.')
+    if (!st.valid) return authErr(403, INVITE_INVALID, 'Die Einladung ist ungültig oder abgelaufen.')
     const b = await body<{ name: string, email: string, password?: string }>(request)
     if ((b.password ?? '').length < 12) return err(422, 'validation', 'Mindestens 12 Zeichen.', 'password')
-    if (st.email && st.email !== b.email) return err(403, 'invite_invalid', 'Die Einladung gilt für eine andere E-Mail-Adresse.')
+    if (st.email && st.email !== b.email) return authErr(403, INVITE_INVALID, 'Die Einladung gilt für eine andere E-Mail-Adresse.')
     const s = getState()
     const key = SEED_INVITE_TOKENS[token] ?? volatileInviteTokens.get(token)
     const inv = s.invites.find(i => i.id === key)

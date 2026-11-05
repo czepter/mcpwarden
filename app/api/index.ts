@@ -1,8 +1,8 @@
 import type {
-  AdminLimitsInput, AdminSettings, AdminSettingsResult, AdminUserList, AllowlistEntry, AllowlistInput, AllowlistList,
-  AuditList, AuthSession, Capabilities, ConnectionList, ConsentInfo, Dashboard, DcrMode, DcrPolicy, InviteCheck, InviteCreated,
+  AdminUserLimitsInput, AdminSettings, AdminSettingsResult, AdminUserList, AllowlistEntry, AllowlistInput, AllowlistList,
+  AuditList, AuthSession, Capabilities, ConnectionList, ConsentInfo, Dashboard, DcrMode, DcrPolicy, InviteInfo, InviteCreated,
   InviteList, LinkInfo, LinkTestResult, OAuthClientAdminList, PatCreated, PatList, SecretInput, SecretResult,
-  StatsSummary, StatsWindow, StdioDraft, TestResult, ToolList, UpstreamDetail, UpstreamInput, UpstreamList, UpstreamPatch, UpstreamTool, AdminUser,
+  StatsSummary, StatsWindow, StdioDraft, UpstreamTestResult, UpstreamToolList, UpstreamDetail, UpstreamInput, UpstreamList, UpstreamPatch, UpstreamToolItem, AdminUser,
 } from '#shared/api-types'
 import { API_PATHS } from '#shared/api-types'
 import { del, get, http, patch, post, put } from './http'
@@ -45,9 +45,9 @@ export const upstreamApi = {
   patch: (id: string, b: UpstreamPatch) => patch<UpstreamDetail>(`${API_PATHS.upstreams}/${enc(id)}`, b),
   remove: (id: string) => del(`${API_PATHS.upstreams}/${enc(id)}`),
   putSecret: (id: string, b: SecretInput) => put<SecretResult>(`${API_PATHS.upstreams}/${enc(id)}/secret`, b),
-  test: (id: string) => post<TestResult>(`${API_PATHS.upstreams}/${enc(id)}/test`),
-  tools: (id: string) => get<ToolList>(`${API_PATHS.upstreams}/${enc(id)}/tools`),
-  setTool: (id: string, name: string, enabled: boolean) => put<UpstreamTool>(`${API_PATHS.upstreams}/${enc(id)}/tools/${enc(name)}`, { enabled }),
+  test: (id: string) => post<UpstreamTestResult>(`${API_PATHS.upstreams}/${enc(id)}/test`),
+  tools: (id: string) => get<UpstreamToolList>(`${API_PATHS.upstreams}/${enc(id)}/tools`),
+  setTool: (id: string, name: string, enabled: boolean) => put<UpstreamToolItem>(`${API_PATHS.upstreams}/${enc(id)}/tools/${enc(name)}`, { enabled }),
   draft: (id: string) => get<StdioDraft>(`${API_PATHS.upstreams}/${enc(id)}/draft`), // Phase 2, Vorschlag
   approve: (id: string) => post<{ status: string }>(`${API_PATHS.upstreams}/${enc(id)}/approve`),
 }
@@ -57,7 +57,7 @@ export const adminApi = {
   ban: (id: string, reason?: string) => post<undefined>(`/api/admin/users/${enc(id)}/ban`, { reason }),
   unban: (id: string) => post<undefined>(`/api/admin/users/${enc(id)}/unban`),
   removeUser: (id: string) => del(`/api/admin/users/${enc(id)}`),
-  setLimits: (id: string, b: AdminLimitsInput) => put<AdminUser>(`/api/admin/users/${enc(id)}/limits`, b),
+  setLimits: (id: string, b: AdminUserLimitsInput) => put<AdminUser>(`/api/admin/users/${enc(id)}/limits`, b),
   invites: () => get<InviteList>('/api/admin/invites'),
   createInvite: (email?: string) => post<InviteCreated>('/api/admin/invites', email ? { email } : {}),
   revokeInvite: (id: string) => del(`/api/admin/invites/${enc(id)}`),
@@ -73,7 +73,7 @@ export const adminApi = {
   revokeClient: (id: string) => del(`/api/admin/oauth/clients/${enc(id)}`),
 }
 
-export const inviteApi = { check: (token: string) => http<InviteCheck>('GET', `/api/invites/${enc(token)}`, { skip401: true }) }
+export const inviteApi = { check: (token: string) => http<InviteInfo>('GET', `/api/invites/${enc(token)}`, { skip401: true }) }
 export const auditApi = { list: (q: { category?: string, cursor?: string, limit?: number }) => get<AuditList>(API_PATHS.audit, q) }
 export const dashboardApi = { get: () => get<Dashboard>(API_PATHS.dashboard) }
 export const statsApi = { summary: (window: StatsWindow, upstream?: string) => get<StatsSummary>('/api/stats/summary', { window, upstream }) }
