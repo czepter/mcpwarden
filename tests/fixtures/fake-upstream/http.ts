@@ -16,7 +16,7 @@ export type FakeHttp = {
 }
 
 /** Streamable HTTP, Revision 2026-07-28 (zustandslos, Legacy `stateless`). */
-export async function startFakeHttp(opts: { toolNames?: string[] } = {}): Promise<FakeHttp> {
+export async function startFakeHttp(opts: { toolNames?: string[], /** Listen-Adresse (Default Loopback; im Compose-Smoke 0.0.0.0). */ host?: string } = {}): Promise<FakeHttp> {
   const state = newState()
   const handler = createMcpHandler(() => buildFakeServer(state, opts), { legacy: 'stateless' })
   const node = toNodeHandler(handler)
@@ -32,7 +32,7 @@ export async function startFakeHttp(opts: { toolNames?: string[] } = {}): Promis
     void node(req, res)
   })
   server.on('connection', (s) => { sockets.add(s); s.on('close', () => sockets.delete(s)) })
-  await new Promise<void>(r => server.listen(0, '127.0.0.1', r))
+  await new Promise<void>(r => server.listen(0, opts.host ?? '127.0.0.1', r))
   const port = (server.address() as AddressInfo).port
   return {
     url: `http://127.0.0.1:${port}/mcp`, port, state,

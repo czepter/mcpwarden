@@ -17,6 +17,7 @@
     "test": "vitest run -c tests/vitest.config.ts",
     "test:container": "vitest run -c tests/vitest.container.config.ts",
     "test:compose": "sh tests/e2e/compose-smoke.sh",
+    "smoke": "tsx tests/smoke/run.ts",
     "test:unit": "vitest run -c tests/vitest.config.ts --project unit",
     "test:int": "vitest run -c tests/vitest.config.ts --project integration",
     "db:schema": "sh scripts/gen-auth-schema.sh",
