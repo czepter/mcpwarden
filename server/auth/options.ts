@@ -25,6 +25,8 @@ export interface AuthDeps {
     check: InviteCheck
     claim: (token: string, email: string) => Promise<string | null>
     bind: (inviteId: string, userId: string) => Promise<void>
+    /** Gibt eine beanspruchte Einladung frei, wenn das Anlegen des Nutzers danach scheitert. */
+    release: (inviteId: string) => Promise<void>
   }
   /**
    * Sicherheitsnetz: Sperren/Loeschen ueber irgendeinen Better-Auth-Pfad (auch Direktaufrufe) stoesst dieselbe Aufraeumkette an (Widerruf der Zugangsdaten, dann Laufzeit-Ressourcen)
@@ -102,6 +104,14 @@ export function buildAuthOptions(d: AuthDeps) {
       }),
       after: createAuthMiddleware(async (ctx) => {
         if (d.dcr) await dcrAfter(ctx.path, ctx.body, ctx.context.returned, d.dcr)
+        // Ein Eintrag in `claimed` ueberlebt nur, wenn das Anlegen nach dem Beanspruchen scheiterte (`user.create.after` raeumt ihn sonst ab):
+        // die Einladung wieder freigeben, sonst ist sie fuer den Eingeladenen verbrannt.
+        if (ctx.path === '/sign-up/email') {
+          const key = (typeof ctx.body?.email === 'string' ? ctx.body.email : '').toLowerCase()
+          const id = claimed.get(key)
+          claimed.delete(key)
+          if (id) await d.invites?.release(id).catch(() => console.error('[mcpwarden] Einladung konnte nicht freigegeben werden'))
+        }
       }),
     },
     databaseHooks: {

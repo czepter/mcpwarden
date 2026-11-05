@@ -29,6 +29,7 @@ function create() {
               return !!inv && repo.inviteStatus(inv) === 'open' && (!inv.email || inv.email === email.toLowerCase())
             },
             claim: (token, email) => repo.claimInvite(token, email),
+            release: id => repo.releaseInvite(id),
             bind: async (inviteId, userId) => {
               await repo.setInviteUsedBy(inviteId, userId)
               await repo.audit({ userId: null, actor: `user:${userId}`, action: 'invite.use', targetType: 'invite', targetId: inviteId, scope: 'instance', category: 'management', result: 'success' }).catch(() => {})
