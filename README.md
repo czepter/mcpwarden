@@ -94,7 +94,7 @@ Der Ablauf ist durch `tests/integration/migrate-pglite-to-pg.test.ts` belegt (Lo
 - Master-Key-Rotation gibt es nicht (`upstream_secret.key_version` ist dafür reserviert).
 - `ssrf.allow` (Admin-Einstellung): CIDR oder genauer Hostname. Cloud-Metadatenadressen (169.254.169.254, 100.100.100.200, fd00:ec2::254) öffnet nur ein ausdrücklich eingetragener Einzeladresse-Eintrag, nie ein Hostname oder Bereich; Link-Local nur per CIDR/IP.
 
-Tests: `pnpm test:container` (Supervisor im Container, Docker nötig), `pnpm test:compose` (Compose-Smoke gegen ein frisch gebautes Image).
+Tests: `pnpm test:container` (Supervisor im Container, Docker nötig), `pnpm test:compose` (Compose-Smoke gegen ein frisch gebautes Image), `pnpm test:slim` (baut und startet das Ziel `slim` ohne Capabilities, prüft `/healthz`, `/readyz`, UID 10001 und dass stdio fest gesperrt ist; läuft auch in der CI).
 
 Frontend gegen echte Routen: Mocks (MSW) gibt es nur in Mock-Builds (`pnpm ui:dev`, `pnpm ui:build`, `VITE_API_MOCK`); `pnpm build` und `pnpm dev` sprechen immer mit dem echten Backend (`pnpm ui:check-build` stellt sicher, dass kein Mock-Code im Build steckt). Vertrag und Full-Stack:
 

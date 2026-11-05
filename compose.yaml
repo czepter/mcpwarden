@@ -27,6 +27,10 @@ services:
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-}
       STDIO_MODE: ${STDIO_MODE:-auto}
       TRUST_PROXY: ${TRUST_PROXY:-false}
+      # Optional: Mailversand (leer = aus). SMTP_URL ist geheim (Zugangsdaten URL-kodiert), MAIL_FROM Pflicht, wenn SMTP_URL gesetzt ist.
+      SMTP_URL: ${SMTP_URL:-}
+      MAIL_FROM: ${MAIL_FROM:-}
+      MAIL_NOTIFY_WINDOW_MIN: ${MAIL_NOTIFY_WINDOW_MIN:-}
     volumes:
       - data:/data
     # Beispiel-Grenzen (Containerebene, zusätzlich zu den Grenzen je Worker):

@@ -92,3 +92,11 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm test:compose
+
+  # Ziel slim (nur Web-App): baut, startet ohne Capabilities, stdio ist fest gesperrt (image_slim)
+  slim-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - run: sh tests/e2e/slim-smoke.sh
