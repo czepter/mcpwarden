@@ -2,7 +2,7 @@
 import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from '~/components/ui/breadcrumb'
 import { SidebarTrigger } from '~/components/ui/sidebar'
 
-defineProps<{ title: string, description?: string, crumbs?: Array<{ label: string, to?: string }> }>()
+defineProps<{ title: string, crumb?: string, description?: string, crumbs?: Array<{ label: string, to?: string }> }>()
 </script>
 
 <template>
@@ -18,7 +18,7 @@ defineProps<{ title: string, description?: string, crumbs?: Array<{ label: strin
               <BreadcrumbItem><BreadcrumbLink v-if="c.to" as-child><NuxtLink :to="c.to">{{ c.label }}</NuxtLink></BreadcrumbLink><span v-else>{{ c.label }}</span></BreadcrumbItem>
             </template>
             <BreadcrumbSeparator />
-            <BreadcrumbItem><BreadcrumbPage>{{ title }}</BreadcrumbPage></BreadcrumbItem>
+            <BreadcrumbItem><BreadcrumbPage>{{ crumb ?? title }}</BreadcrumbPage></BreadcrumbItem>
           </BreadcrumbList>
         </Breadcrumb>
         <h1 class="text-xl font-semibold tracking-tight">{{ title }}</h1>

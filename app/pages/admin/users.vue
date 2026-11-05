@@ -87,16 +87,16 @@ const saveLimits = lim.submit(async (v) => {
       <TableHeader><TableRow class="bg-table-head"><TableHead scope="col">Nutzer</TableHead><TableHead scope="col">Rolle</TableHead><TableHead scope="col">Upstreams</TableHead><TableHead scope="col">Letzte Aktivität</TableHead><TableHead scope="col">stdio erlaubt</TableHead><TableHead scope="col"><span class="sr-only">Aktionen</span></TableHead></TableRow></TableHeader>
       <TableBody>
         <TableRow v-for="u in users.data.value.items" :key="u.id">
-          <TableCell><div class="font-medium">{{ u.name }}<span v-if="u.banned" class="ml-2 rounded-full bg-[#fee2e2] px-2 py-0.5 text-xs text-[#991b1b]">Gesperrt</span></div><div class="text-xs text-muted-foreground">{{ u.email }}</div></TableCell>
+          <TableCell><div class="font-medium">{{ u.name }}<span v-if="u.banned" class="ml-2 rounded-full bg-err-bg px-2 py-0.5 text-xs text-destructive">Gesperrt</span></div><div class="text-xs text-muted-foreground">{{ u.email }}</div></TableCell>
           <TableCell>{{ roleLabel(u.role) }}</TableCell>
           <TableCell class="tnum">{{ u.upstreamCount }} / {{ u.limits.maxUpstreams }}</TableCell>
           <TableCell><RelativeTime :value="u.lastActivityAt" empty="keine" /></TableCell>
           <TableCell><Checkbox :model-value="u.stdioAllowed" :aria-label="`stdio für ${u.name} erlauben`" class="size-5" @update:model-value="(v) => setStdio(u, v)" /></TableCell>
           <TableCell class="text-right">
             <Button variant="ghost" :aria-label="`Limits für ${u.name}`" @click="openLimits(u)">Limits</Button>
-            <Button v-if="u.banned" variant="ghost" :aria-label="`${u.name} entsperren`" @click="unban(u)">Entsperren</Button>
-            <Button v-else variant="ghost" class="text-destructive" :disabled="protectedUser(u)" :aria-label="`${u.name} sperren`" @click="pending = { kind: 'ban', user: u }">Sperren</Button>
-            <Button variant="ghost" class="text-destructive" :disabled="protectedUser(u)" :aria-label="`${u.name} löschen`" @click="pending = { kind: 'delete', user: u }">Löschen</Button>
+            <Button v-if="u.banned" variant="outline" :aria-label="`${u.name} entsperren`" @click="unban(u)">Entsperren</Button>
+            <Button v-else variant="outline" :disabled="protectedUser(u)" :aria-label="`${u.name} sperren`" @click="pending = { kind: 'ban', user: u }">Sperren</Button>
+            <Button variant="destructive-outline" :disabled="protectedUser(u)" :aria-label="`${u.name} löschen`" @click="pending = { kind: 'delete', user: u }">Löschen</Button>
           </TableCell>
         </TableRow>
       </TableBody>
@@ -114,7 +114,7 @@ const saveLimits = lim.submit(async (v) => {
           <TableCell>{{ i.email ?? 'Keine E-Mail' }}</TableCell>
           <TableCell>{{ inviteStatusLabel(i.status) }}</TableCell>
           <TableCell>{{ formatDate(i.expiresAt) }}</TableCell>
-          <TableCell class="text-right"><Button v-if="i.status === 'open'" variant="ghost" class="text-destructive" :aria-label="`Einladung ${i.email ?? ''} widerrufen`" @click="revokeInvite(i.id)">Widerrufen</Button></TableCell>
+          <TableCell class="text-right"><Button v-if="i.status === 'open'" variant="destructive-outline" :aria-label="`Einladung ${i.email ?? ''} widerrufen`" @click="revokeInvite(i.id)">Widerrufen</Button></TableCell>
         </TableRow>
       </TableBody>
     </Table>

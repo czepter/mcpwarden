@@ -64,7 +64,7 @@ const daysLeft = (iso: string | null) => (iso ? Math.max(0, Math.ceil((new Date(
       </label>
     </RadioGroup>
     <ErrorState v-else-if="policy.error.value" :error="policy.error.value" @retry="policy.refresh()" />
-    <Alert v-if="policy.data.value?.mode === 'open'" class="mt-3 border-[#fcd34d] bg-[#fef3c7] text-[13px] text-[#78350f]">Im offenen Modus kann sich jeder Client registrieren. Prüfe unbekannte Clients beim Consent genau.</Alert>
+    <Alert v-if="policy.data.value?.mode === 'open'" class="mt-3 border-warn-border bg-warn-bg text-[13px] text-warn-fg">Im offenen Modus kann sich jeder Client registrieren. Prüfe unbekannte Clients beim Consent genau.</Alert>
   </section>
 
   <DataSection title="Allowlist" min-width="720px">
@@ -78,7 +78,7 @@ const daysLeft = (iso: string | null) => (iso ? Math.max(0, Math.ceil((new Date(
         <TableRow v-for="e in allow.data.value.items" :key="e.id">
           <TableCell class="font-medium">{{ e.label }}</TableCell><TableCell><code class="text-xs">{{ e.namePattern }}</code></TableCell>
           <TableCell><div v-for="r in e.redirectPatterns" :key="r"><code class="text-xs">{{ r }}</code></div></TableCell>
-          <TableCell class="text-right"><Button variant="ghost" :aria-label="`Eintrag ${e.label} entfernen`" @click="removeAllow(e.id)">✕</Button></TableCell>
+          <TableCell class="text-right"><Button variant="ghost" size="icon" class="text-destructive" :aria-label="`Eintrag ${e.label} entfernen`" @click="removeAllow(e.id)"><span aria-hidden="true" class="text-lg">✕</span></Button></TableCell>
         </TableRow>
       </TableBody>
     </Table>
@@ -98,7 +98,7 @@ const daysLeft = (iso: string | null) => (iso ? Math.max(0, Math.ceil((new Date(
           <TableCell><RelativeTime :value="c.createdAt" /></TableCell><TableCell><RelativeTime :value="c.lastUsedAt" empty="nie" /></TableCell>
           <TableCell class="tnum">{{ c.userCount }}</TableCell><TableCell>{{ c.allowlisted ? 'In Allowlist' : 'Nicht in Allowlist' }}</TableCell>
           <TableCell>{{ c.expiresAt ? `in ${daysLeft(c.expiresAt)} Tagen` : '–' }}</TableCell>
-          <TableCell class="text-right"><Button variant="ghost" class="text-destructive" :aria-label="`${c.name} widerrufen`" @click="revoke = c">Widerrufen</Button></TableCell>
+          <TableCell class="text-right"><Button variant="destructive-outline" :aria-label="`${c.name} widerrufen`" @click="revoke = c">Widerrufen</Button></TableCell>
         </TableRow>
       </TableBody>
     </Table>

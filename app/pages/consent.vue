@@ -53,7 +53,7 @@ async function decide(accept: boolean) {
         <h1 class="text-lg font-semibold">Zugriff erlauben?</h1>
         <div class="text-[13px] text-muted-foreground">Angemeldet als {{ user?.email }}</div>
       </div>
-      <Alert v-if="unknown" role="alert" class="border-[#fcd34d] bg-[#fef3c7] text-[#78350f]">
+      <Alert v-if="unknown" role="alert" class="border-warn-border bg-warn-bg text-warn-fg">
         <div class="font-semibold">Unbekannter Client, nicht in der Allowlist</div>
         <dl class="mt-2 grid grid-cols-[90px_minmax(0,1fr)] gap-x-2.5 gap-y-1 text-[13px]">
           <dt>Name</dt><dd class="font-medium">{{ info.client.name }}</dd>
@@ -68,7 +68,7 @@ async function decide(accept: boolean) {
       <div v-else class="text-[13px]">
         <strong>{{ info.client.name }}</strong> möchte auf dein Konto zugreifen. Weiterleitung an <strong class="mono">{{ info.client.redirects[0]?.host }}</strong>.
       </div>
-      <Alert v-if="info.loopback" role="alert" class="border-[#fcd34d] bg-[#fef3c7] text-[#78350f] text-[13px]">
+      <Alert v-if="info.loopback" role="alert" class="border-warn-border bg-warn-bg text-warn-fg text-[13px]">
         Der Client leitet an eine Adresse auf diesem Rechner (localhost) zurück. Das ist bei lokalen Tools normal, bei fremden Programmen aber ein Warnzeichen.
       </Alert>
       <section aria-label="Berechtigungen" class="flex flex-col gap-2">
