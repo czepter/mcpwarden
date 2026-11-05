@@ -51,7 +51,11 @@ export const adminHandlers = [
     if (inv.status !== 'open') return err(409, 'invite_not_open', 'Die Einladung ist nicht mehr offen.')
     inv.status = 'revoked'; save(); return noContent()
   }, A),
-  route('get', '/api/admin/settings', () => json(getState().settings), A),
+  route('get', '/api/admin/settings', () => {
+    const s = getState()
+    const warnings = s.settings['ssrf.allow'].filter(e => METADATA.test(e)).map(entry => ({ key: 'ssrf.allow', entry, code: 'covers_metadata_ip' as const }))
+    return json<AdminSettingsResult>({ ...s.settings, warnings })
+  }, A),
   route('put', '/api/admin/settings', async ({ request }) => {
     const b = await body<Partial<AdminSettings>>(request); const s = getState()
     if (b['ssrf.allow']) {
