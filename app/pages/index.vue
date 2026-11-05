@@ -48,7 +48,19 @@ const k = computed(() => data.value?.kpis)
       <KpiCard label="Gateway-Overhead p95" :value="formatNumber(k.overheadP95Ms)" unit="ms" note="Ziel ≤ 50 ms" />
     </section>
 
-    <div v-if="!data.clients.length" class="rounded-lg border bg-card">
+    <DataSection v-if="data.attention.length" title="Braucht Aufmerksamkeit">
+      <ul class="divide-y">
+        <li v-for="a in data.attention" :key="a.upstreamId" class="flex flex-wrap items-center justify-between gap-3 px-5 py-3">
+          <div class="flex items-center gap-3"><StatusBadge :status="a.status" :setup="a.setup" /><NuxtLink :to="`/upstreams/${a.upstreamId}`" class="font-semibold hover:underline">{{ a.name }}</NuxtLink><span class="text-[13px] text-secondary-foreground">{{ a.statusReason }}</span></div>
+          <Button v-if="a.setup === 'awaiting_auth'" as-child variant="outline"><NuxtLink :to="`/upstreams/${a.upstreamId}?tab=auth`">Zugangsdaten eintragen</NuxtLink></Button>
+          <Button v-else-if="a.setup === 'awaiting_approval'" as-child variant="outline"><NuxtLink :to="`/upstreams/${a.upstreamId}/approve`">Entwurf prüfen</NuxtLink></Button>
+          <Button v-else-if="a.status === 'auth_expired'" as-child variant="outline"><NuxtLink :to="`/upstreams/${a.upstreamId}?tab=auth`">Neu verbinden</NuxtLink></Button>
+        </li>
+      </ul>
+    </DataSection>
+
+    <template v-if="!data.clients.length">
+    <div class="rounded-lg border bg-card">
       <EmptyState title="Noch kein Client verbunden" text="Verbinde Claude Code oder einen anderen MCP-Client mit dieser Adresse.">
         <code class="mono rounded-sm bg-muted px-2 py-1 text-xs" data-testid="mcp-url">{{ caps.data.value?.mcpUrl }}</code>
         <CopyButton v-if="caps.data.value" :value="caps.data.value.mcpUrl" label="URL kopieren" />
@@ -58,6 +70,11 @@ const k = computed(() => data.value?.kpis)
         <p class="basis-full text-[13px] text-muted-foreground">Ohne OAuth: erzeuge unter <NuxtLink to="/settings/tokens" class="text-primary underline">Tokens</NuxtLink> ein Token und sende es als Bearer-Header.</p>
       </EmptyState>
     </div>
+    <!-- Page empty state stays as before, including the "nothing to do" note; the attention card above only exists with items. -->
+    <DataSection v-if="!data.attention.length" title="Braucht Aufmerksamkeit">
+      <p class="px-5 pb-4 text-[13px]" data-testid="nothing-to-do">Nichts zu tun. Alle Upstreams laufen.</p>
+    </DataSection>
+    </template>
     <DataSection v-else title="Verbundene Clients" min-width="760px">
       <template #actions><NuxtLink to="/settings/connections" class="text-[13px] text-primary underline">Alle Clients und Tokens</NuxtLink></template>
       <table class="w-full text-sm">
@@ -75,18 +92,6 @@ const k = computed(() => data.value?.kpis)
           </tr>
         </tbody>
       </table>
-    </DataSection>
-
-    <DataSection title="Braucht Aufmerksamkeit">
-      <p v-if="!data.attention.length" class="px-5 pb-4 text-[13px]" data-testid="nothing-to-do">Nichts zu tun. Alle Upstreams laufen.</p>
-      <ul v-else class="divide-y">
-        <li v-for="a in data.attention" :key="a.upstreamId" class="flex flex-wrap items-center justify-between gap-3 px-5 py-3">
-          <div class="flex items-center gap-3"><StatusBadge :status="a.status" :setup="a.setup" /><NuxtLink :to="`/upstreams/${a.upstreamId}`" class="font-semibold hover:underline">{{ a.name }}</NuxtLink><span class="text-[13px] text-secondary-foreground">{{ a.statusReason }}</span></div>
-          <Button v-if="a.setup === 'awaiting_auth'" as-child variant="outline"><NuxtLink :to="`/upstreams/${a.upstreamId}?tab=auth`">Zugangsdaten eintragen</NuxtLink></Button>
-          <Button v-else-if="a.setup === 'awaiting_approval'" as-child variant="outline"><NuxtLink :to="`/upstreams/${a.upstreamId}/approve`">Entwurf prüfen</NuxtLink></Button>
-          <Button v-else-if="a.status === 'auth_expired'" as-child variant="outline"><NuxtLink :to="`/upstreams/${a.upstreamId}?tab=auth`">Neu verbinden</NuxtLink></Button>
-        </li>
-      </ul>
     </DataSection>
     <ConfirmDialog :open="!!revoke" title="Zugriff widerrufen?" confirm-label="Widerrufen" @update:open="(v) => !v && (revoke = null)" @confirm="doRevoke">
       {{ revoke?.kind === 'oauth' ? 'Die Verbindung' : 'Das Token' }} „{{ revoke?.name }}“ wird beendet. Das wirkt beim nächsten Aufruf.

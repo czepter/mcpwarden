@@ -145,3 +145,21 @@ test('Admin users: "+ Einladung erzeugen" sits in the invitations section, not i
   await btn.click()
   await expect(page.getByRole('dialog')).toBeVisible()
 })
+
+test('Dashboard: "Braucht Aufmerksamkeit" sits above the clients table, only with items', async ({ page }) => {
+  await login(page)
+  const attention = page.getByRole('heading', { name: 'Braucht Aufmerksamkeit' })
+  await expect(attention).toBeVisible()
+  const clients = page.getByRole('heading', { name: 'Verbundene Clients' })
+  expect((await attention.boundingBox())!.y).toBeLessThan((await clients.boundingBox())!.y)
+  // Without items the card is gone (the client table stays)
+  await page.evaluate(() => {
+    const k = 'mcpwarden.mock.state'
+    const s = JSON.parse(sessionStorage.getItem(k)!)
+    for (const u of s.upstreams) { u.setup = 'ready'; u.status = 'healthy' }
+    sessionStorage.setItem(k, JSON.stringify(s))
+  })
+  await page.reload()
+  await expect(clients).toBeVisible()
+  await expect(attention).toHaveCount(0)
+})
