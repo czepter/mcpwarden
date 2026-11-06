@@ -24,6 +24,19 @@ export function generatePat(): GeneratedPat {
   return { token, hash: hashPat(token), prefix: token.slice(0, PAT_DISPLAY_PREFIX_LENGTH) }
 }
 
+export const PAT_MAX_DAYS = 365
+
+export function validatePatExpiry(v: unknown): { ok: true, days: number | null } | { ok: false } {
+  if (v === undefined || v === null) return { ok: true, days: null }
+  return typeof v === 'number' && Number.isInteger(v) && v >= 1 && v <= PAT_MAX_DAYS ? { ok: true, days: v } : { ok: false }
+}
+
+export function validatePatUpstreams(v: unknown): { ok: true, ids: string[] | null } | { ok: false } {
+  if (v === undefined || v === null) return { ok: true, ids: null }
+  if (!Array.isArray(v) || v.length < 1 || v.length > 100 || !v.every(x => typeof x === 'string')) return { ok: false }
+  return { ok: true, ids: [...new Set(v as string[])] }
+}
+
 export function validatePatName(name: unknown): { ok: true, name: string } | { ok: false } {
   if (typeof name !== 'string') return { ok: false }
   const trimmed = name.trim()

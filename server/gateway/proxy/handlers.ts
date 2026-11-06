@@ -47,7 +47,7 @@ export class GatewayCore implements ToolSource {
 
   async listTools(ctx: AuthContext): Promise<ToolDef[]> {
     const t0 = performance.now()
-    const ups = await this.d.store.listEnabledUpstreams(ctx.userId)
+    const ups = (await this.d.store.listEnabledUpstreams(ctx.userId)).filter(u => !ctx.upstreamIds || ctx.upstreamIds.includes(u.id))
     const parts = await Promise.all(ups.map(async (up) => {
       if (up.userId !== ctx.userId) return [] // Defense: the store must never return foreign rows
       if (up.setup !== 'ready') return []
@@ -92,7 +92,7 @@ export class GatewayCore implements ToolSource {
     const parsed = parseToolName(name)
     if (!parsed) throw new ToolNotFoundError(name)
     const up = await this.d.store.getUpstreamBySlug(ctx.userId, parsed.slug)
-    if (!up || !up.enabled || up.userId !== ctx.userId) throw new ToolNotFoundError(name)
+    if (!up || !up.enabled || up.userId !== ctx.userId || (ctx.upstreamIds && !ctx.upstreamIds.includes(up.id))) throw new ToolNotFoundError(name)
     // The filter is checked server-side on EVERY call; unknown names are first synchronized against the catalog.
     let flags = await this.d.store.toolFlags(up.userId, up.id)
     if (!flags.has(parsed.tool) && up.setup === 'ready') {

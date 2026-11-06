@@ -1,17 +1,17 @@
 <script setup lang="ts">
+import LoadingButton from '~/components/common/LoadingButton.vue'
 import { authApi } from '~/api'
 import { ApiError } from '~/api/http'
 import FormRow from '~/components/common/FormRow.vue'
 import { Alert, AlertDescription } from '~/components/ui/alert'
-import { Button } from '~/components/ui/button'
 import { Input } from '~/components/ui/input'
-import { Spinner } from '~/components/ui/spinner'
 import { useZodForm } from '~/lib/useZodForm'
 import { resetSchema } from '~/lib/zod-schemas'
 
 definePageMeta({ layout: 'auth' })
 // Token page: no referrer, do not index. The token is in the fragment (no access log) and is removed from the address bar after reading.
-useHead({ title: 'Neues Passwort · mcpwarden', meta: [{ name: 'referrer', content: 'no-referrer' }, { name: 'robots', content: 'noindex' }] })
+const { t } = useI18n()
+useHead({ title: () => t('auth.reset.docTitle'), meta: [{ name: 'referrer', content: 'no-referrer' }, { name: 'robots', content: 'noindex' }] })
 const route = useRoute()
 const token = ref('')
 const invalid = ref(false)
@@ -34,7 +34,7 @@ const onSubmit = submit(async (v) => {
   try { await authApi.resetPassword(token.value, v.password) } catch (e) {
     if (e instanceof ApiError && e.code === 'INVALID_TOKEN') { invalid.value = true; return }
     form.setFieldValue('password', ''); form.setFieldValue('confirm', '')
-    if (e instanceof ApiError && e.code === 'PASSWORD_TOO_SHORT') { form.setFieldError('password', 'Mindestens 12 Zeichen.'); return }
+    if (e instanceof ApiError && e.code === 'PASSWORD_TOO_SHORT') { form.setFieldError('password', t('auth.reset.minLength')); return }
     throw e
   }
   token.value = ''
@@ -46,21 +46,21 @@ const onSubmit = submit(async (v) => {
   <div class="w-full max-w-[480px] rounded-lg border bg-card p-7 shadow-[0_1px_2px_rgba(0,0,0,0.05)]">
     <template v-if="!ready" />
     <template v-else-if="!token || invalid">
-      <h1 class="mb-2 text-lg font-semibold">Link nicht nutzbar</h1>
-      <p role="alert" class="text-[13px]">Dieser Link ist ungültig, abgelaufen oder wurde schon verwendet.</p>
-      <p class="mt-2 text-[13px] text-muted-foreground"><NuxtLink to="/forgot-password" class="text-primary underline">Neuen Link anfordern</NuxtLink></p>
+      <h1 class="mb-2 text-lg font-semibold">{{ $t('auth.reset.invalidTitle') }}</h1>
+      <p role="alert" class="text-[13px]">{{ $t('auth.reset.invalidText') }}</p>
+      <p class="mt-2 text-[13px] text-muted-foreground"><NuxtLink to="/forgot-password" class="text-primary underline">{{ $t('auth.reset.requestNew') }}</NuxtLink></p>
     </template>
     <template v-else>
-      <h1 class="mb-4 text-lg font-semibold">Neues Passwort festlegen</h1>
+      <h1 class="mb-4 text-lg font-semibold">{{ $t('auth.reset.title') }}</h1>
       <form class="flex flex-col gap-4" novalidate @submit.prevent="onSubmit">
         <Alert v-if="formError" variant="destructive" role="alert"><AlertDescription>{{ formError }}</AlertDescription></Alert>
-        <FormRow id="password" label="Neues Passwort" description="Mindestens 12 Zeichen." :error="form.errors.value.password">
+        <FormRow id="password" :label="$t('auth.reset.newPassword')" :description="$t('auth.reset.minLength')" :error="form.errors.value.password">
           <template #default="{ id, invalid: bad, describedby }"><Input :id="id" v-model="password" type="password" autocomplete="new-password" :aria-invalid="bad || undefined" :aria-describedby="describedby" /></template>
         </FormRow>
-        <FormRow id="confirm" label="Passwort bestätigen" :error="form.errors.value.confirm">
+        <FormRow id="confirm" :label="$t('auth.reset.confirm')" :error="form.errors.value.confirm">
           <template #default="{ id, invalid: bad, describedby }"><Input :id="id" v-model="confirm" type="password" autocomplete="new-password" :aria-invalid="bad || undefined" :aria-describedby="describedby" /></template>
         </FormRow>
-        <Button type="submit" :disabled="busy" :aria-busy="busy"><Spinner v-if="busy" />Passwort speichern</Button>
+        <LoadingButton :busy="busy">{{ $t('auth.reset.submit') }}</LoadingButton>
       </form>
     </template>
   </div>

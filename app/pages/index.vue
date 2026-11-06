@@ -18,7 +18,8 @@ import { Badge } from '~/components/ui/badge'
 import { Button } from '~/components/ui/button'
 import { formatNumber, formatPercent } from '~/lib/format'
 
-useHead({ title: 'Dashboard · mcpwarden' })
+const { t } = useI18n()
+useHead({ title: () => `${t('dashboard.title')} · mcpwarden` })
 const route = useRoute()
 const adminHint = computed(() => route.query.hinweis === 'admin')
 const { data, error, status, refresh } = useApi('dashboard', dashboardApi.get)
@@ -29,72 +30,72 @@ const cmd = computed(() => `claude mcp add --transport http mcpwarden ${caps.dat
 const revoke = ref<DashboardClient | null>(null)
 async function doRevoke() {
   const c = revoke.value; if (!c) return
-  try { if (c.kind === 'oauth') await meApi.revokeConnection(c.id); else await meApi.revokePat(c.id); toast.success('Zugriff widerrufen.'); await refresh() } catch { toast.error('Widerrufen fehlgeschlagen.') }
+  try { if (c.kind === 'oauth') await meApi.revokeConnection(c.id); else await meApi.revokePat(c.id); toast.success(t('dashboard.revoked')); await refresh() } catch { toast.error(t('dashboard.revokeFailed')) }
   revoke.value = null
 }
 const k = computed(() => data.value?.kpis)
 </script>
 
 <template>
-  <PageHeader title="Dashboard"><AutoRefresh v-model="rate" /></PageHeader>
-  <p v-if="adminHint" role="status" class="rounded-sm border border-warn-border bg-warn-bg px-3 py-2 text-[13px] text-warn-fg">Dieser Bereich ist nur für Admins.</p>
+  <PageHeader :title="$t('dashboard.title')"><AutoRefresh v-model="rate" /></PageHeader>
+  <p v-if="adminHint" role="status" class="rounded-sm border border-warn-border bg-warn-bg px-3 py-2 text-[13px] text-warn-fg">{{ $t('dashboard.adminOnly') }}</p>
   <LoadingRows v-if="status === 'pending' && !data" />
   <ErrorState v-else-if="error" :error="error" @retry="refresh()" />
   <template v-else-if="data">
-    <section v-if="k" aria-label="Kennzahlen" class="grid grid-cols-[repeat(auto-fit,minmax(min(200px,100%),1fr))] gap-3">
-      <KpiCard label="Clients aktiv" :value="`${k.clientsActive} von ${k.clientsTotal}`" />
-      <KpiCard label="Aufrufe pro Minute" :value="formatNumber(k.callsPerMin)" />
-      <KpiCard label="Erfolgsquote" :value="formatPercent(k.successRate)" />
-      <KpiCard label="Gateway-Overhead p95" :value="formatNumber(k.overheadP95Ms)" unit="ms" note="Ziel ≤ 50 ms" />
+    <section v-if="k" :aria-label="$t('dashboard.kpis')" class="grid grid-cols-[repeat(auto-fit,minmax(min(200px,100%),1fr))] gap-3">
+      <KpiCard :label="$t('dashboard.kpiClientsActive')" :value="$t('dashboard.kpiClientsValue', { active: k.clientsActive, total: k.clientsTotal })" />
+      <KpiCard :label="$t('dashboard.kpiCallsPerMin')" :value="formatNumber(k.callsPerMin)" />
+      <KpiCard :label="$t('dashboard.kpiSuccessRate')" :value="formatPercent(k.successRate)" />
+      <KpiCard :label="$t('dashboard.kpiOverhead')" :value="formatNumber(k.overheadP95Ms)" unit="ms" :note="$t('dashboard.kpiOverheadNote')" />
     </section>
 
-    <DataSection v-if="data.attention.length" title="Braucht Aufmerksamkeit">
+    <DataSection v-if="data.attention.length" :title="$t('dashboard.attention')">
       <ul class="divide-y">
         <li v-for="a in data.attention" :key="a.upstreamId" class="flex flex-wrap items-center justify-between gap-3 px-5 py-3">
           <div class="flex items-center gap-3"><StatusBadge :status="a.status" :setup="a.setup" /><NuxtLink :to="`/upstreams/${a.upstreamId}`" class="font-semibold hover:underline">{{ a.name }}</NuxtLink><span class="text-[13px] text-secondary-foreground">{{ a.statusReason }}</span></div>
-          <Button v-if="a.setup === 'awaiting_auth'" as-child variant="outline"><NuxtLink :to="`/upstreams/${a.upstreamId}?tab=auth`">Zugangsdaten eintragen</NuxtLink></Button>
-          <Button v-else-if="a.setup === 'awaiting_approval'" as-child variant="outline"><NuxtLink :to="`/upstreams/${a.upstreamId}/approve`">Entwurf prüfen</NuxtLink></Button>
-          <Button v-else-if="a.status === 'auth_expired'" as-child variant="outline"><NuxtLink :to="`/upstreams/${a.upstreamId}?tab=auth`">Neu verbinden</NuxtLink></Button>
+          <Button v-if="a.setup === 'awaiting_auth'" as-child variant="outline"><NuxtLink :to="`/upstreams/${a.upstreamId}?tab=auth`">{{ $t('dashboard.enterCredentials') }}</NuxtLink></Button>
+          <Button v-else-if="a.setup === 'awaiting_approval'" as-child variant="outline"><NuxtLink :to="`/upstreams/${a.upstreamId}/approve`">{{ $t('dashboard.reviewDraft') }}</NuxtLink></Button>
+          <Button v-else-if="a.status === 'auth_expired'" as-child variant="outline"><NuxtLink :to="`/upstreams/${a.upstreamId}?tab=auth`">{{ $t('dashboard.reconnect') }}</NuxtLink></Button>
         </li>
       </ul>
     </DataSection>
 
     <template v-if="!data.clients.length">
     <div class="rounded-lg border bg-card">
-      <EmptyState title="Noch kein Client verbunden" text="Verbinde Claude Code oder einen anderen MCP-Client mit dieser Adresse.">
+      <EmptyState :title="$t('dashboard.emptyTitle')" :text="$t('dashboard.emptyText')">
         <code class="mono rounded-sm bg-muted px-2 py-1 text-xs" data-testid="mcp-url">{{ caps.data.value?.mcpUrl }}</code>
-        <CopyButton v-if="caps.data.value" :value="caps.data.value.mcpUrl" label="URL kopieren" />
+        <CopyButton v-if="caps.data.value" :value="caps.data.value.mcpUrl" :label="$t('dashboard.copyUrl')" />
         <div class="basis-full" />
         <code class="mono rounded-sm bg-muted px-2 py-1 text-xs" data-testid="setup-cmd">{{ cmd }}</code>
-        <CopyButton v-if="caps.data.value" :value="cmd" label="Befehl kopieren" />
-        <p class="basis-full text-[13px] text-muted-foreground">Ohne OAuth: erzeuge unter <NuxtLink to="/settings/tokens" class="text-primary underline">Tokens</NuxtLink> ein Token und sende es als Bearer-Header.</p>
+        <CopyButton v-if="caps.data.value" :value="cmd" :label="$t('dashboard.copyCommand')" />
+        <p class="basis-full text-[13px] text-muted-foreground"><i18n-t keypath="dashboard.withoutOauth" tag="span"><template #link><NuxtLink to="/settings/tokens" class="text-primary underline">{{ $t('dashboard.tokensLink') }}</NuxtLink></template></i18n-t></p>
       </EmptyState>
     </div>
     <!-- Page empty state stays as before, including the "nothing to do" note; the attention card above only exists with items. -->
-    <DataSection v-if="!data.attention.length" title="Braucht Aufmerksamkeit">
-      <p class="px-5 pb-4 text-[13px]" data-testid="nothing-to-do">Nichts zu tun. Alle Upstreams laufen.</p>
+    <DataSection v-if="!data.attention.length" :title="$t('dashboard.attention')">
+      <p class="px-5 pb-4 text-[13px]" data-testid="nothing-to-do">{{ $t('dashboard.nothingToDo') }}</p>
     </DataSection>
     </template>
-    <DataSection v-else title="Verbundene Clients" min-width="760px">
-      <template #actions><NuxtLink to="/settings/connections" class="text-[13px] text-primary underline">Alle Clients und Tokens</NuxtLink></template>
+    <DataSection v-else :title="$t('dashboard.connectedClients')" min-width="760px">
+      <template #actions><NuxtLink to="/settings/connections" class="text-[13px] text-primary underline">{{ $t('dashboard.allClientsAndTokens') }}</NuxtLink></template>
       <table class="w-full text-sm">
-        <caption class="sr-only">Verbundene Clients</caption>
-        <thead class="bg-table-head text-xs text-muted-foreground"><tr class="border-y"><th scope="col" class="px-5 py-2.5 text-left font-medium">Client</th><th scope="col" class="px-3 text-left font-medium">Anmeldung</th><th scope="col" class="px-3 text-left font-medium">Status</th><th scope="col" class="px-3 text-left font-medium">Zuletzt aktiv</th><th scope="col" class="px-3 text-right font-medium">Aufrufe/min</th><th scope="col" class="px-3 text-right font-medium">Tools im Kontext</th><th scope="col" class="px-5"><span class="sr-only">Aktionen</span></th></tr></thead>
+        <caption class="sr-only">{{ $t('dashboard.connectedClients') }}</caption>
+        <thead class="bg-table-head text-xs text-muted-foreground"><tr class="border-y"><th scope="col" class="px-5 py-2.5 text-left font-medium">{{ $t('dashboard.colClient') }}</th><th scope="col" class="px-3 text-left font-medium">{{ $t('dashboard.colSignIn') }}</th><th scope="col" class="px-3 text-left font-medium">{{ $t('dashboard.colStatus') }}</th><th scope="col" class="px-3 text-left font-medium">{{ $t('dashboard.colLastActive') }}</th><th scope="col" class="px-3 text-right font-medium">{{ $t('dashboard.colCallsPerMin') }}</th><th scope="col" class="px-3 text-right font-medium">{{ $t('dashboard.colTools') }}</th><th scope="col" class="px-5"><span class="sr-only">{{ $t('dashboard.colActions') }}</span></th></tr></thead>
         <tbody>
           <tr v-for="c in data.clients" :key="`${c.kind}-${c.id}`" class="border-b border-muted">
-            <td class="px-5 py-2 font-medium">{{ c.name }}<Badge v-if="c.allowlisted === false" variant="outline" class="ml-2">nicht in Allowlist</Badge></td>
-            <td class="px-3">{{ c.kind === 'oauth' ? 'OAuth' : 'Token' }}</td>
+            <td class="px-5 py-2 font-medium">{{ c.name }}<Badge v-if="c.allowlisted === false" variant="outline" class="ml-2">{{ $t('dashboard.notAllowlisted') }}</Badge></td>
+            <td class="px-3">{{ c.kind === 'oauth' ? 'OAuth' : $t('dashboard.kindToken') }}</td>
             <td class="px-3"><StatusDot :active="c.active" /></td>
-            <td class="px-3"><RelativeTime :value="c.lastActiveAt" empty="nie" /></td>
+            <td class="px-3"><RelativeTime :value="c.lastActiveAt" :empty="$t('dashboard.never')" /></td>
             <td class="tnum px-3 text-right">{{ formatNumber(c.callsPerMin) }}</td>
-            <td class="tnum px-3 text-right">{{ c.contextTokensEstimate == null ? '–' : `ca. ${formatNumber(c.contextTokensEstimate)} Tokens` }}</td>
-            <td class="px-5 text-right"><Button variant="destructive-outline" :aria-label="`${c.name} widerrufen`" @click="revoke = c">Widerrufen</Button></td>
+            <td class="tnum px-3 text-right">{{ c.contextTokensEstimate == null ? '–' : $t('dashboard.contextTokens', { n: formatNumber(c.contextTokensEstimate) }) }}</td>
+            <td class="px-5 text-right"><Button variant="destructive-outline" :aria-label="$t('dashboard.revokeLabel', { name: c.name })" @click="revoke = c">{{ $t('dashboard.revoke') }}</Button></td>
           </tr>
         </tbody>
       </table>
     </DataSection>
-    <ConfirmDialog :open="!!revoke" title="Zugriff widerrufen?" confirm-label="Widerrufen" @update:open="(v) => !v && (revoke = null)" @confirm="doRevoke">
-      {{ revoke?.kind === 'oauth' ? 'Die Verbindung' : 'Das Token' }} „{{ revoke?.name }}“ wird beendet. Das wirkt beim nächsten Aufruf.
+    <ConfirmDialog :open="!!revoke" :title="$t('dashboard.confirmTitle')" :confirm-label="$t('dashboard.revoke')" @update:open="(v) => !v && (revoke = null)" @confirm="doRevoke">
+      {{ revoke?.kind === 'oauth' ? $t('dashboard.confirmBodyOauth', { name: revoke?.name }) : $t('dashboard.confirmBodyToken', { name: revoke?.name }) }}
     </ConfirmDialog>
   </template>
 </template>

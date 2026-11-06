@@ -12,6 +12,7 @@ export default defineConfig({
   workers: 1,
   // PW_CHROMIUM_PATH: optional path to a preinstalled Chromium (e.g. in sandboxes without `playwright install`).
   use: {
+    locale: 'de-DE', // the UI defaults to English; the existing specs assert German
     baseURL: `http://localhost:${PORT}`,
     launchOptions: process.env.PW_CHROMIUM_PATH ? { executablePath: process.env.PW_CHROMIUM_PATH, args: ['--no-sandbox'] } : {},
   },

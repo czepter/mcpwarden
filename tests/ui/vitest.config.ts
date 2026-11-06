@@ -15,6 +15,7 @@ export default defineConfig({
     root: r('../..'),
     include: ['tests/ui/{unit,component,contract}/**/*.test.ts'],
     environment: 'happy-dom',
+    setupFiles: ['tests/ui/setup.ts'],
     environmentOptions: { happyDOM: { url: 'http://localhost:3000' } },
   },
 })

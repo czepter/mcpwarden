@@ -1,11 +1,17 @@
 import type { StdioReason } from '#shared/api-types'
+import { t } from '~/lib/i18n'
 import { stdioReasonLabel } from './labels'
 
 export type ChecklistState = 'ok' | 'blocked' | 'open'
 export type ChecklistRow = { key: 'runtime' | 'instance' | 'account' | 'command', label: string, state: ChecklistState, detail?: string }
 
 const RUNTIME_REASONS: string[] = ['supervisor_unreachable', 'no_capabilities']
-export const checklistStateText: Record<ChecklistState, string> = { ok: 'Erfüllt', blocked: 'Blockiert', open: 'Offen' }
+// Getters: the text is resolved at access time, so it follows the active locale.
+export const checklistStateText: Record<ChecklistState, string> = {
+  get ok() { return t('common.checklist.ok') },
+  get blocked() { return t('common.checklist.blocked') },
+  get open() { return t('common.checklist.open') },
+}
 
 /**
  * Prerequisites for approving a stdio upstream, derived from `/api/me/capabilities`.
@@ -17,18 +23,18 @@ export function stdioChecklist(caps: { stdio: { allowed: boolean, reason?: Stdio
   const reason: string | undefined = caps.stdio.allowed ? undefined : (caps.stdio.reason ?? 'unknown')
   type Def = { key: ChecklistRow['key'], label: string, blockedBy: (r: string) => boolean }
   const order: Def[] = []
-  if (reason === 'image_slim') order.push({ key: 'runtime', label: 'stdio-Laufzeit ist vorhanden', blockedBy: r => r === 'image_slim' })
-  order.push({ key: 'instance', label: 'stdio ist auf dieser Instanz aktiviert', blockedBy: r => r === 'instance_disabled' })
-  order.push({ key: 'account', label: 'Dein Konto ist für stdio freigegeben', blockedBy: r => r === 'not_granted' })
+  if (reason === 'image_slim') order.push({ key: 'runtime', label: t('common.checklist.runtime'), blockedBy: r => r === 'image_slim' })
+  order.push({ key: 'instance', label: t('common.checklist.instance'), blockedBy: r => r === 'instance_disabled' })
+  order.push({ key: 'account', label: t('common.checklist.account'), blockedBy: r => r === 'not_granted' })
   if (reason && (RUNTIME_REASONS.includes(reason) || reason === 'unknown')) {
-    order.push({ key: 'runtime', label: 'Prozess-Isolation ist verfügbar', blockedBy: r => RUNTIME_REASONS.includes(r) || r === 'unknown' })
+    order.push({ key: 'runtime', label: t('common.checklist.isolation'), blockedBy: r => RUNTIME_REASONS.includes(r) || r === 'unknown' })
   }
   const blockedAt = reason ? order.findIndex(o => o.blockedBy(reason)) : -1
   const rows: ChecklistRow[] = order.map((o, i) => {
     const state: ChecklistState = blockedAt < 0 || i < blockedAt ? 'ok' : i === blockedAt ? 'blocked' : 'open'
-    const detail = state === 'blocked' ? (reason === 'unknown' ? 'stdio ist derzeit nicht verfügbar.' : stdioReasonLabel(reason!)) : undefined
+    const detail = state === 'blocked' ? (reason === 'unknown' ? t('common.checklist.unavailable') : stdioReasonLabel(reason!)) : undefined
     return { key: o.key, label: o.label, state, detail }
   })
-  rows.push({ key: 'command', label: 'Befehl und Umgebung geprüft', state: 'open', detail: 'Das bestätigst du mit „Freigeben“. Prüfe die Angaben unten genau.' })
+  rows.push({ key: 'command', label: t('common.checklist.command'), state: 'open', detail: t('common.checklist.commandDetail') })
   return rows
 }

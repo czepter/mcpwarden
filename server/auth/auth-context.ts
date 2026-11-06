@@ -9,8 +9,9 @@ export type AuthContext = {
   clientId: string | null // oauth: client_id, pat: null
   clientName: string | null // untrusted, truncated
   scopes: string[]
-  expiresAt: number | null // Unix seconds; PAT: null
+  expiresAt: number | null // Unix seconds; PAT: null = never expires
   resource: string // BASE_URL + '/mcp'
+  upstreamIds?: string[] // PAT only: restricts to these upstreams; absent = all
 }
 
 const KEY = 'authContext'

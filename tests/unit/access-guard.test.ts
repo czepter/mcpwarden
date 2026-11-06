@@ -130,6 +130,12 @@ describe('authenticateMcpRequest: pat', () => {
     await expect401(await setup({ pat: row({ revokedAt: NOW }) }).call(`Bearer ${pat.token}`))
     await expect401(await setup({ pat: row({}, { ...user, banned: true }) }).call(`Bearer ${pat.token}`))
   })
+  it('expired PAT -> 401; future expiry and upstream restriction land in the context', async () => {
+    await expect401(await setup({ pat: row({ expiresAt: new Date(NOW.getTime() - 1) }) }).call(`Bearer ${pat.token}`))
+    const exp = new Date(NOW.getTime() + 60_000)
+    const res = await setup({ pat: row({ expiresAt: exp, upstreamIds: ['up1'] }) }).call(`Bearer ${pat.token}`)
+    expect((res as { ctx: unknown }).ctx).toMatchObject({ expiresAt: Math.floor(exp.getTime() / 1000), upstreamIds: ['up1'] })
+  })
   it('hash mismatch from the store is rejected', async () => {
     await expect401(await setup({ pat: row({ tokenHash: 'f'.repeat(64) }) }).call(`Bearer ${pat.token}`))
   })

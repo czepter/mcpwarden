@@ -13,7 +13,7 @@ describe('labels', () => {
     for (const v of SETUP_VALUES) expect(setupLabel(v)).not.toBe(v)
     expect(healthLabel('new')).toBe('new')
     expect(scopeLabel('mcp:tools')).toBe('Tools auflisten und aufrufen')
-    expect(toolKind({ destructiveHint: true })).toBe('löschend')
+    expect(toolKind({ destructiveHint: true })).toBe('löschend') // tests run with the German locale (tests/ui/setup.ts)
     expect(toolKind(undefined)).toBe('unbekannt')
   })
 })

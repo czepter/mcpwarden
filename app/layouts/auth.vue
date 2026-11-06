@@ -1,5 +1,6 @@
 <script setup lang="ts">
 // Mock banner only in the mock build: __API_MOCK__ is a compile-time constant, in the production build the branch is dropped together with the chunk.
+import LocaleSwitcher from '~/components/shell/LocaleSwitcher.vue'
 const MockBanner = __API_MOCK__ ? defineAsyncComponent(() => import('~/components/shell/MockBanner.vue')) : undefined
 </script>
 
@@ -12,6 +13,7 @@ const MockBanner = __API_MOCK__ ? defineAsyncComponent(() => import('~/component
         <span class="text-[15px] font-bold tracking-tight">mcpwarden</span>
       </div>
       <slot />
+      <LocaleSwitcher />
     </main>
   </div>
 </template>

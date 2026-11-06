@@ -21,7 +21,7 @@ const summaryShape = {
   p95Ms: num().nullable().optional(), recent: z.array(z.enum(['ok', 'warn', 'err', 'none'])).optional(),
 }
 const annotations = z.strictObject({ readOnlyHint: bool().optional(), destructiveHint: bool().optional(), idempotentHint: bool().optional() })
-const patSummary = { id: str(), name: str(), prefix: str(), createdAt: str(), lastUsedAt: nstr, revokedAt: nstr }
+const patSummary = { id: str(), name: str(), prefix: str(), createdAt: str(), lastUsedAt: nstr, revokedAt: nstr, expiresAt: nstr, upstreamIds: z.array(str()).nullable() }
 
 export const schemas = {
   session: z.union([z.null(), z.strictObject({ user: z.strictObject({ id: str(), name: str(), email: str(), role: z.enum(['admin', 'user']), banned: bool() }), session: z.strictObject({ id: str(), expiresAt: str() }) })]) satisfies z.ZodType<AuthSession>,

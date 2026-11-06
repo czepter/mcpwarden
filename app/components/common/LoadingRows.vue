@@ -6,7 +6,7 @@ withDefaults(defineProps<{ rows?: number }>(), { rows: 4 })
 
 <template>
   <div class="flex flex-col gap-3 p-5" aria-busy="true" role="status" data-testid="loading">
-    <span class="sr-only">Wird geladen …</span>
+    <span class="sr-only">{{ $t('common.loading') }}</span>
     <Skeleton v-for="i in rows" :key="i" class="h-9 w-full" />
   </div>
 </template>

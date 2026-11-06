@@ -1,0 +1,206 @@
+{
+  "common": {
+    "language": "Language",
+    "confirm": "Confirm",
+    "cancel": "Cancel",
+    "close": "Close",
+    "copy": "Copy",
+    "holdToConfirm": "Press and hold the red button to confirm.",
+    "copied": "Copied",
+    "show": "Show",
+    "hide": "Hide",
+    "loading": "Loading …",
+    "retry": "Try again",
+    "home": "Home",
+    "openNavigation": "Open navigation",
+    "sidebar": "Sidebar",
+    "collapseSidebar": "Collapse sidebar",
+    "expandSidebar": "Expand sidebar",
+    "mainNav": "Main navigation",
+    "userMenu": "User menu",
+    "settings": "Settings",
+    "logout": "Log out",
+    "needAttention": "({count} need attention)",
+    "unexpectedError": "Unexpected error.",
+    "errorStatus": "Error {status}",
+    "nav": {
+      "operations": "Operations",
+      "access": "Access",
+      "system": "System",
+      "dashboard": "Dashboard",
+      "upstreams": "Upstreams",
+      "stats": "Statistics",
+      "clients": "Clients",
+      "tokens": "Tokens",
+      "audit": "Audit",
+      "admin": "Admin",
+      "settings": "Settings"
+    },
+    "adminTabs": {
+      "label": "Admin sections",
+      "users": "Users",
+      "oauth": "Clients (DCR)",
+      "instance": "Instance",
+      "hint": "You only see metadata here. Users' contents and credentials are not visible to admins."
+    },
+    "pageError": {
+      "notFoundTitle": "Page not found",
+      "notFoundText": "This address does not exist.",
+      "genericTitle": "Something went wrong",
+      "toDashboard": "Go to dashboard"
+    },
+    "errorState": {
+      "forbiddenTitle": "No access",
+      "notFoundTitle": "Not found",
+      "genericTitle": "That didn't work",
+      "forbidden": "You don't have permission to view this page.",
+      "notFound": "This entry does not exist or does not belong to you.",
+      "unknown": "Unknown error."
+    },
+    "autoRefresh": {
+      "label": "Auto-refresh",
+      "off": "Off",
+      "oneMinute": "1 min"
+    },
+    "timeWindow": {
+      "label": "Time window"
+    },
+    "oneTimeSecret": {
+      "hint": "You only see this value now. It can't be retrieved afterwards."
+    },
+    "spark": "Last {total} entries: {ok} without errors, {err} with errors",
+    "time": {
+      "now": "just now",
+      "past": "{n} {unit} ago",
+      "future": "in {n} {unit}",
+      "sec": "s",
+      "min": "min",
+      "hour": "h",
+      "day": "d",
+      "today": "today"
+    },
+    "mock": {
+      "title": "Mock mode",
+      "domains": "Domains: {spec}",
+      "role": "Role",
+      "scenario": "Scenario",
+      "roleLabel": "Mock role",
+      "scenarioLabel": "Mock scenario"
+    },
+    "role": {
+      "admin": "Admin",
+      "user": "User"
+    },
+    "health": {
+      "healthy": "Healthy",
+      "degraded": "Degraded",
+      "open": "Breaker open",
+      "auth_expired": "Auth expired",
+      "disabled": "Disabled",
+      "unknown": "Unknown"
+    },
+    "setup": {
+      "ready": "Ready",
+      "awaiting_auth": "Waiting for credentials",
+      "awaiting_approval": "Waiting for approval"
+    },
+    "outcome": {
+      "ok": "Successful",
+      "tool_error": "Tool error",
+      "timeout": "Timeout",
+      "upstream_error": "Upstream error",
+      "rate_limited": "Rate limit",
+      "breaker_open": "Breaker open",
+      "denied": "Denied"
+    },
+    "scope": {
+      "mcp:tools": "List and call tools",
+      "mcpwarden:admin": "Manage upstreams",
+      "openid": "Sign-in",
+      "offline_access": "Stay signed in"
+    },
+    "authType": {
+      "none": "None",
+      "bearer": "Bearer token",
+      "header": "Custom header",
+      "oauth": "OAuth"
+    },
+    "dcrMode": {
+      "off": "Off",
+      "allowlist": "Allowlist only",
+      "open": "Open with warning"
+    },
+    "inviteStatus": {
+      "open": "Open",
+      "used": "Used",
+      "expired": "Expired",
+      "revoked": "Revoked"
+    },
+    "auditResult": {
+      "success": "Successful",
+      "pending": "Waiting for approval",
+      "denied": "Denied",
+      "status_change": "Status change"
+    },
+    "toolKind": {
+      "read": "read",
+      "write": "write",
+      "delete": "delete",
+      "unknown": "unknown"
+    },
+    "stdioReason": {
+      "instance_disabled": "stdio is turned off on this instance. An admin can enable it under Admin › Instance.",
+      "not_granted": "Your account is not approved for stdio. Ask an admin.",
+      "no_capabilities": "The container lacks the privileges to isolate processes safely.",
+      "supervisor_unreachable": "The supervisor is unreachable.",
+      "image_slim": "This (\"slim\") image does not include a stdio runtime."
+    },
+    "checklist": {
+      "ok": "Met",
+      "blocked": "Blocked",
+      "open": "Open",
+      "runtime": "stdio runtime is present",
+      "instance": "stdio is enabled on this instance",
+      "account": "Your account is approved for stdio",
+      "isolation": "Process isolation is available",
+      "command": "Command and environment reviewed",
+      "unavailable": "stdio is currently unavailable.",
+      "commandDetail": "You confirm this with \"Approve\". Check the details below carefully."
+    },
+    "validation": {
+      "emailRequired": "Please enter an email address.",
+      "emailInvalid": "That is not a valid email address.",
+      "min12": "At least 12 characters.",
+      "passwordRequired": "Please enter your password.",
+      "passwordMismatch": "The passwords don't match.",
+      "nameRequired": "Please enter your name.",
+      "nameEmpty": "The name must not be empty.",
+      "currentPasswordRequired": "Please enter your current password.",
+      "tokenNameRequired": "Please give it a name.",
+      "max64": "At most 64 characters.",
+      "valueRequired": "Please enter the value.",
+      "posInt": "{label}: whole number, 1 or more.",
+      "labelMissing": "Label is missing.",
+      "patternMissing": "Name pattern is missing.",
+      "redirectMissing": "At least one redirect pattern.",
+      "displayNameEmpty": "The display name must not be empty.",
+      "slug": "Only a–z, 0–9 and hyphen, not at the start, at most 32 characters.",
+      "url": "A valid http(s) URL without credentials is required.",
+      "headerName": "Header name: letters, digits and hyphen.",
+      "commandEmpty": "The command must not be empty.",
+      "cwd": "Relative path without \"..\".",
+      "max600": "At most 600 s.",
+      "limits": {
+        "upstreams": "Upstreams",
+        "callsPerMin": "Calls per minute",
+        "connections": "Connections",
+        "stdioProcs": "stdio processes",
+        "stdioIdle": "stdio idle time",
+        "concurrent": "Concurrent",
+        "connect": "Connect",
+        "list": "List",
+        "call": "Call"
+      }
+    }
+  }
+}

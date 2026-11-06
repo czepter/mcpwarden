@@ -93,6 +93,26 @@ describe('ConfirmDialog', () => {
     expect(seen).toEqual(['token-1'])
     w.unmount()
   })
+
+  it('needs a pointer hold for destructive actions, a plain mouse click does not confirm', async () => {
+    vi.useFakeTimers()
+    const seen: string[] = []
+    const w = mount(ConfirmDialog, { props: { open: true, title: 'T', confirmLabel: 'Löschen', onConfirm: () => seen.push('x') }, attachTo: document.body })
+    await vi.advanceTimersByTimeAsync(0)
+    const btn = [...document.body.querySelectorAll('button')].find(b => b.textContent?.trim() === 'Löschen')!
+    btn.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 }))
+    expect(seen).toEqual([])
+    btn.dispatchEvent(new Event('pointerdown', { bubbles: true }))
+    await vi.advanceTimersByTimeAsync(300)
+    btn.dispatchEvent(new Event('pointerup', { bubbles: true }))
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(seen).toEqual([])
+    btn.dispatchEvent(new Event('pointerdown', { bubbles: true }))
+    await vi.advanceTimersByTimeAsync(800)
+    expect(seen).toEqual(['x'])
+    vi.useRealTimers()
+    w.unmount()
+  })
 })
 
 describe('StdioChecklist', () => {

@@ -50,6 +50,13 @@
       "when": 1793875377672,
       "tag": "0006_composite_upstream_fks",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1793997351468,
+      "tag": "0007_pat_expiry_scope",
+      "breakpoints": true
     }
   ]
 }

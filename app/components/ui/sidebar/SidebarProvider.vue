@@ -66,7 +66,7 @@ provideSidebarContext({
 </script>
 
 <template>
-  <TooltipProvider :delay-duration="0">
+  <TooltipProvider :delay-duration="400" :skip-delay-duration="300">
     <div
       data-slot="sidebar-wrapper"
       :style="{
