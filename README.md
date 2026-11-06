@@ -32,6 +32,8 @@ Changing the schema: `pnpm db:schema` (regenerate the Better Auth schema), `pnpm
 
 Tests: `pnpm build && pnpm test` (unit and integration against PGlite, the built artifact runs as a child process). `pnpm test:pg` additionally starts a Postgres container (`TEST_PG_PORT` overrides port 54329) and runs the same tests with `TEST_BACKEND=postgres`.
 
+Image: the `image` workflow (Actions > image > Run workflow) builds `full` and/or `slim` for amd64 and arm64 and pushes to `ghcr.io/<owner>/mcpwarden` (`<tag>`, `sha-<short>`, optional `latest`; slim tags carry a `-slim` suffix). It runs only when triggered by hand.
+
 Notes: single instance (process-wide mutex for registration, PGlite allows only one process per `DATA_DIR`; deploy as recreate, not rolling). No automatic deployment.
 
 ## Does mcpwarden send emails?
