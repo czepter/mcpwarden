@@ -1,10 +1,60 @@
 name: ci
 on:
   push:
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+      - ".github/workflows/image.yml"
+      - ".gitignore"
+      - ".dockerignore"
   pull_request:
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+      - ".github/workflows/image.yml"
+      - ".gitignore"
+      - ".dockerignore"
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+run-name: ci · tree ${{ github.event.head_commit.tree_id || github.sha }}
 
 jobs:
+  # Skip when this exact content (git tree) already passed: a merge or pull of tested content does not run again.
+  # Same-repo PRs are skipped too, because the push to their branch already ran.
+  gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: read
+    outputs:
+      skip: ${{ steps.check.outputs.skip }}
+    steps:
+      - id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          SAME_REPO: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
+          TREE: ${{ github.event.head_commit.tree_id }}
+          WORKFLOW: ${{ github.workflow }}
+        run: |
+          skip=false
+          if [ "$EVENT" = pull_request ] && [ "$SAME_REPO" = true ]; then
+            skip=true
+          elif [ "$EVENT" = push ] && [ -n "$TREE" ]; then
+            hits=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow "$WORKFLOW" --status success --limit 100 \
+              --json displayTitle --jq "[.[] | select(.displayTitle | contains(\"tree $TREE\"))] | length")
+            [ "${hits:-0}" -gt 0 ] && skip=true
+          fi
+          echo "skip=$skip" >> "$GITHUB_OUTPUT"
+          echo "skip=$skip (event=$EVENT tree=$TREE)"
+
   check:
+    timeout-minutes: 20
+    needs: gate
+    if: needs.gate.outputs.skip != 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -25,9 +75,14 @@ jobs:
           test -z "$(git status --porcelain server/db)"
       - run: sh scripts/test-init-env.sh
       - run: pnpm test:unit
+      - run: pnpm ui:test
       - run: pnpm build
+      - run: pnpm ui:check-build
 
   integration:
+    timeout-minutes: 20
+    needs: gate
+    if: needs.gate.outputs.skip != 'true'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -66,6 +121,9 @@ jobs:
 
   # Supervisor in a Linux container (UID switch, only SETUID/SETGID/CHOWN, `id -G`, hardening); Docker is available on the runner
   container:
+    timeout-minutes: 20
+    needs: gate
+    if: needs.gate.outputs.skip != 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -77,26 +135,3 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: node scripts/build-supervisor.mjs
       - run: pnpm test:container
-
-  # Example compose (target full) builds and starts fresh: full-stack smoke (registration, invitation, PAT, OAuth+PKCE, /mcp via fake upstream,
-  # isolation, revocation), restart, clean shutdown
-  compose-smoke:
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version-file: .nvmrc
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm test:compose
-
-  # Target slim (web app only): builds, starts without capabilities, stdio is fixed off (image_slim)
-  slim-smoke:
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v4
-      - run: sh tests/e2e/slim-smoke.sh

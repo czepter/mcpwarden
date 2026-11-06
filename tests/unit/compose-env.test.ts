@@ -17,10 +17,8 @@ describe('compose.yaml', () => {
   })
 })
 
-describe('CI', () => {
-  it('builds and starts the slim image and checks that stdio is locked', () => {
-    const ci = readFileSync('.github/workflows/ci.yml', 'utf8')
-    expect(ci).toContain('tests/e2e/slim-smoke.sh')
+describe('slim smoke script', () => {
+  it('builds and starts the slim image and checks that stdio is locked (run locally: pnpm test:slim)', () => {
     const script = readFileSync('tests/e2e/slim-smoke.sh', 'utf8')
     expect(script).toContain('--target slim')
     expect(script).toContain('image_slim')

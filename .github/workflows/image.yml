@@ -1,0 +1,64 @@
+name: image
+
+# Manual only: Actions > image > Run workflow. Nothing builds on push, PR or tag.
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Image tag (e.g. 0.1.0). The commit SHA is always added as an extra tag.
+        required: true
+        default: latest
+      target:
+        description: Dockerfile target
+        type: choice
+        options: [full, slim, both]
+        default: both
+      latest:
+        description: Also move the `latest` tag (full) / `latest-slim` tag (slim)
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  IMAGE: ghcr.io/${{ github.repository }}
+
+jobs:
+  image:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        target: ${{ inputs.target == 'both' && fromJSON('["full","slim"]') || fromJSON(format('["{0}"]', inputs.target)) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Tags
+        id: tags
+        run: |
+          # full is the default image: plain tags. slim gets a -slim suffix.
+          sfx=''; [ '${{ matrix.target }}' = slim ] && sfx='-slim'
+          tags="$IMAGE:${{ inputs.tag }}$sfx,$IMAGE:sha-${GITHUB_SHA::7}$sfx"
+          [ '${{ inputs.latest }}' = true ] && tags="$tags,$IMAGE:latest$sfx"
+          echo "list=$tags" >> "$GITHUB_OUTPUT"
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: ${{ matrix.target }}
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.tags.outputs.list }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+          cache-from: type=gha,scope=${{ matrix.target }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.target }}
