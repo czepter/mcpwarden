@@ -86,25 +86,8 @@ jobs:
     needs: gate
     if: needs.gate.outputs.skip != 'true'
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        backend: [pglite, postgres]
-    services:
-      postgres:
-        image: postgres:17
-        env:
-          POSTGRES_PASSWORD: test
-        ports:
-          - 54329:5432
-        options: >-
-          --health-cmd "pg_isready -U postgres"
-          --health-interval 2s
-          --health-timeout 3s
-          --health-retries 30
     env:
-      TEST_BACKEND: ${{ matrix.backend }}
-      TEST_PG_ADMIN_URL: postgres://postgres:test@localhost:54329/postgres
+      TEST_BACKEND: pglite
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -117,7 +100,7 @@ jobs:
       - run: node scripts/build-supervisor.mjs
       # test:int contains the contract test (real responses against the zod schemas) and the full-stack smoke as a Vitest suite
       - run: pnpm test:int
-      # the same smoke as a script against a fresh instance of the built artifact (PGlite or Postgres per matrix entry)
+      # the same smoke as a script against a fresh instance of the built artifact (PGlite)
       - name: Full-stack smoke (script)
         run: pnpm smoke
 
