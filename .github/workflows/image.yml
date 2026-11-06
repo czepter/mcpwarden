@@ -1,6 +1,10 @@
 name: image
 
 # Manual only: Actions > image > Run workflow. Nothing builds on push, PR or tag.
+#
+# Layout: one job per architecture on a native runner (no QEMU). Each job builds the selected targets one after the other
+# on the same builder, so `full` and `slim` share the deps/build stages (in the local layer cache and in the per-arch
+# Actions cache). A final job joins the per-arch images into one multi-arch tag per target.
 on:
   workflow_dispatch:
     inputs:
@@ -26,39 +30,90 @@ env:
   IMAGE: ghcr.io/${{ github.repository }}
 
 jobs:
-  image:
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
+  build:
+    name: build (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
     strategy:
-      fail-fast: false
+      fail-fast: true
       matrix:
-        target: ${{ inputs.target == 'both' && fromJSON('["full","slim"]') || fromJSON(format('["{0}"]', inputs.target)) }}
+        include:
+          - { arch: amd64, runner: ubuntu-latest }
+          - { arch: arm64, runner: ubuntu-24.04-arm }
     steps:
       - uses: actions/checkout@v4
-      - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
       - uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Tags
-        id: tags
-        run: |
-          # full is the default image: plain tags. slim gets a -slim suffix.
-          sfx=''; [ '${{ matrix.target }}' = slim ] && sfx='-slim'
-          tags="$IMAGE:${{ inputs.tag }}$sfx,$IMAGE:sha-${GITHUB_SHA::7}$sfx"
-          [ '${{ inputs.latest }}' = true ] && tags="$tags,$IMAGE:latest$sfx"
-          echo "list=$tags" >> "$GITHUB_OUTPUT"
-      - uses: docker/build-push-action@v6
+      - name: Build full
+        id: full
+        if: inputs.target != 'slim'
+        uses: docker/build-push-action@v6
         with:
           context: .
-          target: ${{ matrix.target }}
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: ${{ steps.tags.outputs.list }}
-          labels: |
-            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
-            org.opencontainers.image.revision=${{ github.sha }}
-          cache-from: type=gha,scope=${{ matrix.target }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.target }}
+          target: full
+          platforms: linux/${{ matrix.arch }}
+          provenance: false
+          outputs: type=image,name=${{ env.IMAGE }},push-by-digest=true,name-canonical=true,push=true
+          cache-from: type=gha,scope=${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.arch }}
+      - name: Build slim
+        id: slim
+        if: inputs.target != 'full'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: slim
+          platforms: linux/${{ matrix.arch }}
+          provenance: false
+          outputs: type=image,name=${{ env.IMAGE }},push-by-digest=true,name-canonical=true,push=true
+          cache-from: type=gha,scope=${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.arch }}
+      - name: Record digests
+        run: |
+          mkdir -p digests
+          full='${{ steps.full.outputs.digest }}'; slim='${{ steps.slim.outputs.digest }}'
+          [ -n "$full" ] && touch "digests/full-${full#sha256:}"
+          [ -n "$slim" ] && touch "digests/slim-${slim#sha256:}"
+          ls digests
+      - uses: actions/upload-artifact@v4
+        with:
+          name: digests-${{ matrix.arch }}
+          path: digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  merge:
+    name: publish multi-arch tags
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: build
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: digests-*
+          merge-multiple: true
+          path: digests
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Create manifests
+        working-directory: digests
+        run: |
+          for target in full slim; do
+            ls "$target"-* >/dev/null 2>&1 || continue
+            # full is the default image: plain tags. slim gets a -slim suffix.
+            sfx=''; [ "$target" = slim ] && sfx='-slim'
+            args="-t $IMAGE:${{ inputs.tag }}$sfx -t $IMAGE:sha-${GITHUB_SHA::7}$sfx"
+            [ '${{ inputs.latest }}' = true ] && args="$args -t $IMAGE:latest$sfx"
+            refs=''
+            for f in "$target"-*; do refs="$refs $IMAGE@sha256:${f#"$target"-}"; done
+            docker buildx imagetools create $args $refs
+            docker buildx imagetools inspect "$IMAGE:${{ inputs.tag }}$sfx"
+          done
