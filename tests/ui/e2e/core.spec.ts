@@ -31,15 +31,15 @@ test('wrong password shows an error, registration without an invitation is block
   await expect(page.getByText('nur mit Einladung')).toBeVisible()
 })
 
-test('Login shows the register link only with public-config.registrationOpen', async ({ page }) => {
+test('Login redirects to the registration only with public-config.registrationOpen', async ({ page }) => {
   await prep(page)
   await page.goto('/login')
   await expect(page.getByText('nur mit Einladung')).toBeVisible()
   await expect(page.getByRole('link', { name: 'Registrieren' })).toHaveCount(0)
   await page.evaluate(() => localStorage.setItem('mockRegistration', 'open'))
   await page.reload()
-  await expect(page.getByRole('link', { name: 'Registrieren' })).toBeVisible()
-  await expect(page.getByText('nur mit Einladung')).toHaveCount(0)
+  await expect(page).toHaveURL(/\/register$/)
+  await expect(page.getByRole('heading', { name: 'Registrieren', level: 1 })).toBeVisible()
 })
 
 test('Invitation: valid, bound, expired, used', async ({ page }) => {

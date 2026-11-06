@@ -37,9 +37,9 @@ test.beforeEach(({ page }) => {
 
 test('real build: no service worker, no mock banner, registration open on a fresh instance', async ({ page }) => {
   await page.goto('/login')
-  await expect(page.getByRole('heading', { name: 'Anmelden', level: 1 })).toBeVisible()
-  // public-config.registrationOpen=true: link to registration instead of "nur mit Einladung"
-  await expect(page.getByRole('link', { name: 'Registrieren' })).toBeVisible()
+  // public-config.registrationOpen=true: the login page sends the first visitor to the registration
+  await expect(page).toHaveURL(/\/register$/)
+  await expect(page.getByRole('heading', { name: 'Registrieren', level: 1 })).toBeVisible()
   expect(await page.evaluate(async () => (await navigator.serviceWorker.getRegistrations()).length)).toBe(0)
   await expect(page.getByText('Mock')).toHaveCount(0)
   expect((await page.request.get('/mockServiceWorker.js')).status()).not.toBe(200)
@@ -48,7 +48,6 @@ test('real build: no service worker, no mock banner, registration open on a fres
 
 test('First registration via the UI makes the user an admin and lands on the dashboard', async ({ page }) => {
   await page.goto('/login')
-  await page.getByRole('link', { name: 'Registrieren' }).click()
   await expect(page).toHaveURL(/\/register$/)
   await page.getByLabel('Name').fill(ADMIN.name)
   await page.getByLabel('E-Mail').fill(ADMIN.email)

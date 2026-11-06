@@ -25,6 +25,8 @@ const onSubmit = submit(async (v) => {
   await navigateTo(r)
 })
 const { data: pub } = useAsyncData('public-config', () => publicApi.config().catch(() => ({ mail: false, registrationOpen: false })), { server: false })
+// No user exists yet: the first visitor registers (and becomes admin) instead of seeing a login form nobody can use.
+watch(() => pub.value?.registrationOpen, (open) => { if (open && !route.query.sig) navigateTo('/register', { replace: true }) }, { immediate: true })
 </script>
 
 <template>
