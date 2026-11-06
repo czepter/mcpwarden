@@ -34,7 +34,7 @@ Tests: `pnpm build && pnpm test` (unit and integration against PGlite, the built
 
 Image: the `image` workflow (Actions > image > Run workflow) builds `full` and/or `slim` for amd64 and arm64 (native runners, shared layers) and pushes to `ghcr.io/<owner>/mcpwarden` (`<tag>`, `sha-<short>`, optional `latest`; slim tags carry a `-slim` suffix). It runs only when triggered by hand.
 
-Coolify: `deploy/coolify.compose.yaml` (full) and `deploy/coolify.slim.compose.yaml` (slim: no stdio, no capabilities) use Coolify's magic variables for the domain, `BASE_URL`, `BETTER_AUTH_SECRET` and `MASTER_KEY`. Set the domain of the `mcpwarden` service in Coolify, pin a version with `MCPWARDEN_TAG` (slim tags end in `-slim`), and back up `MASTER_KEY`. The GHCR package must be public or Coolify needs a registry login.
+Coolify: `deploy/coolify.compose.yaml` (full) and `deploy/coolify.slim.compose.yaml` (slim: no stdio, no capabilities) use Coolify's magic variables for the domain, `BASE_URL`, `BETTER_AUTH_SECRET` and `MASTER_KEY`. Set the domain of the `mcpwarden` service in Coolify, pin a version with `MCPWARDEN_TAG` (slim tags end in `-slim`), and back up the generated `SERVICE_PASSWORD_64_MASTERKEY` value: the master key is derived from it (SHA-256, hex) at container start, and losing it makes stored upstream credentials unreadable. The GHCR package must be public or Coolify needs a registry login.
 
 Notes: single instance (process-wide mutex for registration, PGlite allows only one process per `DATA_DIR`; deploy as recreate, not rolling). No automatic deployment.
 

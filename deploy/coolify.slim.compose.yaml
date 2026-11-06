@@ -4,6 +4,7 @@ services:
     init: true
     restart: unless-stopped
     stop_grace_period: 40s
+    command: ["sh", "-c", "MASTER_KEY=$$(printf %s \"$$MASTER_KEY_SEED\" | sha256sum | cut -d' ' -f1) && export MASTER_KEY && unset MASTER_KEY_SEED && exec node .output/server/index.mjs"]
     cap_drop: [ALL]
     security_opt:
       - no-new-privileges:true
@@ -11,7 +12,7 @@ services:
       - SERVICE_FQDN_MCPWARDEN_3000
       - BASE_URL=${SERVICE_URL_MCPWARDEN_3000}
       - BETTER_AUTH_SECRET=${SERVICE_PASSWORD_64_AUTHSECRET}
-      - MASTER_KEY=${SERVICE_BASE64_32_MASTERKEY}
+      - MASTER_KEY_SEED=${SERVICE_PASSWORD_64_MASTERKEY}
       - TRUST_PROXY=${TRUST_PROXY:-1}
       - DATABASE_URL=${DATABASE_URL:-}
       - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-}
