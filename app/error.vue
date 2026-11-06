@@ -7,8 +7,8 @@ defineProps<{ error: NuxtError }>()
 
 <template>
   <main class="mx-auto flex min-h-screen max-w-md flex-col items-center justify-center gap-3 px-4 text-center">
-    <h1 class="text-xl font-semibold">{{ error.statusCode === 404 ? 'Seite nicht gefunden' : 'Etwas ist schiefgelaufen' }}</h1>
-    <p class="text-[13px] text-muted-foreground">{{ error.statusCode === 404 ? 'Diese Adresse gibt es nicht.' : error.message }}</p>
-    <Button @click="clearError({ redirect: '/' })">Zum Dashboard</Button>
+    <h1 class="text-xl font-semibold">{{ error.statusCode === 404 ? $t('common.pageError.notFoundTitle') : $t('common.pageError.genericTitle') }}</h1>
+    <p class="text-[13px] text-muted-foreground">{{ error.statusCode === 404 ? $t('common.pageError.notFoundText') : error.message }}</p>
+    <Button @click="clearError({ redirect: '/' })">{{ $t('common.pageError.toDashboard') }}</Button>
   </main>
 </template>

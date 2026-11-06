@@ -1,0 +1,206 @@
+{
+  "common": {
+    "language": "Sprache",
+    "confirm": "Bestätigen",
+    "cancel": "Abbrechen",
+    "close": "Schließen",
+    "copy": "Kopieren",
+    "holdToConfirm": "Roten Button gedrückt halten, um zu bestätigen.",
+    "copied": "Kopiert",
+    "show": "Anzeigen",
+    "hide": "Verbergen",
+    "loading": "Wird geladen …",
+    "retry": "Erneut versuchen",
+    "home": "Home",
+    "openNavigation": "Navigation öffnen",
+    "sidebar": "Seitenleiste",
+    "collapseSidebar": "Seitenleiste einklappen",
+    "expandSidebar": "Seitenleiste ausklappen",
+    "mainNav": "Hauptnavigation",
+    "userMenu": "Benutzermenü",
+    "settings": "Einstellungen",
+    "logout": "Abmelden",
+    "needAttention": "({count} brauchen Aufmerksamkeit)",
+    "unexpectedError": "Unerwarteter Fehler.",
+    "errorStatus": "Fehler {status}",
+    "nav": {
+      "operations": "Betrieb",
+      "access": "Zugang",
+      "system": "System",
+      "dashboard": "Dashboard",
+      "upstreams": "Upstreams",
+      "stats": "Statistik",
+      "clients": "Clients",
+      "tokens": "Tokens",
+      "audit": "Audit",
+      "admin": "Admin",
+      "settings": "Einstellungen"
+    },
+    "adminTabs": {
+      "label": "Admin-Bereiche",
+      "users": "Nutzer",
+      "oauth": "Clients (DCR)",
+      "instance": "Instanz",
+      "hint": "Du siehst hier nur Metadaten. Inhalte und Zugangsdaten der Nutzer sind für Admins nicht einsehbar."
+    },
+    "pageError": {
+      "notFoundTitle": "Seite nicht gefunden",
+      "notFoundText": "Diese Adresse gibt es nicht.",
+      "genericTitle": "Etwas ist schiefgelaufen",
+      "toDashboard": "Zum Dashboard"
+    },
+    "errorState": {
+      "forbiddenTitle": "Kein Zugriff",
+      "notFoundTitle": "Nicht gefunden",
+      "genericTitle": "Das hat nicht geklappt",
+      "forbidden": "Du hast für diese Seite keine Berechtigung.",
+      "notFound": "Diesen Eintrag gibt es nicht oder er gehört dir nicht.",
+      "unknown": "Unbekannter Fehler."
+    },
+    "autoRefresh": {
+      "label": "Auto-Refresh",
+      "off": "Aus",
+      "oneMinute": "1 min"
+    },
+    "timeWindow": {
+      "label": "Zeitfenster"
+    },
+    "oneTimeSecret": {
+      "hint": "Du siehst diesen Wert nur jetzt. Danach ist er nicht mehr abrufbar."
+    },
+    "spark": "Letzte {total} Einträge: {ok} ohne Fehler, {err} mit Fehlern",
+    "time": {
+      "now": "gerade eben",
+      "past": "vor {n} {unit}",
+      "future": "in {n} {unit}",
+      "sec": "s",
+      "min": "Min.",
+      "hour": "Std.",
+      "day": "Tg.",
+      "today": "heute"
+    },
+    "mock": {
+      "title": "Mock-Modus",
+      "domains": "Domänen: {spec}",
+      "role": "Rolle",
+      "scenario": "Szenario",
+      "roleLabel": "Mock-Rolle",
+      "scenarioLabel": "Mock-Szenario"
+    },
+    "role": {
+      "admin": "Admin",
+      "user": "Nutzer"
+    },
+    "health": {
+      "healthy": "In Ordnung",
+      "degraded": "Eingeschränkt",
+      "open": "Breaker offen",
+      "auth_expired": "Auth abgelaufen",
+      "disabled": "Deaktiviert",
+      "unknown": "Unbekannt"
+    },
+    "setup": {
+      "ready": "Bereit",
+      "awaiting_auth": "Wartet auf Anmeldedaten",
+      "awaiting_approval": "Wartet auf Freigabe"
+    },
+    "outcome": {
+      "ok": "Erfolgreich",
+      "tool_error": "Tool-Fehler",
+      "timeout": "Timeout",
+      "upstream_error": "Upstream-Fehler",
+      "rate_limited": "Rate-Limit",
+      "breaker_open": "Breaker offen",
+      "denied": "Abgelehnt"
+    },
+    "scope": {
+      "mcp:tools": "Tools auflisten und aufrufen",
+      "mcpwarden:admin": "Upstreams verwalten",
+      "openid": "Anmeldung",
+      "offline_access": "Angemeldet bleiben"
+    },
+    "authType": {
+      "none": "Keine",
+      "bearer": "Bearer-Token",
+      "header": "Eigener Header",
+      "oauth": "OAuth"
+    },
+    "dcrMode": {
+      "off": "Aus",
+      "allowlist": "Nur Allowlist",
+      "open": "Offen mit Warnung"
+    },
+    "inviteStatus": {
+      "open": "Offen",
+      "used": "Verwendet",
+      "expired": "Abgelaufen",
+      "revoked": "Widerrufen"
+    },
+    "auditResult": {
+      "success": "Erfolgreich",
+      "pending": "Wartet auf Freigabe",
+      "denied": "Abgelehnt",
+      "status_change": "Statuswechsel"
+    },
+    "toolKind": {
+      "read": "lesend",
+      "write": "schreibend",
+      "delete": "löschend",
+      "unknown": "unbekannt"
+    },
+    "stdioReason": {
+      "instance_disabled": "stdio ist auf dieser Instanz ausgeschaltet. Ein Admin kann es unter Admin › Instanz aktivieren.",
+      "not_granted": "Dein Konto ist für stdio nicht freigegeben. Frag einen Admin.",
+      "no_capabilities": "Der Container hat keine Rechte, Prozesse sicher zu isolieren.",
+      "supervisor_unreachable": "Der Supervisor ist nicht erreichbar.",
+      "image_slim": "Dieses Image („slim“) enthält keine stdio-Laufzeit."
+    },
+    "checklist": {
+      "ok": "Erfüllt",
+      "blocked": "Blockiert",
+      "open": "Offen",
+      "runtime": "stdio-Laufzeit ist vorhanden",
+      "instance": "stdio ist auf dieser Instanz aktiviert",
+      "account": "Dein Konto ist für stdio freigegeben",
+      "isolation": "Prozess-Isolation ist verfügbar",
+      "command": "Befehl und Umgebung geprüft",
+      "unavailable": "stdio ist derzeit nicht verfügbar.",
+      "commandDetail": "Das bestätigst du mit „Freigeben“. Prüfe die Angaben unten genau."
+    },
+    "validation": {
+      "emailRequired": "Bitte gib eine E-Mail-Adresse ein.",
+      "emailInvalid": "Das ist keine gültige E-Mail-Adresse.",
+      "min12": "Mindestens 12 Zeichen.",
+      "passwordRequired": "Bitte gib dein Passwort ein.",
+      "passwordMismatch": "Die Passwörter stimmen nicht überein.",
+      "nameRequired": "Bitte gib deinen Namen ein.",
+      "nameEmpty": "Der Name darf nicht leer sein.",
+      "currentPasswordRequired": "Bitte gib dein aktuelles Passwort ein.",
+      "tokenNameRequired": "Bitte vergib einen Namen.",
+      "max64": "Höchstens 64 Zeichen.",
+      "valueRequired": "Bitte gib den Wert ein.",
+      "posInt": "{label}: ganze Zahl ab 1.",
+      "labelMissing": "Bezeichnung fehlt.",
+      "patternMissing": "Name-Muster fehlt.",
+      "redirectMissing": "Mindestens ein Redirect-Muster.",
+      "displayNameEmpty": "Der Anzeigename darf nicht leer sein.",
+      "slug": "Nur a–z, 0–9 und Bindestrich, nicht am Anfang, höchstens 32 Zeichen.",
+      "url": "Gültige http(s)-URL ohne Zugangsdaten erforderlich.",
+      "headerName": "Header-Name: Buchstaben, Ziffern und Bindestrich.",
+      "commandEmpty": "Der Befehl darf nicht leer sein.",
+      "cwd": "Relativer Pfad ohne „..“.",
+      "max600": "Höchstens 600 s.",
+      "limits": {
+        "upstreams": "Upstreams",
+        "callsPerMin": "Aufrufe pro Minute",
+        "connections": "Verbindungen",
+        "stdioProcs": "stdio-Prozesse",
+        "stdioIdle": "stdio-Leerlauf",
+        "concurrent": "Parallel",
+        "connect": "Verbinden",
+        "list": "Liste",
+        "call": "Aufruf"
+      }
+    }
+  }
+}

@@ -32,7 +32,7 @@ export type OAuthAccessRow = {
 }
 
 export type PatAccessRow = {
-  pat: { id: string, tokenHash: string, revokedAt: Date | null }
+  pat: { id: string, tokenHash: string, revokedAt: Date | null, expiresAt?: Date | null, upstreamIds?: string[] | null }
   user: UserRow
 }
 
@@ -75,10 +75,12 @@ export function createAccessGuard(deps: GuardDeps) {
     const b = Buffer.from(row?.pat.tokenHash ?? '')
     if (!row || a.length !== b.length || !timingSafeEqual(a, b)) return denied('unknown token')
     if (row.pat.revokedAt || isBanned(row.user, now())) return denied('token revoked')
+    if (row.pat.expiresAt && row.pat.expiresAt.getTime() <= now().getTime()) return denied('token expired')
     if (allowTouch(`pat:${row.pat.id}`)) fireAndForget(deps.store.touchPat(row.pat.id, now()))
     return {
       userId: row.user.id, role: row.user.role, tokenType: 'pat', tokenId: row.pat.id,
-      clientId: null, clientName: null, scopes: [SCOPE_MCP_TOOLS], expiresAt: null, resource: deps.resource,
+      clientId: null, clientName: null, scopes: [SCOPE_MCP_TOOLS], expiresAt: row.pat.expiresAt ? Math.floor(row.pat.expiresAt.getTime() / 1000) : null, resource: deps.resource,
+      ...(row.pat.upstreamIds ? { upstreamIds: row.pat.upstreamIds } : {}),
     }
   }
 

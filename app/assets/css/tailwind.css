@@ -128,3 +128,13 @@
   .tnum { font-variant-numeric: tabular-nums; white-space: nowrap; }
   @media (prefers-reduced-motion: reduce) { *, ::before, ::after { transition: none !important; animation: none !important; } }
 }
+
+/* Motion: sliding indicators, hold-to-confirm fill, page fades. All switched off for reduced motion. */
+.slide-indicator { transition: transform 250ms cubic-bezier(.4, 0, .2, 1), width 250ms cubic-bezier(.4, 0, .2, 1), opacity 150ms; }
+.hold-fill { width: 0; }
+.hold-fill.is-holding { width: 100%; transition: width var(--hold-ms) linear; }
+.page-enter-active, .page-leave-active { transition: opacity 120ms ease; }
+.page-enter-from, .page-leave-to { opacity: 0; }
+@media (prefers-reduced-motion: reduce) {
+  *, ::before, ::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
+}

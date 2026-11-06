@@ -16,7 +16,7 @@ export default defineNuxtConfig({
 
   // --- Frontend ---
   ssr: !process.env.VITE_API_MOCK,
-  modules: ['shadcn-nuxt'],
+  modules: ['shadcn-nuxt', '@nuxtjs/i18n'],
   css: ['~/assets/css/tailwind.css'],
   // __API_MOCK__ is a compile-time constant ('' in the production build) and is optimized away together with the mock code.
   vite: { plugins: [tailwindcss()], define: { __API_MOCK__: JSON.stringify(process.env.VITE_API_MOCK ?? '') } },
@@ -37,5 +37,15 @@ export default defineNuxtConfig({
     },
   },
   shadcn: { prefix: '', componentDir: './app/components/ui' },
-  app: { head: { htmlAttrs: { lang: 'de' }, title: 'mcpwarden' } },
+  app: { head: { title: 'mcpwarden' }, pageTransition: { name: 'page', mode: 'out-in' } },
+  // English is the default; German is the second locale. No URL prefix: the locale comes from a cookie, then the browser language.
+  i18n: {
+    defaultLocale: 'en',
+    strategy: 'no_prefix',
+    locales: [
+      { code: 'en', language: 'en-US', name: 'English', files: ['en/common.json', 'en/auth.json', 'en/upstreams.json', 'en/settings.json', 'en/admin.json', 'en/dashboard.json'] },
+      { code: 'de', language: 'de-DE', name: 'Deutsch', files: ['de/common.json', 'de/auth.json', 'de/upstreams.json', 'de/settings.json', 'de/admin.json', 'de/dashboard.json'] },
+    ],
+    detectBrowserLanguage: { useCookie: true, cookieKey: 'mcpw_locale', fallbackLocale: 'en', redirectOn: 'root' },
+  },
 })

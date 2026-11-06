@@ -15,8 +15,8 @@ onBeforeUnmount(() => emit('close'))
     <div class="flex flex-wrap items-center gap-2">
       <code class="rounded-sm bg-white/70 px-2 py-1 text-[13px] select-all" data-testid="one-time-value">{{ value }}</code>
       <CopyButton :value="value" />
-      <Button type="button" variant="outline" @click="emit('close')">Schließen</Button>
+      <Button type="button" variant="outline" @click="emit('close')">{{ $t('common.close') }}</Button>
     </div>
-    <p class="text-[13px]">Du siehst diesen Wert nur jetzt. Danach ist er nicht mehr abrufbar.</p>
+    <p class="text-[13px]">{{ $t('common.oneTimeSecret.hint') }}</p>
   </div>
 </template>

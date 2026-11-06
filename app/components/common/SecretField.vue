@@ -17,9 +17,9 @@ onBeforeUnmount(() => { model.value = '' })
       :aria-invalid="invalid || undefined" :aria-describedby="describedby" data-secret="true"
     />
     <InputGroupAddon align="inline-end" class="py-0 pr-0.5">
-      <InputGroupButton type="button" class="-my-px h-11 min-w-11 px-3" :aria-pressed="shown" :aria-label="shown ? 'Verbergen' : 'Anzeigen'" @click="shown = !shown">
+      <InputGroupButton type="button" class="-my-px h-11 min-w-11 px-3" :aria-pressed="shown" :aria-label="shown ? $t('common.hide') : $t('common.show')" @click="shown = !shown">
         <component :is="shown ? EyeOff : Eye" class="size-4" aria-hidden="true" />
-        {{ shown ? 'Verbergen' : 'Anzeigen' }}
+        {{ shown ? $t('common.hide') : $t('common.show') }}
       </InputGroupButton>
     </InputGroupAddon>
   </InputGroup>

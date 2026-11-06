@@ -29,10 +29,10 @@ export function createDrizzleAccessStore(db: Db): AccessStore {
     },
     async loadPatAccess(tokenHash) {
       const [row] = await db.select({
-        patId: personalAccessToken.id, hash: personalAccessToken.tokenHash, revokedAt: personalAccessToken.revokedAt,
+        patId: personalAccessToken.id, hash: personalAccessToken.tokenHash, revokedAt: personalAccessToken.revokedAt, expiresAt: personalAccessToken.expiresAt, upstreamIds: personalAccessToken.upstreamIds,
         id: user.id, role: user.role, banned: user.banned, banExpires: user.banExpires,
       }).from(personalAccessToken).innerJoin(user, eq(user.id, personalAccessToken.userId)).where(eq(personalAccessToken.tokenHash, tokenHash)).limit(1)
-      return row ? { pat: { id: row.patId, tokenHash: row.hash, revokedAt: row.revokedAt }, user: toUser(row) } : null
+      return row ? { pat: { id: row.patId, tokenHash: row.hash, revokedAt: row.revokedAt, expiresAt: row.expiresAt, upstreamIds: row.upstreamIds }, user: toUser(row) } : null
     },
     async touchConnection(userId, clientId, now) {
       await db.insert(oauthConnectionUse).values({ userId, clientId, lastUsedAt: now })

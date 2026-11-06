@@ -45,4 +45,8 @@ export const personalAccessToken = pgTable('personal_access_token', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   lastUsedAt: timestamp('last_used_at', { withTimezone: true }),
   revokedAt: timestamp('revoked_at', { withTimezone: true }),
+  /** null = never expires */
+  expiresAt: timestamp('expires_at', { withTimezone: true }),
+  /** null = all upstreams of the user; otherwise only these upstream IDs */
+  upstreamIds: uuid('upstream_ids').array(),
 }, t => [index('personal_access_token_user_idx').on(t.userId)])
