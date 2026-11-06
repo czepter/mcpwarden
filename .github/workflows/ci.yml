@@ -4,6 +4,7 @@ on:
     paths-ignore:
       - "**.md"
       - "docs/**"
+      - "deploy/**"
       - ".github/workflows/image.yml"
       - ".gitignore"
       - ".dockerignore"
@@ -11,6 +12,7 @@ on:
     paths-ignore:
       - "**.md"
       - "docs/**"
+      - "deploy/**"
       - ".github/workflows/image.yml"
       - ".gitignore"
       - ".dockerignore"
