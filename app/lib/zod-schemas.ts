@@ -46,7 +46,7 @@ export const upstreamSchema = z.object({
   name: z.string().trim().min(1, { error: () => t('common.validation.displayNameEmpty') }),
   slug: z.string().regex(SLUG_RE, { error: () => t('common.validation.slug') }),
   url: z.string(), transport: z.enum(['auto', 'streamable', 'sse']),
-  authType: z.enum(['none', 'bearer', 'header']), authHeaderName: z.string(), secret: z.string(),
+  authType: z.enum(['none', 'bearer', 'header', 'oauth']), authHeaderName: z.string(), secret: z.string(),
   command: z.string(), args: z.string(), cwd: z.string(),
   ratePerMin: posInt(() => t('common.validation.limits.callsPerMin')), maxConcurrent: posInt(() => t('common.validation.limits.concurrent')),
   connectS: posInt(() => t('common.validation.limits.connect')), listS: posInt(() => t('common.validation.limits.list')), callS: posInt(() => t('common.validation.limits.call')),

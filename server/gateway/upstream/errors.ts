@@ -1,4 +1,4 @@
-import { SdkHttpError, ProtocolError } from '@modelcontextprotocol/client'
+import { SdkHttpError, ProtocolError, UnauthorizedError } from '@modelcontextprotocol/client'
 import { SsrfBlockedError, SSRF_MESSAGE } from '../net/ssrf'
 import { UpstreamRedirectError } from '../net/safe-fetch'
 import { CatalogLimitError } from './catalog'
@@ -7,6 +7,11 @@ export type ErrorCode = 'ssrf_blocked' | 'redirect' | 'timeout' | 'connect_faile
 /** No matching secret is stored for the auth kind (e.g. after renaming the header): do not connect without credentials. */
 export class CredentialsMissingError extends Error {
   constructor() { super('credentials missing') }
+}
+
+/** The stored OAuth session is missing or no longer works (refresh failed): the user has to connect again. */
+export class OAuthReauthError extends Error {
+  constructor() { super('oauth reauthorization required') }
 }
 
 export type Classified = { code: ErrorCode, message: string, status?: number, /** counts for breaker/degraded */ counts: boolean, auth: boolean }
@@ -20,6 +25,9 @@ export function classifyError(e: unknown, opts: { hasAuth?: boolean, aborted?: b
   if (all.some(x => x instanceof CredentialsMissingError)) return { code: 'awaiting_auth', message: 'Zugangsdaten fehlen noch', counts: false, auth: false }
   if (all.some(x => x instanceof UpstreamRedirectError)) return { code: 'redirect', message: 'Upstream leitet um, bitte Ziel-URL direkt eintragen', counts: false, auth: false }
   if (all.some(x => x instanceof CatalogLimitError)) return { code: 'protocol', message: 'Upstream liefert eine zu grosse Tool-Liste', counts: true, auth: false }
+  if (all.some(x => x instanceof OAuthReauthError || x instanceof UnauthorizedError)) {
+    return { code: 'unauthorized', message: 'Anmeldung beim Upstream abgelaufen, bitte neu verbinden', counts: false, auth: true }
+  }
   const http = all.find((x): x is SdkHttpError => x instanceof SdkHttpError)
   const status = http?.status ?? (all.map(x => (x as { status?: number, code?: number }).status).find(s => typeof s === 'number'))
   if (status === 401 || status === 403) {

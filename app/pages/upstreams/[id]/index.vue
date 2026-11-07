@@ -49,6 +49,25 @@ const saveSecret = sec.submit(async (v) => {
   try { await upstreamApi.putSecret(id, { kind: u.value?.authType === 'header' ? 'header' : 'bearer', name: u.value?.authHeaderName ?? undefined, value: v.value }) } finally { sec.form.resetForm({ values: { value: '' } }) }
   replaced.value = true; await up.refresh(); toast.success(t('upstreams.detail.secretToast'))
 }, ['value'])
+// OAuth against the upstream: the browser leaves for the upstream's authorization server and returns with ?oauth=ok|denied|error
+const connecting = ref(false)
+async function oauthConnect() {
+  connecting.value = true
+  try {
+    const r = await upstreamApi.oauthStart(id)
+    if (r.authorizationUrl) { window.location.href = r.authorizationUrl; return }
+    await up.refresh(); toast.success(t('upstreams.oauth.connected'))
+  } catch { toast.error(t('upstreams.oauth.startFailed')) } finally { connecting.value = false }
+}
+async function oauthDisconnect() {
+  try { await upstreamApi.oauthDisconnect(id); await up.refresh(); toast.success(t('upstreams.oauth.disconnected')) } catch { toast.error(t('upstreams.oauth.disconnectFailed')) }
+}
+onMounted(async () => {
+  const r = String(route.query.oauth ?? '')
+  if (!r) return
+  await navigateTo({ query: { tab: 'auth' } }, { replace: true })
+  if (r === 'ok') { toast.success(t('upstreams.oauth.connected')); await runTest() } else toast.error(t(r === 'denied' ? 'upstreams.oauth.denied' : 'upstreams.oauth.failed'))
+})
 // Tabs as in the draft: underline in the accent color, 44 px high.
 const TABS = computed(() => [['overview', t('upstreams.detail.tabOverview')], ['tools', t('upstreams.detail.tabTools')], ['auth', t('upstreams.detail.tabAuth')]] as const)
 const TAB_CLASS = '-mb-px h-11 flex-none rounded-none border-0 border-b-2 border-transparent bg-transparent px-4 text-secondary-foreground shadow-none data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none dark:data-[state=active]:border-transparent dark:data-[state=active]:border-b-primary dark:data-[state=active]:bg-transparent'
@@ -88,7 +107,7 @@ const saveTool = (name: string, enabled: boolean) => upstreamApi.setTool(id, nam
             <dt class="text-muted-foreground">{{ $t('upstreams.detail.type') }}</dt><dd>{{ typeLabel(u.type) }}</dd>
             <dt class="text-muted-foreground">{{ $t('upstreams.detail.slug') }}</dt><dd><code>{{ u.slug }}</code></dd>
             <dt class="text-muted-foreground">{{ u.type === 'http' ? 'URL' : $t('upstreams.detail.command') }}</dt><dd class="mono text-xs">{{ u.url ?? u.command }}</dd>
-            <dt class="text-muted-foreground">{{ $t('upstreams.detail.auth') }}</dt><dd>{{ authTypeLabel(u.authType) }}<Badge v-if="u.hasSecret" variant="secondary" class="ml-2">{{ $t('upstreams.detail.set') }}</Badge></dd>
+            <dt class="text-muted-foreground">{{ $t('upstreams.detail.auth') }}</dt><dd>{{ authTypeLabel(u.authType) }}<Badge v-if="u.hasSecret" variant="secondary" class="ml-2">{{ u.authType === 'oauth' ? $t('upstreams.oauth.badge') : $t('upstreams.detail.set') }}</Badge></dd>
             <dt class="text-muted-foreground">{{ $t('upstreams.detail.rateLimit') }}</dt><dd class="tnum">{{ $t('upstreams.detail.rateValue', { rate: u.ratePerMin, parallel: u.maxConcurrent }) }}</dd>
             <dt class="text-muted-foreground">{{ $t('upstreams.detail.timeouts') }}</dt><dd class="tnum">{{ u.timeouts.connectMs / 1000 }} s · {{ u.timeouts.listMs / 1000 }} s · {{ u.timeouts.callMs / 1000 }} s</dd>
             <dt class="text-muted-foreground">{{ $t('upstreams.detail.lastOk') }}</dt><dd><RelativeTime :value="u.lastOkAt" :empty="$t('upstreams.detail.never')" /></dd>
@@ -107,6 +126,14 @@ const saveTool = (name: string, enabled: boolean) => upstreamApi.setTool(id, nam
         <section class="flex max-w-[600px] flex-col gap-3 rounded-lg border bg-card p-5" aria-labelledby="h-auth">
           <h2 id="h-auth" class="text-[15px] font-semibold">{{ $t('upstreams.detail.authHeading', { type: authTypeLabel(u.authType) }) }}</h2>
           <template v-if="u.authType === 'none'"><p class="text-[13px] text-muted-foreground">{{ $t('upstreams.detail.authNone') }}</p></template>
+          <template v-else-if="u.authType === 'oauth'">
+            <p class="text-sm">{{ $t('upstreams.detail.state') }} <Badge variant="secondary" data-testid="oauth-state">{{ u.hasSecret ? $t('upstreams.oauth.badge') : $t('upstreams.oauth.notConnected') }}</Badge></p>
+            <p class="text-[13px] text-muted-foreground">{{ $t('upstreams.oauth.explain') }}</p>
+            <div class="flex flex-wrap gap-2">
+              <LoadingButton :busy="connecting" type="button" @click="oauthConnect">{{ u.hasSecret ? $t('upstreams.oauth.reconnect') : $t('upstreams.oauth.connect') }}</LoadingButton>
+              <Button v-if="u.hasSecret" type="button" variant="outline" @click="oauthDisconnect">{{ $t('upstreams.oauth.disconnect') }}</Button>
+            </div>
+          </template>
           <template v-else>
             <p class="text-sm">{{ $t('upstreams.detail.state') }} <Badge variant="secondary">{{ u.hasSecret ? $t('upstreams.detail.set') : $t('upstreams.detail.stateNotSet') }}</Badge></p>
             <p v-if="replaced" role="status" class="text-[13px] text-ok-fg">{{ $t('upstreams.detail.secretReplaced') }}</p>

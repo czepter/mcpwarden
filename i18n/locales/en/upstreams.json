@@ -166,7 +166,30 @@
       "tCall": "Call timeout (s)",
       "cancel": "Cancel",
       "save": "Save",
-      "create": "Create and connect"
+      "create": "Create and connect",
+      "oauthHint": "After creating it, connect your account at the upstream in the “Auth” tab. The upstream must offer OAuth with Dynamic Client Registration.",
+      "oauthHintEdit": "Manage the connection to your account at the upstream in the “Auth” tab.",
+      "probe": {
+        "checking": "Checking whether the server offers OAuth …",
+        "dcr": "OAuth detected: connect your account in the “Auth” tab after creating the upstream.",
+        "no_dcr": "The server offers OAuth without automatic registration. That is not supported yet, use Bearer or Header.",
+        "none": "No OAuth found. Choose None, Bearer or Header.",
+        "error": "OAuth could not be checked. You can still pick the sign-in yourself."
+      }
+    },
+    "oauth": {
+      "badge": "Connected",
+      "notConnected": "Not connected",
+      "connect": "Connect to upstream",
+      "reconnect": "Reconnect",
+      "disconnect": "Disconnect",
+      "explain": "You sign in to the upstream in your browser. mcpwarden stores the tokens encrypted and renews them itself; they are never shown.",
+      "connected": "Connected.",
+      "disconnected": "Disconnected.",
+      "disconnectFailed": "Disconnecting failed.",
+      "startFailed": "Could not start the connection. Does the upstream offer OAuth with Dynamic Client Registration?",
+      "denied": "The upstream denied access.",
+      "failed": "Signing in to the upstream failed."
     }
   }
 }

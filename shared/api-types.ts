@@ -124,7 +124,7 @@ export type OAuthClientAdminList = { items: OAuthClientAdmin[] }
 export type UpstreamStatus = 'unknown' | 'healthy' | 'degraded' | 'open' | 'auth_expired' | 'disabled'
 export type UpstreamSetup = 'ready' | 'awaiting_auth' | 'awaiting_approval'
 export type UpstreamType = 'http' | 'stdio'
-export type UpstreamAuthType = 'none' | 'bearer' | 'header' | 'env' // 'env': stdio only
+export type UpstreamAuthType = 'none' | 'bearer' | 'header' | 'env' | 'oauth' // 'env': stdio only, 'oauth': http only
 export type UpstreamTimeouts = { connectMs: number, listMs: number, callMs: number }
 
 export type UpstreamSummary = {
@@ -186,6 +186,12 @@ export type UpstreamInput = {
 export type UpstreamPatch = Partial<Omit<UpstreamInput, 'slug' | 'type'>> & { enabled?: boolean }
 export type SecretInput = { kind: 'bearer' | 'header' | 'env', name?: string, value: string }
 export type SecretResult = { hasSecret: true, setup: UpstreamSetup }
+/** Where the upstream's authorization server sends the browser back (registered as redirect URI, relative to BASE_URL). */
+export const UPSTREAM_OAUTH_CALLBACK_PATH = '/api/upstream-oauth/callback'
+/** `authorizationUrl`: send the browser there; `null` with `connected: true` when the stored session was still valid. */
+/** Result of `POST /api/upstreams/probe`: does the server offer OAuth, and can mcpwarden register itself (DCR)? */
+export type UpstreamAuthProbe = { oauth: 'dcr' | 'no_dcr' | 'none' }
+export type UpstreamOAuthStart = { authorizationUrl: string | null, connected: boolean }
 export type UpstreamTestErrorCode = 'ssrf_blocked' | 'redirect' | 'timeout' | 'connect_failed' | 'unauthorized' | 'upstream_error' | 'protocol' | 'awaiting_auth' | 'stdio_not_allowed'
 export type UpstreamTestResult =
   | { ok: true, tools: Array<{ name: string, description?: string }>, latencyMs: number }
@@ -282,7 +288,7 @@ export type ApiErrorCode =
   | 'validation' | 'not_found' | 'forbidden' | 'slug_taken' | 'limit_reached' | 'slug_immutable'
   | 'awaiting_auth' | 'stdio_not_allowed' | 'invite_required' | 'invite_invalid' | 'self_target'
   | 'last_admin' | 'invite_not_open' | 'invalid_consent_query' | 'client_not_found' | 'invalid_name'
-  | 'pat_limit_reached' | 'invalid_mode' | 'invalid_entry'
+  | 'pat_limit_reached' | 'invalid_mode' | 'invalid_entry' | 'oauth_discovery_failed'
   | typeof REGISTRATION_CLOSED | typeof INVITE_REQUIRED | typeof INVITE_INVALID | (string & {})
 
 export const API_PATHS = {

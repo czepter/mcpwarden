@@ -2,7 +2,7 @@ import type {
   AdminUserLimitsInput, AdminSettings, AdminSettingsResult, AdminUserList, AllowlistEntry, AllowlistInput, AllowlistList,
   AuditList, AuthSession, Capabilities, PublicConfig, MeSettings, ConnectionList, ConsentInfo, Dashboard, DcrMode, DcrPolicy, InviteInfo, InviteCreated,
   InviteList, LinkInfo, LinkTestResult, OAuthClientAdminList, PatCreateInput, PatCreated, PatList, SecretInput, SecretResult,
-  StatsSummary, StatsWindow, StdioDraft, UpstreamTestResult, UpstreamToolList, UpstreamDetail, UpstreamInput, UpstreamList, UpstreamPatch, UpstreamToolItem, AdminUser,
+  StatsSummary, StatsWindow, StdioDraft, UpstreamAuthProbe, UpstreamOAuthStart, UpstreamTestResult, UpstreamToolList, UpstreamDetail, UpstreamInput, UpstreamList, UpstreamPatch, UpstreamToolItem, AdminUser,
 } from '#shared/api-types'
 import { API_PATHS } from '#shared/api-types'
 import { del, get, http, patch, post, put } from './http'
@@ -51,6 +51,9 @@ export const upstreamApi = {
   patch: (id: string, b: UpstreamPatch) => patch<UpstreamDetail>(`${API_PATHS.upstreams}/${enc(id)}`, b),
   remove: (id: string) => del(`${API_PATHS.upstreams}/${enc(id)}`),
   putSecret: (id: string, b: SecretInput) => put<SecretResult>(`${API_PATHS.upstreams}/${enc(id)}/secret`, b),
+  probe: (url: string) => post<UpstreamAuthProbe>(`${API_PATHS.upstreams}/probe`, { url }),
+  oauthStart: (id: string) => post<UpstreamOAuthStart>(`${API_PATHS.upstreams}/${enc(id)}/oauth/start`),
+  oauthDisconnect: (id: string) => del(`${API_PATHS.upstreams}/${enc(id)}/oauth`),
   test: (id: string) => post<UpstreamTestResult>(`${API_PATHS.upstreams}/${enc(id)}/test`),
   tools: (id: string) => get<UpstreamToolList>(`${API_PATHS.upstreams}/${enc(id)}/tools`),
   setTool: (id: string, name: string, enabled: boolean) => put<UpstreamToolItem>(`${API_PATHS.upstreams}/${enc(id)}/tools/${enc(name)}`, { enabled }),

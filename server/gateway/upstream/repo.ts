@@ -3,9 +3,9 @@
  * filters on it; there is no access by ID alone (foreign records are "not found").
  */
 import { createHash, randomBytes } from 'node:crypto'
-import { and, asc, count, desc, eq, gt, inArray, isNull, lt, max, notInArray, or, sql } from 'drizzle-orm'
+import { and, asc, count, desc, eq, gt, inArray, isNotNull, isNull, lt, max, notInArray, or, sql } from 'drizzle-orm'
 import type { Db } from '../../db'
-import { appSetting, auditLog, callStat, personalAccessToken, upstream, upstreamSecret, upstreamTool, user, userGatewayLimits, userInvite, userPreference } from '../../db/schema'
+import { appSetting, auditLog, callStat, personalAccessToken, upstream, upstreamOauth, upstreamSecret, upstreamTool, user, userGatewayLimits, userInvite, userPreference } from '../../db/schema'
 import { ACTIVE_WINDOW_MS, DEFAULT_LIMITS, INVITE_TTL_DAYS } from '../config'
 import type { Timeouts } from '../config'
 import type { CallStatRow } from '../stats/buffer'
@@ -96,11 +96,15 @@ export class GatewayRepo implements GatewayStore {
     const rows = await this.db.select().from(upstream).where(eq(upstream.userId, userId)).orderBy(asc(upstream.name))
     const tools = await this.db.select({ upstreamId: upstreamTool.upstreamId, enabled: upstreamTool.enabled }).from(upstreamTool).where(and(eq(upstreamTool.userId, userId), eq(upstreamTool.gone, false)))
     const secrets = await this.db.select({ upstreamId: upstreamSecret.upstreamId, kind: upstreamSecret.kind, name: upstreamSecret.name }).from(upstreamSecret).where(eq(upstreamSecret.userId, userId))
+    const oauth = await this.db.select({ upstreamId: upstreamOauth.upstreamId }).from(upstreamOauth).where(and(eq(upstreamOauth.userId, userId), isNotNull(upstreamOauth.connectedAt)))
     return rows.map(r => ({
       ...r,
       toolsTotal: tools.filter(t => t.upstreamId === r.id).length,
       toolsEnabled: tools.filter(t => t.upstreamId === r.id && t.enabled).length,
-      secretNames: secrets.filter(s => s.upstreamId === r.id).map(s => (s.kind === 'bearer' ? 'bearer' : s.name)),
+      secretNames: [
+        ...secrets.filter(s => s.upstreamId === r.id).map(s => (s.kind === 'bearer' ? 'bearer' : s.name)),
+        ...(r.authType === 'oauth' && oauth.some(o => o.upstreamId === r.id) ? ['oauth'] : []),
+      ],
     }))
   }
   async getUpstreamDetail(userId: string, id: string) {
@@ -148,6 +152,28 @@ export class GatewayRepo implements GatewayStore {
   async secretCount(userId: string, upstreamId: string) {
     const [r] = await this.db.select({ n: count() }).from(upstreamSecret).where(and(eq(upstreamSecret.userId, userId), eq(upstreamSecret.upstreamId, upstreamId)))
     return r?.n ?? 0
+  }
+
+  // --- OAuth session of an upstream (ciphertext only; encryption lives in upstream/oauth.ts) ---
+  async getOAuth(userId: string, upstreamId: string) {
+    const [r] = await this.db.select().from(upstreamOauth).where(and(eq(upstreamOauth.userId, userId), eq(upstreamOauth.upstreamId, upstreamId)))
+    return r ?? null
+  }
+  /** Upsert; `pending` undefined keeps the stored state, `null` clears it. `connected` sets or clears `connectedAt`. */
+  async saveOAuth(userId: string, upstreamId: string, p: { data: string | null, pending?: { stateHash: string, expiresAt: Date } | null, connected: boolean }) {
+    const pending = p.pending === undefined ? {} : { stateHash: p.pending?.stateHash ?? null, stateExpiresAt: p.pending?.expiresAt ?? null }
+    const connectedAt = p.connected ? sql`coalesce(${upstreamOauth.connectedAt}, now())` : null
+    await this.db.insert(upstreamOauth).values({ userId, upstreamId, data: p.data, ...pending, connectedAt: p.connected ? new Date() : null })
+      .onConflictDoUpdate({ target: upstreamOauth.upstreamId, set: { data: p.data, ...pending, connectedAt, updatedAt: new Date() } })
+  }
+  /** Single use: returns the row of a still valid `state` hash and clears the state in the same statement. */
+  async consumeOAuthState(stateHash: string, now = new Date()) {
+    const [r] = await this.db.update(upstreamOauth).set({ stateHash: null, stateExpiresAt: null, updatedAt: now })
+      .where(and(eq(upstreamOauth.stateHash, stateHash), gt(upstreamOauth.stateExpiresAt, now))).returning({ userId: upstreamOauth.userId, upstreamId: upstreamOauth.upstreamId })
+    return r ?? null
+  }
+  async deleteOAuth(userId: string, upstreamId: string) {
+    await this.db.delete(upstreamOauth).where(and(eq(upstreamOauth.userId, userId), eq(upstreamOauth.upstreamId, upstreamId)))
   }
 
   async listToolRows(userId: string, upstreamId: string) {

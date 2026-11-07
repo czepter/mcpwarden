@@ -74,6 +74,22 @@ export const upstreamHandlers = [
     u.hasSecret = true; u.setup = 'ready'; if (b.name && !u.secretNames.includes(b.name)) u.secretNames.push(b.name)
     save(); return json({ hasSecret: true as const, setup: u.setup })
   }),
+  // The mock has no authorization server: "connecting" succeeds immediately (no redirect), like a still valid session.
+  route('post', '/api/upstreams/probe', async ({ request }) => {
+    const b = await body<{ url?: string }>(request)
+    return json({ oauth: /oauth/i.test(b.url ?? '') ? 'dcr' : 'none' })
+  }),
+  route('post', '/api/upstreams/:id/oauth/start', ({ params }) => {
+    const u = find(params.id); if (!u) return NF()
+    if (u.authType !== 'oauth') return err(422, 'validation', 'Dieser Upstream nutzt keine OAuth-Anmeldung.', 'authType')
+    u.hasSecret = true; u.setup = 'ready'; if (!u.secretNames.includes('oauth')) u.secretNames.push('oauth')
+    save(); return json({ authorizationUrl: null, connected: true })
+  }),
+  route('delete', '/api/upstreams/:id/oauth', ({ params }) => {
+    const u = find(params.id); if (!u) return NF()
+    u.hasSecret = false; u.setup = 'awaiting_auth'; u.secretNames = u.secretNames.filter(n => n !== 'oauth')
+    save(); return noContent()
+  }),
   route('post', '/api/upstreams/:id/test', ({ params }) => {
     const u = find(params.id); if (!u) return NF()
     const s = getState()

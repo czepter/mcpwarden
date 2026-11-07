@@ -62,6 +62,10 @@ claude mcp add --transport http mcpwarden <BASE_URL>/mcp --header "Authorization
 
 Note: manual acceptance with real clients (Claude Code, Cursor) has not been recorded yet; the automated OAuth PKCE flow test is `tests/integration/oauth/flow.test.ts`.
 
+## Upstreams with OAuth
+
+An HTTP upstream can use "OAuth" as its sign-in. After creating it, open its "Auth" tab and click "Mit Upstream verbinden": mcpwarden discovers the upstream's authorization server (RFC 9728/8414), registers itself via Dynamic Client Registration, and sends the browser through authorization code + PKCE. The redirect URI is `<BASE_URL>/api/upstream-oauth/callback`. Client registration, tokens and the PKCE verifier are stored encrypted per upstream (never returned by the API); access tokens are refreshed automatically. If the refresh fails (revoked, expired) the upstream shows `auth_expired` and the user reconnects. Changing the server URL or auth kind discards the session. Upstreams without Dynamic Client Registration (pre-registered client ID/secret) are not supported yet.
+
 ## Docker and operations
 
 Two targets in the `Dockerfile`: `full` (default) contains the supervisor, `uv`/`uvx` and the stdio workers, `slim` only the web app (stdio fixed off, no capabilities needed).

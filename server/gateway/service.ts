@@ -5,7 +5,7 @@
 import { createError } from 'h3'
 import type {
   AdminSettings, AdminSettingsResult, AdminUser, AdminUserList, AdminUserLimitsInput, AuditItem, Capabilities, Dashboard, InviteSummary,
-  UpstreamDetail, UpstreamSummary, UpstreamTestResult, UpstreamToolList, UserLimits,
+  UpstreamAuthProbe, UpstreamDetail, UpstreamOAuthStart, UpstreamSummary, UpstreamTestResult, UpstreamToolList, UserLimits,
 } from '#shared/api-types'
 import { apiError } from '../utils/api'
 import { trySendMail, type Mailer } from '../mail'
@@ -16,6 +16,8 @@ import { ACTIVE_WINDOW_MS, DEFAULT_LIMITS, TIMEOUTS, mergeTimeouts, type Timeout
 import { assertUrlAllowed, SsrfBlockedError, validateAllowEntry, AllowList } from './net/ssrf'
 import { encryptSecret } from './crypto/secrets'
 import { classifyError } from './upstream/errors'
+import { hashState, UpstreamOAuthProvider } from './upstream/oauth'
+import { auth as sdkAuth, discoverOAuthServerInfo } from '@modelcontextprotocol/client'
 import { LimitReached, SlugTaken, type NewUpstream } from './upstream/repo'
 import type { Runtime } from './runtime'
 import { getMasterKey } from '../utils/master-key'
@@ -63,7 +65,7 @@ function checkCommon(b: Record<string, unknown>, partial: boolean): Checked {
     out.url = url
   }
   if (b.transport !== undefined) { if (!['auto', 'streamable', 'sse'].includes(b.transport as string)) throw bad('transport', 'transport ungültig'); out.transport = b.transport as string }
-  if (b.authType !== undefined) { if (!['none', 'bearer', 'header', 'env'].includes(b.authType as string)) throw bad('authType', 'authType ungültig'); out.authType = b.authType as string }
+  if (b.authType !== undefined) { if (!['none', 'bearer', 'header', 'env', 'oauth'].includes(b.authType as string)) throw bad('authType', 'authType ungültig'); out.authType = b.authType as string }
   if (b.authHeaderName !== undefined) {
     if (b.authHeaderName !== null && !(typeof b.authHeaderName === 'string' && HEADER_RE.test(b.authHeaderName))) throw bad('authHeaderName', 'Headername ungültig')
     out.authHeaderName = b.authHeaderName as string | null
@@ -175,7 +177,7 @@ export async function createUpstream(rt: Runtime, who: Who, body: Record<string,
   await precheckUrl(rt, c.url)
   if (body.type === 'stdio') { if (!c.command) throw bad('command', 'command fehlt'); await requireStdio(rt, who) }
   if ((c.authType ?? 'none') === 'header' && !c.authHeaderName) throw bad('authHeaderName', 'authHeaderName fehlt')
-  if (body.type === 'stdio' && ['bearer', 'header'].includes(c.authType ?? '')) throw bad('authType', 'stdio kennt nur env')
+  if (body.type === 'stdio' && ['bearer', 'header', 'oauth'].includes(c.authType ?? '')) throw bad('authType', 'stdio kennt nur env')
   if (body.type === 'http' && c.authType === 'env') throw bad('authType', 'http kennt kein env')
   const limits = await rt.repo.getLimits(who.id)
   const setup = (c.authType ?? 'none') === 'none' ? 'ready' : 'awaiting_auth'
@@ -201,7 +203,7 @@ export async function patchUpstream(rt: Runtime, who: Who, id: string, body: Rec
   if (cur.type === 'stdio' && (c.url !== undefined || c.transport !== undefined)) throw bad('url', 'Feld gehört zu http')
   if (cur.type === 'stdio' && body.enabled === true) await requireStdio(rt, who)
   const authType = c.authType ?? cur.authType
-  if (c.authType !== undefined && cur.type === 'stdio' && ['bearer', 'header'].includes(authType)) throw bad('authType', 'stdio kennt nur env')
+  if (c.authType !== undefined && cur.type === 'stdio' && ['bearer', 'header', 'oauth'].includes(authType)) throw bad('authType', 'stdio kennt nur env')
   if (c.authType !== undefined && cur.type === 'http' && authType === 'env') throw bad('authType', 'http kennt kein env')
   if (authType === 'header' && !(c.authHeaderName ?? cur.authHeaderName)) throw bad('authHeaderName', 'authHeaderName fehlt')
   const patch: Parameters<typeof rt.repo.updateUpstream>[2] = { ...c, ...(body.enabled !== undefined ? { enabled: body.enabled as boolean } : {}) }
@@ -211,6 +213,12 @@ export async function patchUpstream(rt: Runtime, who: Who, id: string, body: Rec
     // without a header, silently); the user enters it again
     for (const s of await rt.repo.getSecrets(who.id, id)) await rt.repo.deleteSecret(who.id, id, s.kind, s.name)
     patch.setup = authType === 'none' ? 'ready' : 'awaiting_auth'
+  }
+  // The OAuth session belongs to one server and one auth kind: switching either away discards it (reconnecting is required)
+  const urlChanged = c.url !== undefined && c.url !== cur.url
+  if (cur.authType === 'oauth' && (authType !== 'oauth' || urlChanged)) {
+    await rt.repo.deleteOAuth(who.id, id)
+    if (authType === 'oauth') patch.setup = 'awaiting_auth'
   }
   const row = await rt.repo.updateUpstream(who.id, id, patch)
   if (!row) throw apiError(404, 'not_found', 'Upstream nicht gefunden')
@@ -264,6 +272,91 @@ export async function deleteSecret(rt: Runtime, who: Who, id: string, kind: stri
   await rt.repo.updateUpstream(who.id, id, left === 0 && cur.authType !== 'none' ? { setup: 'awaiting_auth' } : {})
   await evict(rt, who.id, id)
   await rec(rt, who, 'secret.delete', 'secret', id, cur.slug)
+}
+
+// ---------- OAuth against the upstream ----------
+
+const oauthProvider = (rt: Runtime, userId: string, upstreamId: string) => new UpstreamOAuthProvider({
+  vault: rt.gw.oauth!.vault, userId, upstreamId, redirectUrl: rt.gw.oauth!.redirectUrl, interactive: true,
+})
+
+/** Starts the connect flow: discovery, client registration and the authorization URL the browser is sent to. */
+export async function startUpstreamOAuth(rt: Runtime, who: Who, id: string): Promise<UpstreamOAuthStart> {
+  const cur = await load(rt, who, id)
+  if (cur.type !== 'http' || cur.authType !== 'oauth' || !cur.url) throw bad('authType', 'Dieser Upstream nutzt keine OAuth-Anmeldung')
+  await precheckUrl(rt, cur.url)
+  const provider = oauthProvider(rt, who.id, id)
+  // Always a fresh flow (also for "reconnect"): drop the old session and client registration so nothing stale is refreshed
+  await provider.invalidateCredentials('all')
+  await rt.repo.updateUpstream(who.id, id, { setup: 'awaiting_auth' })
+  await evict(rt, who.id, id)
+  rt.gw.healthFor(toRowForHealth(cur)).configure({ enabled: cur.enabled, setup: 'awaiting_auth' })
+  try {
+    const result = await sdkAuth(provider, { serverUrl: cur.url, fetchFn: rt.gw.safeFetch })
+    if (result === 'AUTHORIZED' || !provider.authorizationUrl) return { authorizationUrl: null, connected: true }
+  } catch (e) {
+    const c = classifyError(e)
+    if (c.code === 'ssrf_blocked') throw apiError(422, 'ssrf_blocked', 'Dieses Ziel ist nicht erlaubt (SSRF-Schutz)', 'url')
+    throw apiError(502, 'oauth_discovery_failed', 'Der Upstream bietet keine passende OAuth-Anmeldung an (Discovery oder Registrierung fehlgeschlagen)')
+  }
+  const url = provider.authorizationUrl
+  if (!['https:', 'http:'].includes(url.protocol)) throw apiError(502, 'oauth_discovery_failed', 'Der Upstream lieferte eine ungültige Anmeldeadresse')
+  return { authorizationUrl: url.href, connected: false }
+}
+
+/** Looks for OAuth metadata (RFC 9728 / 8414) at the entered URL so the form can offer the right sign-in before anything is saved. */
+export async function probeUpstreamAuth(rt: Runtime, url: unknown): Promise<UpstreamAuthProbe> {
+  if (typeof url !== 'string') throw bad('url', 'url fehlt')
+  const c = checkCommon({ url }, true)
+  if (!c.url) throw bad('url', 'url fehlt')
+  await precheckUrl(rt, c.url)
+  const ac = new AbortController()
+  const timer = setTimeout(() => ac.abort(), 8000)
+  try {
+    const f: typeof rt.gw.safeFetch = (u, init) => rt.gw.safeFetch(u, { ...init, signal: ac.signal })
+    const info = await discoverOAuthServerInfo(c.url, { fetchFn: f })
+    const m = info.authorizationServerMetadata
+    if (!m?.authorization_endpoint) return { oauth: 'none' }
+    return { oauth: m.registration_endpoint ? 'dcr' : 'no_dcr' }
+  } catch (e) {
+    if (classifyError(e).code === 'ssrf_blocked') throw apiError(422, 'ssrf_blocked', 'Dieses Ziel ist nicht erlaubt (SSRF-Schutz)', 'url')
+    return { oauth: 'none' }
+  } finally { clearTimeout(timer) }
+}
+
+export type OAuthCallbackResult = { upstreamId: string | null, result: 'ok' | 'denied' | 'error' }
+
+/**
+ * Completes the flow with the parameters of the browser redirect. `state` is single use and bound to the user that started the
+ * flow: a callback from another session never redeems the code.
+ */
+export async function completeUpstreamOAuth(rt: Runtime, who: Who, q: { state?: string, code?: string, iss?: string, error?: string }): Promise<OAuthCallbackResult> {
+  if (!q.state) return { upstreamId: null, result: 'error' }
+  const row = await rt.repo.consumeOAuthState(hashState(q.state))
+  if (!row || row.userId !== who.id) return { upstreamId: null, result: 'error' }
+  const cur = await rt.repo.getUpstream(who.id, row.upstreamId)
+  if (!cur || cur.authType !== 'oauth' || !cur.url) return { upstreamId: null, result: 'error' }
+  if (q.error) return { upstreamId: cur.id, result: q.error === 'access_denied' ? 'denied' : 'error' }
+  if (!q.code) return { upstreamId: cur.id, result: 'error' }
+  try {
+    const result = await sdkAuth(oauthProvider(rt, who.id, cur.id), { serverUrl: cur.url, authorizationCode: q.code, iss: q.iss, fetchFn: rt.gw.safeFetch })
+    if (result !== 'AUTHORIZED') return { upstreamId: cur.id, result: 'error' }
+  } catch { return { upstreamId: cur.id, result: 'error' } }
+  await rt.repo.updateUpstream(who.id, cur.id, { setup: 'ready' })
+  await evict(rt, who.id, cur.id)
+  rt.gw.healthFor(({ id: cur.id, userId: cur.userId, enabled: cur.enabled, setup: 'ready', status: cur.status }) as never).configure({ enabled: cur.enabled, setup: 'ready' })
+  await rec(rt, who, 'upstream.oauth_connect', 'upstream', cur.id, cur.slug)
+  return { upstreamId: cur.id, result: 'ok' }
+}
+
+export async function disconnectUpstreamOAuth(rt: Runtime, who: Who, id: string) {
+  const cur = await load(rt, who, id)
+  if (cur.authType !== 'oauth') throw bad('authType', 'Dieser Upstream nutzt keine OAuth-Anmeldung')
+  await rt.repo.deleteOAuth(who.id, id)
+  await rt.repo.updateUpstream(who.id, id, { setup: 'awaiting_auth' })
+  await evict(rt, who.id, id)
+  rt.gw.healthFor(toRowForHealth(cur)).configure({ enabled: cur.enabled, setup: 'awaiting_auth' })
+  await rec(rt, who, 'upstream.oauth_disconnect', 'upstream', id, cur.slug)
 }
 
 // ---------- Test and tools ----------

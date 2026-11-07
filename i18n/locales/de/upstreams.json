@@ -166,7 +166,30 @@
       "tCall": "Timeout Aufruf (s)",
       "cancel": "Abbrechen",
       "save": "Speichern",
-      "create": "Anlegen und verbinden"
+      "create": "Anlegen und verbinden",
+      "oauthHint": "Nach dem Anlegen verbindest du dein Konto beim Upstream im Reiter „Auth“. Der Upstream muss OAuth mit Dynamic Client Registration anbieten.",
+      "oauthHintEdit": "Die Verbindung zum Konto beim Upstream verwaltest du im Reiter „Auth“.",
+      "probe": {
+        "checking": "Prüfe, ob der Server OAuth anbietet …",
+        "dcr": "OAuth erkannt: du verbindest dein Konto nach dem Anlegen im Reiter „Auth“.",
+        "no_dcr": "Der Server bietet OAuth ohne automatische Registrierung an. Das wird noch nicht unterstützt, nimm Bearer oder Header.",
+        "none": "Kein OAuth gefunden. Wähle Keine, Bearer oder Header.",
+        "error": "OAuth konnte nicht geprüft werden. Du kannst die Anmeldung trotzdem selbst wählen."
+      }
+    },
+    "oauth": {
+      "badge": "Verbunden",
+      "notConnected": "Nicht verbunden",
+      "connect": "Mit Upstream verbinden",
+      "reconnect": "Neu verbinden",
+      "disconnect": "Trennen",
+      "explain": "Du meldest dich im Browser beim Upstream an. mcpwarden speichert die Tokens verschlüsselt und erneuert sie selbst; sie werden nie angezeigt.",
+      "connected": "Verbunden.",
+      "disconnected": "Verbindung getrennt.",
+      "disconnectFailed": "Trennen fehlgeschlagen.",
+      "startFailed": "Verbindung konnte nicht gestartet werden. Bietet der Upstream OAuth mit Dynamic Client Registration an?",
+      "denied": "Der Zugriff wurde beim Upstream abgelehnt.",
+      "failed": "Die Anmeldung beim Upstream ist fehlgeschlagen."
     }
   }
 }
