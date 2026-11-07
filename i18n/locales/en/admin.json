@@ -74,7 +74,17 @@
       "newException": "New exception",
       "placeholder": "10.0.0.0/8 or internal.example",
       "addEntry": "+ Entry",
-      "registrationNote": "Registration is only possible via invitation link (Admin › Users)."
+      "registrationNote": "Registration is only possible via invitation link (Admin › Users).",
+      "usageTitle": "Instance usage",
+      "usageDesc": "Aggregated figures of all users. You never see the contents of calls.",
+      "usageUsers": "Active users",
+      "usageUsersNote": "with calls in the period",
+      "usageUpstreams": "Upstreams",
+      "usageCalls": "Calls",
+      "usagePerMin": "{n} / min",
+      "usageSuccess": "Success rate",
+      "usageOverhead": "Gateway overhead p95",
+      "usageDropped": "{n} measurements were dropped (buffer full or database unreachable)."
     },
     "users": {
       "pageTitle": "Admin: Users · mcpwarden",

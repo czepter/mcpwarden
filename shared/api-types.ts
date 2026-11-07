@@ -148,7 +148,10 @@ export type UpstreamSummary = {
   rateLimitHits5m: number
   hasSecret: boolean
   p95Ms?: number | null // Phase 2
-  recent?: Array<'ok' | 'warn' | 'err' | 'none'> // Phase 2, 24 entries
+  /** The last 24 calls, oldest first (`none` pads the left). */
+  recent?: HealthHour[] // Phase 2, 24 entries
+  /** The last 24 hours, oldest first. */
+  hourly?: HealthHour[]
 }
 export type UpstreamDetail = UpstreamSummary & {
   transport: 'auto' | 'streamable' | 'sse'
@@ -270,6 +273,7 @@ export type DashboardAttention = { upstreamId: string, slug: string, name: strin
 export type Dashboard = {
   clients: DashboardClient[], attention: DashboardAttention[], attentionCount: number
   kpis?: { clientsActive: number, clientsTotal: number, callsPerMin: number, successRate: number, overheadP95Ms: number } // Phase 2
+  /** Calls per minute over the window (24 points). */
   series?: Array<{ t: string, calls: number }> // Phase 2
 }
 
@@ -321,14 +325,44 @@ export type PublicConfig = { mail: boolean, registrationOpen: boolean }
 /** Personal settings (`GET`/`PATCH /api/me/settings`). `notifyStatusMail` applies only with an active mailer. */
 export type MeSettings = { notifyStatusMail: boolean }
 
-// Statistics (phase 2, proposal)
+// Statistics (spec P0-15)
 export type StatsWindow = '5m' | '1h' | '24h' | '7d'
+export type StatsTool = { upstream: string, tool: string, calls: number, okRate: number, p50Ms: number, p95Ms: number, p99Ms: number, avgMs: number, maxMs: number }
 export type StatsRow = { upstream: string, calls: number, okRate: number, p5Ms: number, p50Ms: number, p75Ms: number, p95Ms: number, p99Ms: number, overheadP95Ms: number }
 export type StatsSummary = {
   window: StatsWindow, calls: number, callsPerMin: number, okRate: number, peakConcurrent: number, activeClients: number
+  /** Average / maximum total duration and gateway overhead p95 over all calls of the view (ms). */
+  avgMs: number, maxMs: number, overheadP95Ms: number
+  /** 24 equally wide buckets over the window (named `perHour` for the 24 h view). */
   perHour: Array<{ t: string, calls: number }>
   outcomes: Array<{ outcome: CallOutcome, count: number }>
   rows: StatsRow[]
+  /** Per upstream and tool (at most 200 rows, most calls first). */
+  tools: StatsTool[]
+}
+
+/** `GET /api/upstreams/:id/stats?window` */
+export type UpstreamStats = {
+  window: StatsWindow, calls: number, errorCount: number, errorRate: number, callsPerMin: number
+  p50Ms: number, p95Ms: number, p99Ms: number, overheadP95Ms: number
+  /** Same percentiles over 7 days, as baseline for the comparison. */
+  baseline: { p50Ms: number, p95Ms: number }
+  series: Array<{ t: string, p50Ms: number | null, p95Ms: number | null, p99Ms: number | null }>
+  errors: Array<{ outcome: CallOutcome, count: number, avgMs: number }>
+  tools: Array<{ name: string, calls: number, errorRate: number, p95Ms: number }>
+}
+
+/** One hour of an upstream: `none` = no calls, `ok` < 5 % errors, `warn` < 50 %, `err` otherwise (timeouts, upstream errors, breaker). */
+export type HealthHour = 'ok' | 'warn' | 'err' | 'none'
+/** `GET /api/upstreams/:id/health-history`: 168 full hours, oldest first, the last one is the current hour. */
+export type HealthHistory = { start: string, hours: HealthHour[], availability: number | null }
+
+/** `GET /api/admin/stats?window`: aggregated counters of the whole instance, never contents. */
+export type AdminStats = {
+  window: StatsWindow, users: number, activeUsers: number, upstreams: number
+  calls: number, okRate: number, callsPerMin: number, p95Ms: number, overheadP95Ms: number
+  outcomes: Array<{ outcome: CallOutcome, count: number }>
+  statsDropped: number
 }
 
 // Auth links and approval (phase 2, proposal)

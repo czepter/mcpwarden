@@ -1,4 +1,5 @@
-import type { AdminUserLimitsInput, AdminSettings, AdminSettingsResult, AllowlistInput, DcrMode } from '#shared/api-types'
+import { WINDOW_FACTOR, WINDOW_MIN } from '../stats-data'
+import type { AdminStats, AdminUserLimitsInput, AdminSettings, AdminSettingsResult, AllowlistInput, DcrMode } from '#shared/api-types'
 import { DEFAULT_LIMITS } from '../seed'
 import { getState, mailEnabled, save, scenario, volatileInviteTokens } from '../state'
 import { body, err, json, nid, noContent, route } from '../util'
@@ -54,6 +55,16 @@ export const adminHandlers = [
     if (!inv) return err(404, 'not_found', 'Nicht gefunden.')
     if (inv.status !== 'open') return err(409, 'invite_not_open', 'Die Einladung ist nicht mehr offen.')
     inv.status = 'revoked'; save(); return noContent()
+  }, A),
+  route('get', '/api/admin/stats', ({ request }) => {
+    const w = (new URL(request.url).searchParams.get('window') ?? '24h') as AdminStats['window']
+    const f = WINDOW_FACTOR[w] ?? 1
+    const calls = Math.round(14230 * f)
+    return json<AdminStats>({
+      window: w, users: 3, activeUsers: 2, upstreams: getState().upstreams.length, calls, okRate: 0.962, callsPerMin: Math.round((calls / WINDOW_MIN[w]!) * 10) / 10, p95Ms: 340, overheadP95Ms: 19,
+      outcomes: ['ok', 'tool_error', 'timeout', 'upstream_error', 'rate_limited', 'breaker_open', 'denied'].map((outcome, i) => ({ outcome: outcome as AdminStats['outcomes'][number]['outcome'], count: Math.round(calls * [0.962, 0.016, 0.009, 0.007, 0.004, 0.002, 0][i]!) })),
+      statsDropped: 0,
+    })
   }, A),
   route('get', '/api/admin/settings', () => {
     const s = getState()

@@ -199,5 +199,41 @@
       "denied": "The upstream denied access.",
       "failed": "Signing in to the upstream failed."
     }
+  },
+  "stats": {
+    "sideList": "All upstreams",
+    "kpis": "Key figures",
+    "kpiP50": "Latency p50",
+    "kpiP95": "Latency p95",
+    "kpiOverhead": "Gateway overhead p95",
+    "kpiErrorRate": "Error rate",
+    "kpiCallsPerMin": "Calls per minute",
+    "note7d": "7 days: {ms}",
+    "noteTarget": "Target ≤ 50 ms",
+    "noteErrors": "{errors} of {calls} calls",
+    "noteLimit": "Limit {n} / min",
+    "slowNote": "p95 is {factor}x the 7-day baseline.",
+    "statusTitle": "Status, last 24 hours",
+    "available": "Available {pct}",
+    "availableNone": "No data",
+    "ago24h": "24 h ago",
+    "heatTitle": "Status per hour, last 7 days",
+    "heatAria": "Status per hour over seven days: {err} hours with many errors, {warn} hours with a few errors.",
+    "legend": {
+      "ok": "no errors",
+      "warn": "a few errors",
+      "err": "many errors",
+      "none": "no data"
+    },
+    "percentileTitle": "Latency percentiles",
+    "percentileAria": "Latency over 24 hours: p50 now {p50}, p95 now {p95}",
+    "errorsTitle": "Errors by kind",
+    "noErrors": "No errors in the period.",
+    "colKind": "Kind",
+    "colShare": "Share",
+    "colCount": "Count",
+    "colAvg": "Avg duration",
+    "errorsNote": "Avg duration is the time until the error. Invalid arguments and tool errors do not count towards the breaker.",
+    "colErrors": "Errors"
   }
 }

@@ -4,6 +4,8 @@ import { createSafeFetch, type FetchLike } from './net/safe-fetch'
 import type { AllowList } from './net/ssrf'
 import { GatewayCore } from './proxy/handlers'
 import { StatsBuffer, type CallStatRow } from './stats/buffer'
+import type { StatsQuery } from './stats/query'
+import type { StatsSummary } from '#shared/api-types'
 import { Catalog } from './upstream/catalog'
 import { connectUpstream, type ConnectDeps, type Credentials } from './upstream/connect'
 import { Limiter } from './upstream/limiter'
@@ -19,6 +21,7 @@ export type GatewayOptions = {
   masterKey: Buffer
   statusSink: StatusSink
   statsWrite: (rows: CallStatRow[]) => Promise<void>
+  statsRead?: (q: StatsQuery) => Promise<StatsSummary>
   getAllow?: () => AllowList | Promise<AllowList>
   safeFetch?: FetchLike
   stdioTransport?: (up: UpstreamRow, creds: Credentials) => Promise<Transport>
@@ -76,10 +79,12 @@ export function createGateway(o: GatewayOptions) {
     else h.configure({ enabled: up.enabled, setup: up.setup })
     return h
   }
-  const core = new GatewayCore({ store: o.store, pool, catalog, limiter, stats, healthFor, notifyChanged: o.notifyChanged })
+  const core = new GatewayCore({ store: o.store, pool, catalog, limiter, stats, healthFor, notifyChanged: o.notifyChanged, statsRead: o.statsRead })
   return {
     toolSource: core as import('./ports').ToolSource,
     core, pool, catalog, limiter, stats, healthFor, safeFetch, credentials, oauth,
+    /** Latency check (p95 vs 7-day baseline): `slow` maps upstream ID -> reason; everything else is cleared. Unknown IDs are ignored. */
+    applySlow(slow: Map<string, string>) { for (const [id, h] of health) h.setSlow(slow.get(id) ?? null) },
     /** Lifecycle: ban/delete. */
     async onUserDisabled(userId: string) {
       await pool.closeUser(userId)

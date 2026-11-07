@@ -12,7 +12,7 @@ export const NAV: NavGroup[] = [
   { label: 'common.nav.operations', items: [
     { label: 'common.nav.dashboard', to: '/', icon: House },
     { label: 'common.nav.upstreams', to: '/upstreams', icon: LayoutGrid, badge: 'attention' },
-    { label: 'common.nav.stats', to: '/stats', icon: Activity, phase2: true },
+    { label: 'common.nav.stats', to: '/stats', icon: Activity },
   ] },
   { label: 'common.nav.access', items: [
     { label: 'common.nav.clients', to: '/settings/connections', icon: Monitor },

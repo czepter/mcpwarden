@@ -6,6 +6,11 @@ import ErrorState from '~/components/common/ErrorState.vue'
 import LoadingRows from '~/components/common/LoadingRows.vue'
 import AdminTabs from '~/components/shell/AdminTabs.vue'
 import PageHeader from '~/components/shell/PageHeader.vue'
+import KpiCard from '~/components/common/KpiCard.vue'
+import TimeWindow from '~/components/common/TimeWindow.vue'
+import { formatNumber, formatPercent } from '~/lib/format'
+import { outcomeLabel } from '~/lib/labels'
+import type { StatsWindow } from '#shared/api-types'
 import { Alert } from '~/components/ui/alert'
 import { Button } from '~/components/ui/button'
 import { Input } from '~/components/ui/input'
@@ -15,6 +20,9 @@ definePageMeta({ middleware: 'admin' })
 const { t } = useI18n()
 useHead({ title: () => t('admin.settings.pageTitle') })
 const { data, error, status, refresh } = useApi('admin-settings', adminApi.settings)
+// Instance figures (spec P0-15): aggregated counters, never contents of other users.
+const win = ref<StatsWindow>('24h')
+const stats = useAsyncData('admin-stats', () => adminApi.stats(win.value), { server: false, lazy: true, watch: [win] })
 const warnings = ref<string[]>([])
 const entry = ref('')
 const entryError = ref('')
@@ -40,7 +48,27 @@ const removeEntry = (e: string) => put({ 'ssrf.allow': (data.value?.['ssrf.allow
   <AdminTabs />
   <LoadingRows v-if="status === 'pending' && !data" />
   <ErrorState v-else-if="error" :error="error" @retry="refresh()" />
-  <div v-else-if="data" class="flex max-w-[720px] flex-col gap-4">
+  <div v-else-if="data" class="flex flex-col gap-4">
+    <section class="flex flex-col gap-3" aria-labelledby="h-usage">
+      <div class="flex flex-wrap items-center justify-between gap-2"><h2 id="h-usage" class="text-base font-semibold">{{ $t('admin.settings.usageTitle') }}</h2><TimeWindow v-model="win" /></div>
+      <p class="text-[13px] text-muted-foreground">{{ $t('admin.settings.usageDesc') }}</p>
+      <ErrorState v-if="stats.error.value" :error="stats.error.value" @retry="stats.refresh()" />
+      <template v-else-if="stats.data.value">
+        <div class="grid grid-cols-[repeat(auto-fit,minmax(min(170px,100%),1fr))] gap-3">
+          <KpiCard :label="$t('admin.settings.usageUsers')" :value="`${stats.data.value.activeUsers} / ${stats.data.value.users}`" :note="$t('admin.settings.usageUsersNote')" />
+          <KpiCard :label="$t('admin.settings.usageUpstreams')" :value="formatNumber(stats.data.value.upstreams)" />
+          <KpiCard :label="$t('admin.settings.usageCalls')" :value="formatNumber(stats.data.value.calls)" :note="$t('admin.settings.usagePerMin', { n: formatNumber(stats.data.value.callsPerMin, 1) })" />
+          <KpiCard :label="$t('admin.settings.usageSuccess')" :value="formatPercent(stats.data.value.okRate)" />
+          <KpiCard label="p95" :value="formatNumber(stats.data.value.p95Ms)" unit="ms" />
+          <KpiCard :label="$t('admin.settings.usageOverhead')" :value="formatNumber(stats.data.value.overheadP95Ms)" unit="ms" :note="$t('dashboard.kpiOverheadNote')" />
+        </div>
+        <ul class="flex flex-wrap gap-x-4 gap-y-1 text-[13px] text-secondary-foreground">
+          <li v-for="o in stats.data.value.outcomes.filter(x => x.count)" :key="o.outcome">{{ outcomeLabel(o.outcome) }}: <span class="tnum font-medium">{{ formatNumber(o.count) }}</span></li>
+        </ul>
+        <p v-if="stats.data.value.statsDropped" role="status" class="text-[13px] text-warn-fg">{{ $t('admin.settings.usageDropped', { n: formatNumber(stats.data.value.statsDropped) }) }}</p>
+      </template>
+    </section>
+    <div class="flex max-w-[720px] flex-col gap-4">
     <section class="rounded-lg border bg-card p-5" aria-labelledby="h-stdio">
       <div class="flex items-start justify-between gap-4">
         <div><h2 id="h-stdio" class="text-base font-semibold"><label for="sw-stdio">{{ $t('admin.settings.stdioTitle') }}</label></h2>
@@ -62,5 +90,6 @@ const removeEntry = (e: string) => put({ 'ssrf.allow': (data.value?.['ssrf.allow
       </form>
     </section>
     <p class="text-[13px] text-muted-foreground">{{ $t('admin.settings.registrationNote') }}</p>
+    </div>
   </div>
 </template>

@@ -56,8 +56,8 @@ test('First registration via the UI makes the user an admin and lands on the das
   await page.getByRole('button', { name: 'Konto anlegen' }).click()
   await expect(page.getByRole('heading', { name: 'Dashboard', level: 1 })).toBeVisible()
   await expect(page.getByRole('link', { name: 'Admin' })).toBeVisible()
-  // Phase 2 pages without a backend route are not in the navigation
-  await expect(page.getByRole('link', { name: 'Statistik' })).toHaveCount(0)
+  // Statistics has a backend now and is part of the navigation
+  await expect(page.getByRole('link', { name: 'Statistik' })).toBeVisible()
 })
 
 test('afterwards: registration only with an invitation; wrong password shows an error; login with correct credentials', async ({ page }) => {
@@ -74,12 +74,13 @@ test('afterwards: registration only with an invitation; wrong password shows an 
   await axe(page)
 })
 
-test('Dashboard with real data: empty, navigation, pages without a backend redirect', async ({ page }) => {
+test('Dashboard with real data: empty, navigation; statistics without calls', async ({ page }) => {
   await login(page)
   await expect(page.getByRole('navigation', { name: 'Hauptnavigation' })).toBeVisible()
-  await page.goto('/stats')
-  await expect(page).toHaveURL(/\/$/)
   await expect(page.getByRole('heading', { name: 'Dashboard', level: 1 })).toBeVisible()
+  await page.goto('/stats')
+  await expect(page.getByRole('heading', { name: 'Statistik', level: 1 })).toBeVisible()
+  await expect(page.getByText('Im gewählten Zeitraum gab es keine Aufrufe.')).toBeVisible()
 })
 
 test('Upstream list: empty; create upstream via the UI (SSRF exception by the admin), connection ok, in the list', async ({ page }) => {

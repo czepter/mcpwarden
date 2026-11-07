@@ -2,7 +2,7 @@ import type {
   AdminUserLimitsInput, AdminSettings, AdminSettingsResult, AdminUserList, AllowlistEntry, AllowlistInput, AllowlistList,
   AuditList, AuthSession, Capabilities, PublicConfig, MeSettings, ConnectionList, ConsentInfo, Dashboard, DcrMode, DcrPolicy, InviteInfo, InviteCreated,
   InviteList, LinkInfo, LinkTestResult, OAuthClientAdminList, PatCreateInput, PatCreated, PatList, SecretInput, SecretResult,
-  StatsSummary, StatsWindow, StdioDraft, UpstreamAuthProbe, UpstreamOAuthStart, UpstreamTestResult, UpstreamToolList, UpstreamDetail, UpstreamInput, UpstreamList, UpstreamPatch, UpstreamToolItem, AdminUser,
+  AdminStats, HealthHistory, UpstreamStats, StatsSummary, StatsWindow, StdioDraft, UpstreamAuthProbe, UpstreamOAuthStart, UpstreamTestResult, UpstreamToolList, UpstreamDetail, UpstreamInput, UpstreamList, UpstreamPatch, UpstreamToolItem, AdminUser,
 } from '#shared/api-types'
 import { API_PATHS } from '#shared/api-types'
 import { del, get, http, patch, post, put } from './http'
@@ -45,7 +45,9 @@ export const meApi = {
 }
 
 export const upstreamApi = {
-  list: () => get<UpstreamList>(API_PATHS.upstreams),
+  list: (window?: StatsWindow) => get<UpstreamList>(API_PATHS.upstreams, { window }),
+  stats: (id: string, window: StatsWindow) => get<UpstreamStats>(`${API_PATHS.upstreams}/${enc(id)}/stats`, { window }),
+  healthHistory: (id: string) => get<HealthHistory>(`${API_PATHS.upstreams}/${enc(id)}/health-history`),
   get: (id: string) => get<UpstreamDetail>(`${API_PATHS.upstreams}/${enc(id)}`),
   create: (b: UpstreamInput) => post<UpstreamDetail>(API_PATHS.upstreams, b),
   patch: (id: string, b: UpstreamPatch) => patch<UpstreamDetail>(`${API_PATHS.upstreams}/${enc(id)}`, b),
@@ -63,6 +65,7 @@ export const upstreamApi = {
 
 export const adminApi = {
   users: () => get<AdminUserList>('/api/admin/users'),
+  stats: (window: StatsWindow) => get<AdminStats>('/api/admin/stats', { window }),
   ban: (id: string, reason?: string) => post<undefined>(`/api/admin/users/${enc(id)}/ban`, { reason }),
   unban: (id: string) => post<undefined>(`/api/admin/users/${enc(id)}/unban`),
   removeUser: (id: string) => del(`/api/admin/users/${enc(id)}`),
@@ -84,8 +87,8 @@ export const adminApi = {
 
 export const inviteApi = { check: (token: string) => http<InviteInfo>('GET', `/api/invites/${enc(token)}`, { skip401: true }) }
 export const auditApi = { list: (q: { category?: string, cursor?: string, limit?: number }) => get<AuditList>(API_PATHS.audit, q) }
-export const dashboardApi = { get: () => get<Dashboard>(API_PATHS.dashboard) }
-export const statsApi = { summary: (window: StatsWindow, upstream?: string) => get<StatsSummary>('/api/stats/summary', { window, upstream }) }
+export const dashboardApi = { get: (window?: StatsWindow) => get<Dashboard>(API_PATHS.dashboard, { window }) }
+export const statsApi = { summary: (window: StatsWindow, upstream?: string, tool?: string) => get<StatsSummary>('/api/stats/summary', { window, upstream, tool }) }
 export const linkApi = {
   get: (token: string) => http<LinkInfo>('GET', `/api/links/${enc(token)}`, { skip401: true }),
   test: (token: string, value: string) => post<LinkTestResult>(`/api/links/${enc(token)}/test`, { value }),
