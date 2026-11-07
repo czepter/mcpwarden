@@ -200,7 +200,8 @@
         "connect": "Verbinden",
         "list": "Liste",
         "call": "Aufruf"
-      }
+      },
+      "envName": "Variablennamen dürfen nur Buchstaben, Ziffern und Unterstriche enthalten."
     }
   }
 }

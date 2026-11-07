@@ -10,7 +10,7 @@ import { Button } from '~/components/ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '~/components/ui/collapsible'
 import { Input } from '~/components/ui/input'
 import { RadioGroup, RadioGroupItem } from '~/components/ui/radio-group'
-import { Textarea } from '~/components/ui/textarea'
+import { Plus, X } from '@lucide/vue'
 import { stdioReasonLabel } from '~/lib/labels'
 import { useZodForm } from '~/lib/useZodForm'
 import { upstreamSchema } from '~/lib/zod-schemas'
@@ -33,6 +33,11 @@ const KEYS = ['type', 'name', 'slug', 'url', 'transport', 'authType', 'authHeade
 const fv = reactive(Object.fromEntries(KEYS.map(k => [k, form.defineField(k)[0]]))) as unknown as Record<(typeof KEYS)[number], any>
 const err = (k: string) => (form.errors.value as Record<string, string | undefined>)[k]
 const advanced = ref(false)
+// stdio: arguments and environment variables as editable lists (values go to the encrypted secret store, never back to the browser)
+const argList = ref<string[]>([...(i?.args ?? [])])
+const envList = ref<Array<{ name: string, value: string }>>((i?.secretNames ?? []).map(name => ({ name, value: '' })))
+const ENV_NAME_RE = /^[A-Za-z_][A-Za-z0-9_]{0,63}$/
+const envNameError = computed(() => envList.value.some(r => (r.name.trim() || r.value) && !ENV_NAME_RE.test(r.name.trim())))
 // Auto-detection: once the URL looks complete, ask the server whether it offers OAuth (before the user picks a sign-in)
 type Probe = 'idle' | 'checking' | 'dcr' | 'no_dcr' | 'none' | 'error'
 const probe = ref<Probe>('idle')
@@ -66,20 +71,23 @@ watch(() => fv.name as string, (n) => { if (!edit.value && !slugTouched) form.se
 watch(() => fv.slug as string, (sl) => { if (sl !== slugify(fv.name ?? '')) slugTouched = true })
 watch(() => fv.type as string, (t) => { if (t === 'stdio' && stdioBlocked.value) form.setFieldValue('type', 'http') })
 
+const envRows = () => envList.value.map(r => ({ name: r.name.trim(), value: r.value })).filter(r => r.name && r.value)
 const onSubmit = submit(async (v) => {
+  if (v.type === 'stdio' && envNameError.value) return
   let test: TestResultT | null = null
   const body = {
     name: v.name, ratePerMin: v.ratePerMin, maxConcurrent: v.maxConcurrent,
     timeouts: { connectMs: v.connectS * 1000, listMs: v.listS * 1000, callMs: v.callS * 1000 },
     ...(v.type === 'http' ? { url: v.url.trim(), transport: v.transport, authType: v.authType, authHeaderName: v.authType === 'header' ? v.authHeaderName : undefined } : {}),
-    ...(v.type === 'stdio' ? { command: v.command.trim(), args: v.args.split('\n').map(s => s.trim()).filter(Boolean), cwd: v.cwd || undefined } : {}),
+    ...(v.type === 'stdio' ? { command: v.command.trim(), args: argList.value.map(a => a.trim()).filter(Boolean), cwd: v.cwd || undefined, ...(envRows().length || i?.authType === 'env' ? { authType: 'env' as const } : {}) } : {}),
   }
   let u: UpstreamDetail
   if (props.initial) u = await upstreamApi.patch(props.initial.id, body)
   else u = await upstreamApi.create({ ...body, slug: v.slug, type: v.type })
   try {
     if (v.secret && v.authType !== 'oauth') { await upstreamApi.putSecret(u.id, { kind: v.authType === 'header' ? 'header' : 'bearer', name: v.authType === 'header' ? v.authHeaderName : undefined, value: v.secret }); u.hasSecret = true }
-  } finally { form.setFieldValue('secret', '') }
+    if (v.type === 'stdio') for (const r of envRows()) await upstreamApi.putSecret(u.id, { kind: 'env', name: r.name, value: r.value })
+  } finally { form.setFieldValue('secret', ''); envList.value.forEach(r => (r.value = '')) }
   if (!props.initial && v.authType !== 'oauth') test = await upstreamApi.test(u.id) // OAuth: nothing to test before the account is connected
   emit('saved', u, test)
 }, ['name', 'slug', 'url', 'command', 'authHeaderName'])
@@ -94,7 +102,7 @@ const onSubmit = submit(async (v) => {
       <RadioGroup v-model="fv.type" class="grid grid-cols-2 gap-2" :aria-label="$t('upstreams.form.type')">
         <label class="flex min-h-14 cursor-pointer items-start gap-2 rounded-sm border px-3 py-2" :class="fv.type === 'http' ? 'border-primary bg-primary-tint' : ''"><RadioGroupItem value="http" class="mt-0.5" /><span class="flex flex-col"><span class="font-semibold">HTTP</span><span class="text-xs text-secondary-foreground">Streamable HTTP, SSE</span></span></label>
         <label class="flex min-h-14 items-start gap-2 rounded-sm border px-3 py-2" :class="[fv.type === 'stdio' ? 'border-primary bg-primary-tint' : '', stdioBlocked ? 'cursor-not-allowed opacity-70' : 'cursor-pointer']">
-          <RadioGroupItem value="stdio" :disabled="stdioBlocked" class="mt-0.5" /><span class="flex flex-col"><span class="font-semibold">stdio</span><span class="text-xs text-secondary-foreground">{{ $t('upstreams.form.stdioHint') }}</span></span>
+          <RadioGroupItem value="stdio" :disabled="stdioBlocked" class="mt-0.5" /><span class="flex flex-col"><span class="font-semibold">{{ $t('upstreams.form.typeCommand') }}</span><span class="text-xs text-secondary-foreground">{{ $t('upstreams.form.stdioHint') }}</span></span>
         </label>
       </RadioGroup>
       <p v-if="stdioBlocked" class="text-[13px] text-muted-foreground" data-testid="stdio-reason">{{ $t('upstreams.form.stdioBlocked', { reason: stdioReasonLabel(caps.stdio.reason ?? '') }) }}</p>
@@ -122,8 +130,26 @@ const onSubmit = submit(async (v) => {
     </div>
 
     <div v-if="fv.type === 'stdio'" class="flex flex-col gap-5">
-      <FormRow id="u-cmd" :label="$t('upstreams.form.command')" :error="err('command')"><template #default="{ id, invalid, describedby }"><Input :id="id" v-model="fv.command" class="mono" placeholder="uvx mcp-server-duckdb" :aria-invalid="invalid || undefined" :aria-describedby="describedby" /></template></FormRow>
-      <FormRow id="u-args" :label="$t('upstreams.form.args')" :description="$t('upstreams.form.argsDesc')" optional><template #default="{ id }"><Textarea :id="id" v-model="fv.args" rows="3" class="mono" /></template></FormRow>
+      <FormRow id="u-cmd" :label="$t('upstreams.form.command')" :error="err('command')"><template #default="{ id, invalid, describedby }"><Input :id="id" v-model="fv.command" class="mono" placeholder="npx" :aria-invalid="invalid || undefined" :aria-describedby="describedby" /></template></FormRow>
+      <fieldset class="flex flex-col gap-2" data-testid="args-list">
+        <legend class="mb-1 text-sm font-medium">{{ $t('upstreams.form.args') }}</legend>
+        <div v-for="(_, n) in argList" :key="n" class="flex gap-2">
+          <Input v-model="argList[n]" class="mono" :aria-label="`${$t('upstreams.form.args')} ${n + 1}`" :placeholder="n === 0 ? '-y' : n === 1 ? '@modelcontextprotocol/server-everything' : ''" />
+          <Button type="button" variant="ghost" size="icon" :aria-label="$t('upstreams.form.remove')" @click="argList.splice(n, 1)"><X class="size-4" aria-hidden="true" /></Button>
+        </div>
+        <Button type="button" variant="secondary" class="w-fit" @click="argList.push('')"><Plus class="size-4" aria-hidden="true" />{{ $t('upstreams.form.addArg') }}</Button>
+      </fieldset>
+      <fieldset class="flex flex-col gap-2" data-testid="env-list">
+        <legend class="mb-1 text-sm font-medium">{{ $t('upstreams.form.env') }}</legend>
+        <div v-for="(r, n) in envList" :key="n" class="flex gap-2">
+          <Input v-model="r.name" class="mono" :aria-label="$t('upstreams.form.envName')" placeholder="API_KEY" />
+          <SecretField v-model="r.value" :aria-label="$t('upstreams.form.envValue')" />
+          <Button type="button" variant="ghost" size="icon" :aria-label="$t('upstreams.form.remove')" @click="envList.splice(n, 1)"><X class="size-4" aria-hidden="true" /></Button>
+        </div>
+        <p v-if="envNameError" class="text-[13px] text-destructive" role="alert">{{ $t('common.validation.envName') }}</p>
+        <Button type="button" variant="secondary" class="w-fit" @click="envList.push({ name: '', value: '' })"><Plus class="size-4" aria-hidden="true" />{{ $t('upstreams.form.addEnv') }}</Button>
+        <p class="text-[13px] text-muted-foreground">{{ edit ? $t('upstreams.form.envDescEdit') : $t('upstreams.form.envDesc') }}</p>
+      </fieldset>
       <FormRow id="u-cwd" :label="$t('upstreams.form.cwd')" :description="$t('upstreams.form.cwdDesc')" :error="err('cwd')" optional><template #default="{ id, invalid, describedby }"><Input :id="id" v-model="fv.cwd" class="mono" :aria-invalid="invalid || undefined" :aria-describedby="describedby" /></template></FormRow>
     </div>
 
