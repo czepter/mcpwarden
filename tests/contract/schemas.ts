@@ -4,6 +4,7 @@
 // of the built server (tests/integration/contract.test.ts). If one side drifts, the test fails.
 import { z } from 'zod'
 import type {
+  AdminStats, HealthHistory, StatsSummary, UpstreamStats,
   AdminSettingsResult, AdminUserList, AllowlistList, AuditList, AuthSession, Capabilities, ConnectionList, ConsentInfo, Dashboard, DcrPolicy,
   InviteCreated, InviteInfo, InviteList, MeSettings, OAuthClientAdminList, PatCreated, PatList, PublicConfig, UpstreamDetail, UpstreamList, UpstreamTestResult, UpstreamToolList,
 } from '#shared/api-types'
@@ -12,13 +13,15 @@ const { string: str, number: num, boolean: bool } = z
 const nstr = z.string().nullable()
 const health = z.enum(['healthy', 'degraded', 'open', 'auth_expired', 'disabled', 'unknown'])
 const setup = z.enum(['ready', 'awaiting_auth', 'awaiting_approval'])
+const hour = z.enum(['ok', 'warn', 'err', 'none'])
+const outcome = z.enum(['ok', 'tool_error', 'timeout', 'upstream_error', 'rate_limited', 'breaker_open', 'denied'])
 const timeouts = z.strictObject({ connectMs: num(), listMs: num(), callMs: num() })
 const limits = z.strictObject({ maxUpstreams: num(), callsPerMin: num(), maxConnections: num(), stdioMaxProcs: num(), stdioIdleMin: num() })
 const summaryShape = {
   id: str(), slug: str(), name: str(), description: nstr, type: z.enum(['http', 'stdio']), url: nstr, command: nstr, enabled: bool(),
   status: health, statusReason: nstr, statusChangedAt: nstr, lastError: nstr, lastOkAt: nstr, setup, toolsEnabled: num(), toolsTotal: num(),
   nextRetryAt: nstr, rateLimitHits5m: num(), hasSecret: bool(),
-  p95Ms: num().nullable().optional(), recent: z.array(z.enum(['ok', 'warn', 'err', 'none'])).optional(),
+  p95Ms: num().nullable().optional(), recent: z.array(hour).optional(), hourly: z.array(hour).optional(),
 }
 const annotations = z.strictObject({ readOnlyHint: bool().optional(), destructiveHint: bool().optional(), idempotentHint: bool().optional() })
 const patSummary = { id: str(), name: str(), prefix: str(), createdAt: str(), lastUsedAt: nstr, revokedAt: nstr, expiresAt: nstr, upstreamIds: z.array(str()).nullable() }
@@ -83,6 +86,8 @@ export const schemas = {
     clients: z.array(z.strictObject({ kind: z.enum(['oauth', 'pat']), id: str(), name: str(), allowlisted: z.boolean().nullable(), active: bool(), lastActiveAt: nstr, callsPerMin: num(), contextTokensEstimate: num().nullable() })),
     attention: z.array(z.strictObject({ upstreamId: str(), slug: str(), name: str(), status: health, setup: z.enum(['ready', 'awaiting_auth', 'awaiting_approval']), statusReason: nstr, nextRetryAt: nstr })),
     attentionCount: num(),
+    kpis: z.strictObject({ clientsActive: num(), clientsTotal: num(), callsPerMin: num(), successRate: num(), overheadP95Ms: num() }).optional(),
+    series: z.array(z.strictObject({ t: str(), calls: num() })).optional(),
   }) satisfies z.ZodType<Dashboard>,
   audit: z.strictObject({
     items: z.array(z.strictObject({
@@ -91,6 +96,25 @@ export const schemas = {
     })),
     nextCursor: nstr,
   }) satisfies z.ZodType<AuditList>,
+  stats: z.strictObject({
+    window: z.enum(['5m', '1h', '24h', '7d']), calls: num(), callsPerMin: num(), okRate: num(), peakConcurrent: num(), activeClients: num(), avgMs: num(), maxMs: num(), overheadP95Ms: num(),
+    perHour: z.array(z.strictObject({ t: str(), calls: num() })),
+    outcomes: z.array(z.strictObject({ outcome: z.enum(['ok', 'tool_error', 'timeout', 'upstream_error', 'rate_limited', 'breaker_open', 'denied']), count: num() })),
+    rows: z.array(z.strictObject({ upstream: str(), calls: num(), okRate: num(), p5Ms: num(), p50Ms: num(), p75Ms: num(), p95Ms: num(), p99Ms: num(), overheadP95Ms: num() })),
+    tools: z.array(z.strictObject({ upstream: str(), tool: str(), calls: num(), okRate: num(), p50Ms: num(), p95Ms: num(), p99Ms: num(), avgMs: num(), maxMs: num() })),
+  }) satisfies z.ZodType<StatsSummary>,
+  upstreamStats: z.strictObject({
+    window: z.enum(['5m', '1h', '24h', '7d']), calls: num(), errorCount: num(), errorRate: num(), callsPerMin: num(), p50Ms: num(), p95Ms: num(), p99Ms: num(), overheadP95Ms: num(),
+    baseline: z.strictObject({ p50Ms: num(), p95Ms: num() }),
+    series: z.array(z.strictObject({ t: str(), p50Ms: num().nullable(), p95Ms: num().nullable(), p99Ms: num().nullable() })),
+    errors: z.array(z.strictObject({ outcome, count: num(), avgMs: num() })),
+    tools: z.array(z.strictObject({ name: str(), calls: num(), errorRate: num(), p95Ms: num() })),
+  }) satisfies z.ZodType<UpstreamStats>,
+  healthHistory: z.strictObject({ start: str(), hours: z.array(hour), availability: num().nullable() }) satisfies z.ZodType<HealthHistory>,
+  adminStats: z.strictObject({
+    window: z.enum(['5m', '1h', '24h', '7d']), users: num(), activeUsers: num(), upstreams: num(), calls: num(), okRate: num(), callsPerMin: num(), p95Ms: num(), overheadP95Ms: num(),
+    outcomes: z.array(z.strictObject({ outcome, count: num() })), statsDropped: num(),
+  }) satisfies z.ZodType<AdminStats>,
   meSettings: z.strictObject({ notifyStatusMail: bool() }) satisfies z.ZodType<MeSettings>,
   publicConfig: z.strictObject({ mail: bool(), registrationOpen: bool() }) satisfies z.ZodType<PublicConfig>,
   /** Nitro error shape (`ApiErrorBody`), not `/api/auth/*`. */

@@ -39,7 +39,10 @@
     "revokeLabel": "Revoke {name}",
     "confirmTitle": "Revoke access?",
     "confirmBodyOauth": "The connection “{name}” will be ended. This takes effect on the next call.",
-    "confirmBodyToken": "The token “{name}” will be ended. This takes effect on the next call."
+    "confirmBodyToken": "The token “{name}” will be ended. This takes effect on the next call.",
+    "kpiClientsNote": "Call within the last 5 min",
+    "callsPerMinChart": "Calls per minute",
+    "callsPerMinAria": "Calls per minute, {window}, peak {peak}"
   },
   "audit": {
     "title": "Audit log",
@@ -84,6 +87,26 @@
     "colUpstream": "Upstream",
     "colCalls": "Calls",
     "colSuccess": "Success",
-    "colOverhead": "Overhead p95"
+    "colOverhead": "Overhead p95",
+    "filterUpstream": "Filter by upstream",
+    "allUpstreams": "All upstreams",
+    "empty": "No calls in the selected time window.",
+    "callsOverTime": "Calls over time",
+    "noData": "no data",
+    "callsOverTimePeak": "Calls over time, peak {peak}",
+    "window5m": "5 minutes",
+    "window1h": "1 hour",
+    "window24h": "24 hours",
+    "window7d": "7 days",
+    "filterTool": "Filter by tool",
+    "allTools": "All tools",
+    "kpiAvg": "Avg duration",
+    "kpiMax": "Longest call",
+    "toolLatency": "Latency per tool",
+    "toolLatencyDesc": "Total duration per tool, most used first. Avg and max in milliseconds or seconds.",
+    "toolCaption": "Statistics per tool",
+    "colTool": "Tool",
+    "colAvg": "Avg",
+    "colMax": "Max"
   }
 }

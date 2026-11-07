@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm'
-import { bigserial, boolean, check, foreignKey, index, integer, jsonb, pgTable, smallint, text, timestamp, unique, uniqueIndex, uuid, primaryKey } from 'drizzle-orm/pg-core'
+import { bigint, bigserial, boolean, check, foreignKey, index, integer, jsonb, pgTable, smallint, text, timestamp, unique, uniqueIndex, uuid, primaryKey } from 'drizzle-orm/pg-core'
 import { user } from './auth'
 
 const userFk = () => text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' })
@@ -169,4 +169,26 @@ export const callStat = pgTable('call_stat', {
   index('call_stat_user_upstream_ts_idx').on(t.userId, t.upstreamId, t.ts),
   index('call_stat_ts_idx').on(t.ts),
   check('call_stat_kind_ck', sql`${t.kind} in ('list','call')`),
+])
+
+/**
+ * Hourly rollup of `call_stat` (spec P0-15): written when raw rows age out (14 days), kept for 13 months.
+ * `hist` holds the call count per duration bucket (upper bounds in `ROLLUP_BUCKETS_MS`, the last bucket is open),
+ * so percentiles stay approximately reconstructible after the raw data is gone.
+ */
+export const callStatHourly = pgTable('call_stat_hourly', {
+  hour: timestamp('hour', { withTimezone: true }).notNull(),
+  userId: userFk(),
+  upstreamSlug: text('upstream_slug').notNull(),
+  tool: text('tool').notNull().default(''),
+  status: text('status').notNull(),
+  calls: integer('calls').notNull(),
+  totalMsSum: bigint('total_ms_sum', { mode: 'number' }).notNull(),
+  maxMs: integer('max_ms').notNull(),
+  overheadMsSum: bigint('overhead_ms_sum', { mode: 'number' }).notNull().default(0),
+  overheadCalls: integer('overhead_calls').notNull().default(0),
+  hist: jsonb('hist').$type<number[]>().notNull(),
+}, t => [
+  primaryKey({ columns: [t.hour, t.userId, t.upstreamSlug, t.tool, t.status] }),
+  index('call_stat_hourly_hour_idx').on(t.hour),
 ])

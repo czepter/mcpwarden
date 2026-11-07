@@ -9,5 +9,5 @@ export default defineEventHandler(async (event) => {
   const who = { id: user.id, role: (user.role === 'admin' ? 'admin' : 'user') as 'admin' | 'user' }
   const rt = await getRuntime()
   noStore(event)
-  return await svc.listUpstreams(rt, who) satisfies UpstreamList
+  return await svc.listUpstreams(rt, who, getQuery(event)) satisfies UpstreamList
 })

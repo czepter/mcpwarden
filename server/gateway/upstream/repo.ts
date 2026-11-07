@@ -5,10 +5,12 @@
 import { createHash, randomBytes } from 'node:crypto'
 import { and, asc, count, desc, eq, gt, inArray, isNotNull, isNull, lt, max, notInArray, or, sql } from 'drizzle-orm'
 import type { Db } from '../../db'
-import { appSetting, auditLog, callStat, personalAccessToken, upstream, upstreamOauth, upstreamSecret, upstreamTool, user, userGatewayLimits, userInvite, userPreference } from '../../db/schema'
-import { ACTIVE_WINDOW_MS, DEFAULT_LIMITS, INVITE_TTL_DAYS } from '../config'
+import { appSetting, auditLog, callStat, callStatHourly, personalAccessToken, upstream, upstreamOauth, upstreamSecret, upstreamTool, user, userGatewayLimits, userInvite, userPreference } from '../../db/schema'
+import { ACTIVE_WINDOW_MS, DEFAULT_LIMITS, INVITE_TTL_DAYS, ROLLUP_BUCKETS_MS, STATS } from '../config'
 import type { Timeouts } from '../config'
 import type { CallStatRow } from '../stats/buffer'
+import { querySlowUpstreams, queryAdminStats, queryHealthHistory, queryStats, queryUpstreamOverview, queryUpstreamStats, type StatsQuery } from '../stats/query'
+import type { StatsWindow } from '#shared/api-types'
 import type { StatusSnapshot } from './status'
 import type { GatewayStore, SecretRow, UpstreamRow, UserLimits } from './types'
 import { auditMeta, type AuditEntry } from '../../utils/audit'
@@ -300,10 +302,47 @@ export class GatewayRepo implements GatewayStore {
       status: r.status, totalMs: r.totalMs, upstreamMs: r.upstreamMs, overheadMs: r.overheadMs, retries: r.retries, reqBytes: r.reqBytes, resBytes: r.resBytes, cacheHit: r.cacheHit,
     })))
   }
-  async purgeStats(retentionDays: number, now = new Date()) {
-    const r = await this.db.delete(callStat).where(lt(callStat.ts, new Date(now.getTime() - retentionDays * 86_400_000))).returning({ id: callStat.id })
-    return r.length
+  /**
+   * Daily cleanup (spec P0-15): raw rows older than `retentionDays` move into the hourly rollup (counters, sums and a duration
+   * histogram) and are then deleted in the same transaction, so nothing is counted twice or lost. Rollups older than
+   * `rollupRetentionDays` (13 months) are dropped. Returns the number of raw rows removed.
+   */
+  async purgeStats(retentionDays: number, now = new Date(), rollupRetentionDays: number = STATS.rollupRetentionDays) {
+    const cutoff = new Date(now.getTime() - retentionDays * 86_400_000)
+    const bounds = ROLLUP_BUCKETS_MS
+    const bucketCols = sql.join([...bounds.map((b, i) => sql`count(*) filter (where total_ms <= ${b} and ${i === 0 ? sql`true` : sql`total_ms > ${bounds[i - 1]!}`}) as ${sql.raw(`b${i}`)}`), sql`count(*) filter (where total_ms > ${bounds.at(-1)!}) as ${sql.raw(`b${bounds.length}`)}`], sql`, `)
+    return await this.db.transaction(async (tx) => {
+      const agg = await tx.execute(sql`select date_trunc('hour', ts) as hour, user_id, upstream_slug, coalesce(tool, '') as tool, status, count(*) as calls,
+        sum(total_ms) as total_sum, max(total_ms) as max_ms, coalesce(sum(overhead_ms), 0) as oh_sum, count(overhead_ms) as oh_calls, ${bucketCols}
+        from call_stat where ts < ${cutoff} and kind = 'call' group by 1, 2, 3, 4, 5`)
+      const rows = (Array.isArray(agg) ? agg : ((agg as { rows?: Array<Record<string, unknown>> }).rows ?? [])) as Array<Record<string, unknown>>
+      for (const r of rows) {
+        const hist = Array.from({ length: bounds.length + 1 }, (_, i) => Number(r[`b${i}`]))
+        await tx.insert(callStatHourly).values({
+          hour: new Date(String(r.hour)), userId: String(r.user_id), upstreamSlug: String(r.upstream_slug), tool: String(r.tool), status: String(r.status),
+          calls: Number(r.calls), totalMsSum: Number(r.total_sum), maxMs: Number(r.max_ms), overheadMsSum: Number(r.oh_sum), overheadCalls: Number(r.oh_calls), hist,
+        }).onConflictDoUpdate({
+          target: [callStatHourly.hour, callStatHourly.userId, callStatHourly.upstreamSlug, callStatHourly.tool, callStatHourly.status],
+          // A partial hour can be rolled up twice (rows of one hour straddling the cutoff on two days): add up, never overwrite.
+          set: {
+            calls: sql`${callStatHourly.calls} + excluded.calls`, totalMsSum: sql`${callStatHourly.totalMsSum} + excluded.total_ms_sum`,
+            maxMs: sql`greatest(${callStatHourly.maxMs}, excluded.max_ms)`, overheadMsSum: sql`${callStatHourly.overheadMsSum} + excluded.overhead_ms_sum`,
+            overheadCalls: sql`${callStatHourly.overheadCalls} + excluded.overhead_calls`,
+            hist: sql`(select jsonb_agg((a.v)::int + (b.v)::int order by a.i) from jsonb_array_elements(${callStatHourly.hist}) with ordinality as a(v, i) join jsonb_array_elements(excluded.hist) with ordinality as b(v, i) on a.i = b.i)`,
+          },
+        })
+      }
+      const r = await tx.delete(callStat).where(lt(callStat.ts, cutoff)).returning({ id: callStat.id })
+      await tx.delete(callStatHourly).where(lt(callStatHourly.hour, new Date(now.getTime() - rollupRetentionDays * 86_400_000)))
+      return r.length
+    })
   }
+  async statsSummary(q: StatsQuery, now = new Date()) { return await queryStats(this.db, q, now) }
+  async upstreamStats(q: { userId: string, slug: string, window: StatsWindow }, now = new Date()) { return await queryUpstreamStats(this.db, q, now) }
+  async healthHistory(q: { userId: string, slug: string }, now = new Date()) { return await queryHealthHistory(this.db, q, now) }
+  async upstreamOverview(q: { userId: string, window: StatsWindow }, now = new Date()) { return await queryUpstreamOverview(this.db, q, now) }
+  async slowUpstreams(now = new Date()) { return await querySlowUpstreams(this.db, now) }
+  async adminStats(window: StatsWindow, now = new Date()) { return await queryAdminStats(this.db, window, now) }
 
   // --- Dashboard ---
   async dashboardUsage(userId: string, now = new Date()) {

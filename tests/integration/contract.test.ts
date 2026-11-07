@@ -156,6 +156,13 @@ describe('Adminrouten', () => {
   it('Audit and dashboard of the admin', async () => {
     expectContract('audit', await admin.request('/api/audit'), schemas.audit)
     expectContract('dashboard', await admin.request('/api/dashboard'), schemas.dashboard)
+    expectContract('stats', await admin.request('/api/stats/summary?window=7d&upstream=nope'), schemas.stats)
+    expectContract('admin stats', await admin.request('/api/admin/stats?window=24h'), schemas.adminStats)
+    const ups = expectContract('upstream list', await admin.request('/api/upstreams?window=24h'), schemas.upstreamList)
+    if (ups.items[0]) {
+      expectContract('upstream stats', await admin.request(`/api/upstreams/${ups.items[0].id}/stats?window=24h`), schemas.upstreamStats)
+      expectContract('health history', await admin.request(`/api/upstreams/${ups.items[0].id}/health-history`), schemas.healthHistory)
+    }
     expectContract('connections', await admin.request('/api/me/connections'), schemas.connections)
   })
 })

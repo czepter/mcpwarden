@@ -7,11 +7,28 @@ import type { Catalog } from '../upstream/catalog'
 import { classifyError } from '../upstream/errors'
 import type { Limiter } from '../upstream/limiter'
 import { PoolLimitError, type Pool } from '../upstream/pool'
-import { namespaced, parseToolName } from '../upstream/slug'
+import { namespaced, parseToolName, SLUG_RE } from '../upstream/slug'
 import type { UpstreamHealth } from '../upstream/status'
 import type { GatewayStore, UpstreamRow } from '../upstream/types'
 import { upstreamContext } from '../upstream/context'
 import { errorResult, type GatewayErrorCode } from './errors'
+import { isStatsWindow, type StatsQuery } from '../stats/query'
+import type { StatsSummary } from '#shared/api-types'
+
+/** Name of the built-in statistics tool; it has no `__`, so it can never collide with `<slug>__<tool>`. */
+export const GET_STATS_TOOL = 'get_stats'
+const GET_STATS_DEF: ToolDef = {
+  name: GET_STATS_TOOL,
+  description: 'Statistics of your own tool calls through mcpwarden: number of calls, success rate, results per status and latency percentiles (p5/p50/p75/p95/p99, gateway overhead) per upstream. Metadata only, never contents.',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      window: { type: 'string', enum: ['5m', '1h', '24h', '7d'], description: 'Time window, default 24h' },
+      upstream: { type: 'string', description: 'Upstream slug to narrow the figures to one upstream' },
+      tool: { type: 'string', description: 'Tool name (without the upstream prefix) to narrow the figures to one tool' },
+    },
+  },
+}
 
 export type CoreDeps = {
   store: GatewayStore
@@ -23,6 +40,8 @@ export type CoreDeps = {
   now?: () => number
   /** Called when a user's catalog changes (notifyToolsChanged, 1.2.8). */
   notifyChanged?: (userId: string) => void
+  /** Read side of the measurement data; without it the `get_stats` tool is not offered. */
+  statsRead?: (q: StatsQuery) => Promise<StatsSummary>
 }
 
 /**
@@ -84,11 +103,13 @@ export class GatewayCore implements ToolSource {
       return out
     }))
     void t0
-    return parts.flat() as ToolDef[]
+    const out = parts.flat() as ToolDef[]
+    return this.d.statsRead ? [...out, GET_STATS_DEF] : out
   }
 
   async callTool(ctx: AuthContext, name: string, args: Record<string, unknown>, opts: { signal: AbortSignal }): Promise<CallToolResult> {
     const t0 = performance.now()
+    if (name === GET_STATS_TOOL && this.d.statsRead) return await this.getStats(ctx, args)
     const parsed = parseToolName(name)
     if (!parsed) throw new ToolNotFoundError(name)
     const up = await this.d.store.getUpstreamBySlug(ctx.userId, parsed.slug)
@@ -149,6 +170,22 @@ export class GatewayCore implements ToolSource {
       opts.signal.removeEventListener('abort', onAbort)
       this.active.delete(ctl)
       lease.release()
+    }
+  }
+
+  /** `get_stats`: the user's own figures (from the auth context), narrowed by the token's upstream restriction. Never throws. */
+  private async getStats(ctx: AuthContext, args: Record<string, unknown>): Promise<CallToolResult> {
+    const window = args.window ?? '24h'
+    const text = (v: unknown) => (typeof v === 'string' && v ? v : undefined)
+    const upstream = text(args.upstream)
+    if (!isStatsWindow(window) || (args.upstream !== undefined && (!upstream || !SLUG_RE.test(upstream))) || (args.tool !== undefined && (!text(args.tool) || String(args.tool).length > 256))) {
+      return errorResult('invalid_arguments', 'Ungültige Argumente: window (5m, 1h, 24h, 7d), upstream (Slug), tool (Name)')
+    }
+    try {
+      const summary = await this.d.statsRead!({ userId: ctx.userId, window, upstream, tool: text(args.tool), upstreamIds: ctx.upstreamIds ?? null })
+      return { content: [{ type: 'text', text: JSON.stringify(summary) }], structuredContent: summary as unknown as Record<string, unknown> }
+    } catch {
+      return errorResult('internal', 'Statistik vorübergehend nicht verfügbar')
     }
   }
 

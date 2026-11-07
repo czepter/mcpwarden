@@ -39,10 +39,10 @@ describe('nav', () => {
     expect(labels('admin')).toContain('Admin')
     expect(labels('user')).not.toContain('Admin')
   })
-  it('Phase 2 pages (statistics) only in the mock build; without a backend route not in the navigation', () => {
+  it('statistics is part of the navigation with and without the phase 2 switch (the backend serves it)', () => {
     const labels = (p: boolean) => navFor('admin', p).flatMap(g => g.items.map(i => i.label))
     expect(labels(true)).toContain('Statistik')
-    expect(labels(false)).not.toContain('Statistik')
+    expect(labels(false)).toContain('Statistik')
     expect(labels(false)).toContain('Upstreams')
   })
 })

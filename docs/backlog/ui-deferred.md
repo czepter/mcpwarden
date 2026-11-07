@@ -8,11 +8,11 @@ These items from the mockup review were deferred by the owner. They are not reje
 
 | Item | Page | Revisit when |
 |---|---|---|
-| [U4](#u4-time-window-letzte-7-tage-in-the-upstream-list) | Upstream list | Phase 2 statistics / health history |
+| ~~[U4](#u4-time-window-letzte-7-tage-in-the-upstream-list)~~ | Upstream list | Done: time window with p95 and "Letzte 24 Aufrufe" (`?window=`) |
 | [U7](#u7-paging-footer-in-the-upstream-list) | Upstream list | The per-user upstream limit is raised |
-| [T1](#t1-upstream-list-with-24-h-bars-left-of-the-detail) | Upstream detail | Phase 2 `health-history` |
-| [S6](#s6-statistics-filter-alle-upstreams) | Statistics | Next work on the statistics page |
-| [D6 phase 2](#d6-phase-2-attention-card-beside-the-kpi-row) | Dashboard | Phase 2 KPI row and chart |
+| ~~[T1](#t1-upstream-list-with-24-h-bars-left-of-the-detail)~~ | Upstream detail | Done: side list with 24 h bars, availability and heatmap (`features.healthHistory`) |
+| ~~[S6](#s6-statistics-filter-alle-upstreams)~~ | Statistics | Done with the statistics page (`?upstream=<slug>`) |
+| ~~[D6 phase 2](#d6-phase-2-attention-card-beside-the-kpi-row)~~ | Dashboard | Done: KPI row, chart "Aufrufe pro Minute", attention card in the right column |
 
 ## U4: time window "Letzte 7 Tage" in the upstream list
 

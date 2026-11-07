@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { UpstreamTestResult as TestResultT, UpstreamSummary } from '#shared/api-types'
+import type { StatsWindow, UpstreamTestResult as TestResultT, UpstreamSummary } from '#shared/api-types'
 import { toast } from 'vue-sonner'
 import { upstreamApi } from '~/api'
 import AutoRefresh from '~/components/common/AutoRefresh.vue'
@@ -8,6 +8,7 @@ import EmptyState from '~/components/common/EmptyState.vue'
 import ErrorState from '~/components/common/ErrorState.vue'
 import KpiCard from '~/components/common/KpiCard.vue'
 import LoadingRows from '~/components/common/LoadingRows.vue'
+import TimeWindow from '~/components/common/TimeWindow.vue'
 import SparkBars from '~/components/common/SparkBars.vue'
 import StatusBadge from '~/components/common/StatusBadge.vue'
 import PageHeader from '~/components/shell/PageHeader.vue'
@@ -20,7 +21,13 @@ import { HEALTH_VALUES, healthLabel, typeLabel } from '~/lib/labels'
 
 const { t } = useI18n()
 useHead({ title: () => `${t('upstreams.list.title')} · mcpwarden` })
-const { data, error, status, refresh } = useApi('upstreams', upstreamApi.list)
+// Time window (U4): only the p95 column depends on it; kept in the query so reloads and links keep it.
+const route = useRoute()
+const router = useRouter()
+const WINDOWS: StatsWindow[] = ['5m', '1h', '24h', '7d']
+const win = ref<StatsWindow>(WINDOWS.find(w => w === route.query.window) ?? '7d')
+watch(win, (w) => { void router.replace({ query: { ...route.query, window: w === '7d' ? undefined : w } }) })
+const { data, error, status, refresh } = useAsyncData('upstreams', () => upstreamApi.list(win.value), { server: false, lazy: true, watch: [win] })
 const refreshRate = ref(0)
 usePolling(refresh, refreshRate)
 const q = ref('')
@@ -53,6 +60,7 @@ const sub = (u: UpstreamSummary) => (u.url ?? u.command ?? '').replace(/^https?:
 
 <template>
   <PageHeader :title="$t('upstreams.list.title')">
+    <TimeWindow v-model="win" />
     <AutoRefresh v-model="refreshRate" />
     <Button as-child><NuxtLink to="/upstreams/new">{{ $t('upstreams.list.add') }}</NuxtLink></Button>
   </PageHeader>
