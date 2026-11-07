@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { ChevronsUpDown, LogOut, PanelLeft, Settings } from '@lucide/vue'
-import LocaleSwitcher from '~/components/shell/LocaleSwitcher.vue'
+import { ChevronsUpDown, Languages, LogOut, PanelLeft, Settings } from '@lucide/vue'
 import { navFor, isActive } from '~/lib/nav'
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '~/components/ui/dropdown-menu'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuSeparator, DropdownMenuTrigger } from '~/components/ui/dropdown-menu'
 import { Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupLabel, SidebarHeader, SidebarMenu, SidebarMenuBadge, SidebarMenuButton, SidebarMenuItem, SidebarSeparator, useSidebar } from '~/components/ui/sidebar'
 
 const { user, logout } = useSessionUser()
+const { locale, locales, setLocale } = useI18n()
+const localeOptions = computed(() => locales.value.map(l => (typeof l === 'string' ? { code: l, name: l } : { code: l.code, name: l.name ?? l.code })))
 const route = useRoute()
 const { count, refresh } = useAttentionCount()
 const groups = computed(() => navFor(user.value?.role))
@@ -68,10 +69,15 @@ const initials = computed(() => (user.value?.name ?? '?').split(/\s+/).map(s => 
         </DropdownMenuTrigger>
         <DropdownMenuContent side="top" align="start" class="w-56">
           <DropdownMenuItem as-child><NuxtLink to="/settings"><Settings class="size-4" aria-hidden="true" />{{ $t('common.settings') }}</NuxtLink></DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuLabel class="flex items-center gap-2 text-xs font-semibold text-muted-foreground"><Languages class="size-4" aria-hidden="true" />{{ $t('common.language') }}</DropdownMenuLabel>
+          <DropdownMenuRadioGroup :model-value="locale" data-testid="locale-switcher" @update:model-value="setLocale($event as 'en' | 'de')">
+            <DropdownMenuRadioItem v-for="o in localeOptions" :key="o.code" :value="o.code">{{ o.name }}</DropdownMenuRadioItem>
+          </DropdownMenuRadioGroup>
+          <DropdownMenuSeparator />
           <DropdownMenuItem data-testid="logout" @select="logout"><LogOut class="size-4" aria-hidden="true" />{{ $t('common.logout') }}</DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
-      <LocaleSwitcher class="px-1.5 group-data-[collapsible=icon]:hidden" />
     </SidebarFooter>
   </Sidebar>
 </template>
