@@ -16,6 +16,8 @@ const toSummary = (r: typeof personalAccessToken.$inferSelect): PatSummary => ({
   createdAt: r.createdAt.toISOString(),
   lastUsedAt: r.lastUsedAt?.toISOString() ?? null,
   revokedAt: r.revokedAt?.toISOString() ?? null,
+  expiresAt: r.expiresAt?.toISOString() ?? null,
+  upstreamIds: r.upstreamIds ?? null,
 })
 
 export async function listPats(db: Db, userId: string): Promise<PatList> {
@@ -24,11 +26,11 @@ export async function listPats(db: Db, userId: string): Promise<PatList> {
 }
 
 /** `null` when the limit is reached. The plaintext leaves this function only in the return value. */
-export async function createPat(db: Db, userId: string, name: string): Promise<(PatSummary & { token: string }) | null> {
+export async function createPat(db: Db, userId: string, name: string, opts: { expiresInDays?: number | null, upstreamIds?: string[] | null } = {}, now = new Date()): Promise<(PatSummary & { token: string }) | null> {
   const [{ n } = { n: 0 }] = await db.select({ n: count() }).from(personalAccessToken).where(and(eq(personalAccessToken.userId, userId), isNull(personalAccessToken.revokedAt)))
   if (n >= PAT_LIMIT) return null
   const g = generatePat()
-  const [row] = await db.insert(personalAccessToken).values({ userId, name, tokenHash: g.hash, prefix: g.prefix }).returning()
+  const [row] = await db.insert(personalAccessToken).values({ userId, name, tokenHash: g.hash, prefix: g.prefix, expiresAt: opts.expiresInDays ? new Date(now.getTime() + opts.expiresInDays * 86_400_000) : null, upstreamIds: opts.upstreamIds ?? null }).returning()
   return { ...toSummary(row!), token: g.token }
 }
 

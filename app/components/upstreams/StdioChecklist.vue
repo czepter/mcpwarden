@@ -11,7 +11,7 @@ const TONE = { ok: 'text-ok-fg', blocked: 'text-err-fg', open: 'text-warn-fg' } 
 
 <template>
   <section aria-labelledby="h-prereq" class="flex flex-col gap-2" data-testid="stdio-checklist">
-    <h2 id="h-prereq" class="text-[15px] font-semibold">Voraussetzungen</h2>
+    <h2 id="h-prereq" class="text-[15px] font-semibold">{{ $t('upstreams.checklist.heading') }}</h2>
     <ul class="flex flex-col divide-y rounded-sm border bg-card">
       <li v-for="r in rows" :key="r.key" :data-state="r.state" class="flex items-start gap-3 px-3 py-2.5">
         <!-- Icon and text per row: the state never depends on colour alone. -->

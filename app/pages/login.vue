@@ -1,15 +1,15 @@
 <script setup lang="ts">
+import LoadingButton from '~/components/common/LoadingButton.vue'
 import { authApi, publicApi } from '~/api'
 import FormRow from '~/components/common/FormRow.vue'
 import { Alert, AlertDescription } from '~/components/ui/alert'
-import { Button } from '~/components/ui/button'
 import { Input } from '~/components/ui/input'
-import { Spinner } from '~/components/ui/spinner'
 import { useZodForm } from '~/lib/useZodForm'
 import { loginSchema } from '~/lib/zod-schemas'
 
 definePageMeta({ layout: 'auth' })
-useHead({ title: 'Anmelden · mcpwarden' })
+const { t } = useI18n()
+useHead({ title: () => t('auth.login.docTitle') })
 const route = useRoute()
 const { load } = useSessionUser()
 const { form, formError, busy, submit } = useZodForm(loginSchema, { email: '', password: '' })
@@ -31,22 +31,22 @@ watch(() => pub.value?.registrationOpen, (open) => { if (open && !route.query.si
 
 <template>
   <div class="w-full max-w-[480px] rounded-lg border bg-card p-7 shadow-[0_1px_2px_rgba(0,0,0,0.05)]">
-    <h1 class="mb-4 text-lg font-semibold">Anmelden</h1>
-    <Alert v-if="route.query.reset" class="mb-4" role="status"><AlertDescription>Dein Passwort wurde geändert. Melde dich jetzt mit dem neuen Passwort an.</AlertDescription></Alert>
+    <h1 class="mb-4 text-lg font-semibold">{{ $t('auth.login.title') }}</h1>
+    <Alert v-if="route.query.reset" class="mb-4" role="status"><AlertDescription>{{ $t('auth.login.resetDone') }}</AlertDescription></Alert>
     <form class="flex flex-col gap-4" novalidate @submit.prevent="onSubmit">
       <Alert v-if="formError" variant="destructive" role="alert"><AlertDescription>{{ formError }}</AlertDescription></Alert>
-      <FormRow id="email" label="E-Mail" :error="form.errors.value.email">
+      <FormRow id="email" :label="$t('auth.login.email')" :error="form.errors.value.email">
         <template #default="{ id, invalid, describedby }"><Input :id="id" v-model="email" type="email" autocomplete="username" :aria-invalid="invalid || undefined" :aria-describedby="describedby" /></template>
       </FormRow>
-      <FormRow id="password" label="Passwort" :error="form.errors.value.password">
+      <FormRow id="password" :label="$t('auth.login.password')" :error="form.errors.value.password">
         <template #default="{ id, invalid, describedby }"><Input :id="id" v-model="password" type="password" autocomplete="current-password" :aria-invalid="invalid || undefined" :aria-describedby="describedby" /></template>
       </FormRow>
-      <Button type="submit" :disabled="busy" :aria-busy="busy"><Spinner v-if="busy" />Anmelden</Button>
-      <NuxtLink v-if="pub?.mail" to="/forgot-password" class="text-[13px] text-primary underline">Passwort vergessen?</NuxtLink>
+      <LoadingButton :busy="busy">{{ $t('auth.login.submit') }}</LoadingButton>
+      <NuxtLink v-if="pub?.mail" to="/forgot-password" class="text-[13px] text-primary underline">{{ $t('auth.login.forgot') }}</NuxtLink>
     </form>
     <p class="mt-4 text-[13px] text-muted-foreground">
-      <template v-if="pub?.registrationOpen">Noch kein Konto? <NuxtLink to="/register" class="text-primary underline">Registrieren</NuxtLink></template>
-      <template v-else>Neue Konten gibt es nur mit Einladung. Frag einen Admin nach einem Einladungslink.</template>
+      <template v-if="pub?.registrationOpen">{{ $t('auth.login.noAccount') }} <NuxtLink to="/register" class="text-primary underline">{{ $t('auth.login.register') }}</NuxtLink></template>
+      <template v-else>{{ $t('auth.login.inviteOnly') }}</template>
     </p>
   </div>
 </template>

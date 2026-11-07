@@ -57,9 +57,9 @@ export const SEED_INVITE_TOKENS: Record<string, string> = {
 }
 
 export const seedPats = (): PatSummary[] => [
-  { id: 'pat_1', name: 'nas-cron', prefix: 'mcpw_pat_9f3c', createdAt: ago(60 * 24 * 30), lastUsedAt: ago(2), revokedAt: null },
-  { id: 'pat_2', name: 'Laptop CLI', prefix: 'mcpw_pat_a1b2', createdAt: ago(60 * 24 * 12), lastUsedAt: ago(60 * 5), revokedAt: null },
-  { id: 'pat_3', name: 'Alt', prefix: 'mcpw_pat_77de', createdAt: ago(60 * 24 * 90), lastUsedAt: null, revokedAt: ago(60 * 24 * 60) },
+  { id: 'pat_1', name: 'nas-cron', prefix: 'mcpw_pat_9f3c', createdAt: ago(60 * 24 * 30), lastUsedAt: ago(2), revokedAt: null, expiresAt: null, upstreamIds: null },
+  { id: 'pat_2', name: 'Laptop CLI', prefix: 'mcpw_pat_a1b2', createdAt: ago(60 * 24 * 12), lastUsedAt: ago(60 * 5), revokedAt: null, expiresAt: null, upstreamIds: null },
+  { id: 'pat_3', name: 'Alt', prefix: 'mcpw_pat_77de', createdAt: ago(60 * 24 * 90), lastUsedAt: null, revokedAt: ago(60 * 24 * 60), expiresAt: null, upstreamIds: null },
 ]
 
 export const seedConnections = (): ConnectionSummary[] => [

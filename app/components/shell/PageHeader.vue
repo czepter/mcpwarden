@@ -8,11 +8,11 @@ defineProps<{ title: string, crumb?: string, description?: string, crumbs?: Arra
 <template>
   <header class="flex flex-wrap items-center justify-between gap-3 py-1">
     <div class="flex items-start gap-2">
-      <SidebarTrigger class="min-[700px]:hidden size-11" aria-label="Navigation öffnen" />
+      <SidebarTrigger class="min-[700px]:hidden size-11" :aria-label="$t('common.openNavigation')" />
       <div class="flex flex-col gap-0.5">
         <Breadcrumb>
           <BreadcrumbList class="text-xs">
-            <BreadcrumbItem><BreadcrumbLink as-child><NuxtLink to="/">Home</NuxtLink></BreadcrumbLink></BreadcrumbItem>
+            <BreadcrumbItem><BreadcrumbLink as-child><NuxtLink to="/">{{ $t('common.home') }}</NuxtLink></BreadcrumbLink></BreadcrumbItem>
             <template v-for="c in crumbs ?? []" :key="c.label">
               <BreadcrumbSeparator />
               <BreadcrumbItem><BreadcrumbLink v-if="c.to" as-child><NuxtLink :to="c.to">{{ c.label }}</NuxtLink></BreadcrumbLink><span v-else>{{ c.label }}</span></BreadcrumbItem>

@@ -1,7 +1,7 @@
 import type {
   AdminUserLimitsInput, AdminSettings, AdminSettingsResult, AdminUserList, AllowlistEntry, AllowlistInput, AllowlistList,
   AuditList, AuthSession, Capabilities, PublicConfig, MeSettings, ConnectionList, ConsentInfo, Dashboard, DcrMode, DcrPolicy, InviteInfo, InviteCreated,
-  InviteList, LinkInfo, LinkTestResult, OAuthClientAdminList, PatCreated, PatList, SecretInput, SecretResult,
+  InviteList, LinkInfo, LinkTestResult, OAuthClientAdminList, PatCreateInput, PatCreated, PatList, SecretInput, SecretResult,
   StatsSummary, StatsWindow, StdioDraft, UpstreamAuthProbe, UpstreamOAuthStart, UpstreamTestResult, UpstreamToolList, UpstreamDetail, UpstreamInput, UpstreamList, UpstreamPatch, UpstreamToolItem, AdminUser,
 } from '#shared/api-types'
 import { API_PATHS } from '#shared/api-types'
@@ -38,7 +38,7 @@ export const meApi = {
   settings: () => get<MeSettings>(API_PATHS.meSettings),
   patchSettings: (b: Partial<MeSettings>) => patch<MeSettings>(API_PATHS.meSettings, b),
   pats: () => get<PatList>(API_PATHS.pats),
-  createPat: (name: string) => post<PatCreated>(API_PATHS.pats, { name }),
+  createPat: (b: PatCreateInput) => post<PatCreated>(API_PATHS.pats, b),
   revokePat: (id: string) => del(`${API_PATHS.pats}/${enc(id)}`),
   connections: () => get<ConnectionList>(API_PATHS.connections),
   revokeConnection: (clientId: string) => del(`${API_PATHS.connections}/${enc(clientId)}`),

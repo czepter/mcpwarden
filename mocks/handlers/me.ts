@@ -1,4 +1,4 @@
-import type { Capabilities, ConnectionList, MeSettings, PatCreated, PatList } from '#shared/api-types'
+import type { Capabilities, ConnectionList, MeSettings, PatCreated, PatList, PatSummary } from '#shared/api-types'
 import { getState, role, save, scenario, stdioReasonOverride } from '../state'
 import { body, err, json, nid, noContent, route } from '../util'
 
@@ -29,14 +29,15 @@ export const meHandlers = [
     return json<PatList>({ items, limit: { max: 20, active: items.filter(p => !p.revokedAt).length } })
   }),
   route('post', '/api/me/pats', async ({ request }) => {
-    const b = await body<{ name?: string }>(request)
+    const b = await body<{ name?: string, expiresInDays?: number | null, upstreamIds?: string[] | null }>(request)
     const name = (b.name ?? '').trim()
     if (!name || name.length > 64) return err(400, 'invalid_name', 'Der Name muss 1 bis 64 Zeichen lang sein.', 'name')
     const s = getState()
     if (s.pats.filter(p => !p.revokedAt).length >= 20) return err(409, 'pat_limit_reached', 'Du hast die Obergrenze von 20 aktiven Tokens erreicht.')
     const rnd = Math.random().toString(36).slice(2, 6)
     const token = `mcpw_pat_${rnd}${Math.random().toString(36).slice(2)}${Math.random().toString(36).slice(2)}`
-    const p = { id: nid('pat'), name, prefix: `mcpw_pat_${rnd}`, createdAt: new Date().toISOString(), lastUsedAt: null, revokedAt: null }
+    const expiresAt = b.expiresInDays ? new Date(Date.now() + b.expiresInDays * 86_400_000).toISOString() : null
+    const p: PatSummary = { id: nid('pat'), name, prefix: `mcpw_pat_${rnd}`, createdAt: new Date().toISOString(), lastUsedAt: null, revokedAt: null, expiresAt, upstreamIds: b.upstreamIds ?? null }
     s.pats.unshift(p); save() // plaintext only in this response, not in the state
     return json<PatCreated>({ ...p, token }, 201)
   }),

@@ -72,7 +72,7 @@ describe('PAT routes (task 5)', () => {
     const r = await admin.request('/api/me/pats', { body: { name: '  second  ' } })
     expect(r.status).toBe(201)
     const created = r.json satisfies PatCreated
-    expect(Object.keys(created).sort()).toEqual(['createdAt', 'id', 'lastUsedAt', 'name', 'prefix', 'revokedAt', 'token'])
+    expect(Object.keys(created).sort()).toEqual(['createdAt', 'expiresAt', 'id', 'lastUsedAt', 'name', 'prefix', 'revokedAt', 'token', 'upstreamIds'])
     expect(created.token.startsWith('mcpw_pat_')).toBe(true)
     expect(created.prefix).toHaveLength(13)
     expect(created.token.startsWith(created.prefix)).toBe(true)

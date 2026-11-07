@@ -18,7 +18,8 @@ import { RefreshCw, Pencil } from '@lucide/vue'
 import { formatCountdown, formatMs } from '~/lib/format'
 import { HEALTH_VALUES, healthLabel, typeLabel } from '~/lib/labels'
 
-useHead({ title: 'Upstreams · mcpwarden' })
+const { t } = useI18n()
+useHead({ title: () => `${t('upstreams.list.title')} · mcpwarden` })
 const { data, error, status, refresh } = useApi('upstreams', upstreamApi.list)
 const refreshRate = ref(0)
 usePolling(refresh, refreshRate)
@@ -38,56 +39,56 @@ async function runTest(u: UpstreamSummary) {
   testing.value = u.id
   try {
     const r: TestResultT = await upstreamApi.test(u.id)
-    if (r.ok) toast.success(`${u.name}: ${r.tools.length} Tools gefunden.`); else toast.error(`${u.name}: ${r.message}`)
+    if (r.ok) toast.success(t('upstreams.list.toolsFound', { name: u.name, n: r.tools.length }, r.tools.length)); else toast.error(`${u.name}: ${r.message}`)
     await refresh()
-  } catch { toast.error('Test fehlgeschlagen.') } finally { testing.value = null }
+  } catch { toast.error(t('upstreams.toast.testFailed')) } finally { testing.value = null }
 }
 const message = (u: UpstreamSummary) => {
-  if (u.status === 'open' && u.nextRetryAt) return `Breaker offen, nächster Versuch in ${formatCountdown(u.nextRetryAt)}.`
-  if (u.setup !== 'ready') return u.setup === 'awaiting_auth' ? 'Warte auf Anmeldedaten.' : 'Wartet auf Freigabe.'
+  if (u.status === 'open' && u.nextRetryAt) return t('upstreams.list.breakerOpen', { time: formatCountdown(u.nextRetryAt) })
+  if (u.setup !== 'ready') return u.setup === 'awaiting_auth' ? t('upstreams.list.awaitingAuth') : t('upstreams.list.awaitingApproval')
   return u.statusReason ?? ''
 }
 const sub = (u: UpstreamSummary) => (u.url ?? u.command ?? '').replace(/^https?:\/\//, '')
 </script>
 
 <template>
-  <PageHeader title="Upstreams">
+  <PageHeader :title="$t('upstreams.list.title')">
     <AutoRefresh v-model="refreshRate" />
-    <Button as-child><NuxtLink to="/upstreams/new">+ Upstream hinzufügen</NuxtLink></Button>
+    <Button as-child><NuxtLink to="/upstreams/new">{{ $t('upstreams.list.add') }}</NuxtLink></Button>
   </PageHeader>
 
-  <section aria-label="Filter" class="flex flex-wrap items-center gap-2">
-    <label for="q" class="sr-only">Upstreams suchen</label>
-    <Input id="q" v-model="q" type="search" placeholder="Name oder URL suchen" class="w-60" />
+  <section :aria-label="$t('upstreams.list.filter')" class="flex flex-wrap items-center gap-2">
+    <label for="q" class="sr-only">{{ $t('upstreams.list.searchLabel') }}</label>
+    <Input id="q" v-model="q" type="search" :placeholder="$t('upstreams.list.searchPlaceholder')" class="w-60" />
     <Select v-model="statusFilter">
-      <SelectTrigger class="w-44" aria-label="Status filtern"><SelectValue placeholder="Status" /></SelectTrigger>
-      <SelectContent><SelectItem value="all">Alle Status</SelectItem><SelectItem v-for="h in HEALTH_VALUES" :key="h" :value="h">{{ healthLabel(h) }}</SelectItem></SelectContent>
+      <SelectTrigger class="w-44" :aria-label="$t('upstreams.list.filterStatus')"><SelectValue :placeholder="$t('upstreams.list.status')" /></SelectTrigger>
+      <SelectContent><SelectItem value="all">{{ $t('upstreams.list.allStatuses') }}</SelectItem><SelectItem v-for="h in HEALTH_VALUES" :key="h" :value="h">{{ healthLabel(h) }}</SelectItem></SelectContent>
     </Select>
     <Select v-model="typeFilter">
-      <SelectTrigger class="w-36" aria-label="Typ filtern"><SelectValue placeholder="Typ" /></SelectTrigger>
-      <SelectContent><SelectItem value="all">Alle Typen</SelectItem><SelectItem value="http">HTTP</SelectItem><SelectItem value="stdio">stdio</SelectItem></SelectContent>
+      <SelectTrigger class="w-36" :aria-label="$t('upstreams.list.filterType')"><SelectValue :placeholder="$t('upstreams.list.type')" /></SelectTrigger>
+      <SelectContent><SelectItem value="all">{{ $t('upstreams.list.allTypes') }}</SelectItem><SelectItem value="http">HTTP</SelectItem><SelectItem value="stdio">stdio</SelectItem></SelectContent>
     </Select>
   </section>
 
-  <section v-if="items.length" aria-label="Kennzahlen" class="grid grid-cols-[repeat(auto-fit,minmax(min(190px,100%),1fr))] gap-3">
-    <KpiCard v-for="c in counts" :key="c.h" :label="healthLabel(c.h)" :value="String(c.n)" unit="Upstreams" :dot="`var(--st-${c.h}-dot)`" :share="items.length ? c.n / items.length : 0" />
+  <section v-if="items.length" :aria-label="$t('upstreams.list.kpis')" class="grid grid-cols-[repeat(auto-fit,minmax(min(190px,100%),1fr))] gap-3">
+    <KpiCard v-for="c in counts" :key="c.h" :label="healthLabel(c.h)" :value="String(c.n)" :unit="$t('upstreams.list.kpiUnit')" :dot="`var(--st-${c.h}-dot)`" :share="items.length ? c.n / items.length : 0" />
   </section>
 
-  <p v-if="items.length" class="text-sm font-semibold">{{ items.length === 1 ? '1 Upstream' : `${items.length} Upstreams` }}</p>
+  <p v-if="items.length" class="text-sm font-semibold">{{ $t('upstreams.list.count', { n: items.length }, items.length) }}</p>
   <DataSection min-width="1040px">
     <LoadingRows v-if="status === 'pending' && !data" />
     <ErrorState v-else-if="error" :error="error" @retry="refresh()" />
-    <EmptyState v-else-if="!items.length" title="Noch kein Upstream" text="Ein Upstream ist ein MCP-Server, den du über mcpwarden bereitstellst. 1. Upstream anlegen. 2. Anmeldedaten eintragen. 3. Verbindung testen.">
-      <Button as-child><NuxtLink to="/upstreams/new">+ Upstream hinzufügen</NuxtLink></Button>
+    <EmptyState v-else-if="!items.length" :title="$t('upstreams.list.emptyTitle')" :text="$t('upstreams.list.emptyText')">
+      <Button as-child><NuxtLink to="/upstreams/new">{{ $t('upstreams.list.add') }}</NuxtLink></Button>
     </EmptyState>
-    <EmptyState v-else-if="!filtered.length" title="Keine Treffer" text="Kein Upstream passt zu den Filtern." />
+    <EmptyState v-else-if="!filtered.length" :title="$t('upstreams.list.noMatchTitle')" :text="$t('upstreams.list.noMatchText')" />
     <table v-else class="w-full text-sm">
-      <caption class="sr-only">Upstream-Liste</caption>
+      <caption class="sr-only">{{ $t('upstreams.list.caption') }}</caption>
       <thead class="bg-table-head text-xs font-medium text-muted-foreground">
         <tr class="border-b">
-          <th scope="col" class="px-5 py-2.5 text-left font-medium">Name</th><th scope="col" class="px-3 text-left font-medium">Status</th><th scope="col" class="px-3 text-left font-medium">Typ</th>
-          <th scope="col" class="px-3 text-left font-medium">Tools</th><th v-if="hasP95" scope="col" class="px-3 text-left font-medium">p95</th><th v-if="hasRecent" scope="col" class="px-3 text-left font-medium">Letzte 24 Aufrufe</th>
-          <th scope="col" class="px-3 text-left font-medium">Meldung</th><th scope="col" class="px-3 text-right font-medium"><span class="sr-only">Aktionen</span></th>
+          <th scope="col" class="px-5 py-2.5 text-left font-medium">{{ $t('upstreams.list.colName') }}</th><th scope="col" class="px-3 text-left font-medium">{{ $t('upstreams.list.colStatus') }}</th><th scope="col" class="px-3 text-left font-medium">{{ $t('upstreams.list.colType') }}</th>
+          <th scope="col" class="px-3 text-left font-medium">{{ $t('upstreams.list.colTools') }}</th><th v-if="hasP95" scope="col" class="px-3 text-left font-medium">p95</th><th v-if="hasRecent" scope="col" class="px-3 text-left font-medium">{{ $t('upstreams.list.colRecent') }}</th>
+          <th scope="col" class="px-3 text-left font-medium">{{ $t('upstreams.list.colMessage') }}</th><th scope="col" class="px-3 text-right font-medium"><span class="sr-only">{{ $t('upstreams.list.colActions') }}</span></th>
         </tr>
       </thead>
       <tbody>
@@ -103,12 +104,12 @@ const sub = (u: UpstreamSummary) => (u.url ?? u.command ?? '').replace(/^https?:
           <td v-if="hasRecent" class="px-3"><SparkBars v-if="u.recent" :items="u.recent" /></td>
           <td class="min-w-44 px-3 text-[13px] text-secondary-foreground">{{ message(u) }}</td>
           <td class="px-3 text-right whitespace-nowrap">
-            <Button variant="ghost" size="icon" :disabled="testing === u.id" :aria-label="`Verbindung testen: ${u.name}`" @click="runTest(u)"><RefreshCw class="size-[18px]" :class="testing === u.id && 'animate-spin'" aria-hidden="true" /></Button>
-            <Button as-child variant="ghost" size="icon" :aria-label="`Bearbeiten: ${u.name}`"><NuxtLink :to="`/upstreams/${u.id}/edit`"><Pencil class="size-[18px]" aria-hidden="true" /></NuxtLink></Button>
+            <Button variant="ghost" size="icon" :disabled="testing === u.id" :aria-label="$t('upstreams.list.testAria', { name: u.name })" @click="runTest(u)"><RefreshCw class="size-[18px]" :class="testing === u.id && 'animate-spin'" aria-hidden="true" /></Button>
+            <Button as-child variant="ghost" size="icon" :aria-label="$t('upstreams.list.editAria', { name: u.name })"><NuxtLink :to="`/upstreams/${u.id}/edit`"><Pencil class="size-[18px]" aria-hidden="true" /></NuxtLink></Button>
           </td>
         </tr>
       </tbody>
     </table>
-    <template v-if="filtered.length" #footer><span>Zeige {{ filtered.length }} von {{ items.length }}</span></template>
+    <template v-if="filtered.length" #footer><span>{{ $t('upstreams.list.showing', { shown: filtered.length, total: items.length }) }}</span></template>
   </DataSection>
 </template>

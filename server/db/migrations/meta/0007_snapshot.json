@@ -1,5 +1,5 @@
 {
-  "id": "7fc018f3-20b6-4279-9f8c-3d22ebfbe017",
+  "id": "c2abe49b-abea-4c0f-8f84-2a82d2a34580",
   "prevId": "9ccb1c81-210c-4143-8754-97264b0ad220",
   "version": "7",
   "dialect": "postgresql",
@@ -1826,6 +1826,18 @@
           "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": false
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "upstream_ids": {
+          "name": "upstream_ids",
+          "type": "uuid[]",
+          "primaryKey": false,
+          "notNull": false
         }
       },
       "indexes": {
@@ -2445,7 +2457,7 @@
         },
         "upstream_auth_type_ck": {
           "name": "upstream_auth_type_ck",
-          "value": "\"upstream\".\"auth_type\" in ('none','bearer','header','env','oauth')"
+          "value": "\"upstream\".\"auth_type\" in ('none','bearer','header','env')"
         },
         "upstream_status_ck": {
           "name": "upstream_status_ck",
@@ -2468,114 +2480,6 @@
           "value": "\"upstream\".\"type\" <> 'stdio' or \"upstream\".\"command\" is not null"
         }
       },
-      "isRLSEnabled": false
-    },
-    "public.upstream_oauth": {
-      "name": "upstream_oauth",
-      "schema": "",
-      "columns": {
-        "upstream_id": {
-          "name": "upstream_id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "user_id": {
-          "name": "user_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "data": {
-          "name": "data",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "state_hash": {
-          "name": "state_hash",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "state_expires_at": {
-          "name": "state_expires_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "connected_at": {
-          "name": "connected_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "upstream_oauth_state_uq": {
-          "name": "upstream_oauth_state_uq",
-          "columns": [
-            {
-              "expression": "state_hash",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "upstream_oauth_user_id_user_id_fk": {
-          "name": "upstream_oauth_user_id_user_id_fk",
-          "tableFrom": "upstream_oauth",
-          "tableTo": "user",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "upstream_oauth_user_upstream_fk": {
-          "name": "upstream_oauth_user_upstream_fk",
-          "tableFrom": "upstream_oauth",
-          "tableTo": "upstream",
-          "columnsFrom": [
-            "user_id",
-            "upstream_id"
-          ],
-          "columnsTo": [
-            "user_id",
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
       "isRLSEnabled": false
     },
     "public.upstream_secret": {

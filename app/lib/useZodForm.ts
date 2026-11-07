@@ -4,6 +4,7 @@ import type { GenericObject } from 'vee-validate'
 import { nextTick, ref } from 'vue'
 import type { z } from 'zod'
 import { ApiError } from '~/api/http'
+import { t } from '~/lib/i18n'
 
 /** vee-validate + zod. Server errors with `field` land on the field, all others in `formError` (alert above the form). */
 export function useZodForm<S extends z.ZodType>(schema: S, initialValues: z.input<S>) {
@@ -19,7 +20,7 @@ export function useZodForm<S extends z.ZodType>(schema: S, initialValues: z.inpu
       try { await fn(values as z.output<S>) } catch (e) {
         if (e instanceof ApiError) {
           if (e.field && fields.includes(e.field)) { form.setFieldError(e.field as never, e.message); focusFirst() } else formError.value = e.message
-        } else formError.value = 'Unerwarteter Fehler.'
+        } else formError.value = t('common.unexpectedError')
       } finally { busy.value = false }
     }, focusFirst)
   }

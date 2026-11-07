@@ -16,12 +16,12 @@ const notFound = computed(() => err.value?.statusCode === 404)
 <template>
   <div role="alert" class="flex flex-col items-center gap-2 px-6 py-10 text-center" data-testid="error-state">
     <h3 class="text-[15px] font-semibold">
-      {{ forbidden ? 'Kein Zugriff' : notFound ? 'Nicht gefunden' : 'Das hat nicht geklappt' }}
+      {{ forbidden ? $t('common.errorState.forbiddenTitle') : notFound ? $t('common.errorState.notFoundTitle') : $t('common.errorState.genericTitle') }}
     </h3>
     <p class="max-w-md text-[13px] text-muted-foreground">
-      {{ forbidden ? 'Du hast für diese Seite keine Berechtigung.' : notFound ? 'Diesen Eintrag gibt es nicht oder er gehört dir nicht.' : (err?.message ?? 'Unbekannter Fehler.') }}
+      {{ forbidden ? $t('common.errorState.forbidden') : notFound ? $t('common.errorState.notFound') : (err?.message ?? $t('common.errorState.unknown')) }}
     </p>
     <code v-if="err && !forbidden && !notFound" class="text-xs text-muted-foreground">{{ err.code }} · {{ err.statusCode }}</code>
-    <Button v-if="!forbidden && !notFound" variant="outline" class="mt-2" @click="$emit('retry')">Erneut versuchen</Button>
+    <Button v-if="!forbidden && !notFound" variant="outline" class="mt-2" @click="$emit('retry')">{{ $t('common.retry') }}</Button>
   </div>
 </template>

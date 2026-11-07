@@ -74,10 +74,12 @@ export type PatSummary = {
   createdAt: string
   lastUsedAt: string | null
   revokedAt: string | null
+  expiresAt: string | null // null = läuft nie ab
+  upstreamIds: string[] | null // null = alle Upstreams
 }
 export type PatList = { items: PatSummary[], limit: { max: number, active: number } } // max = 20
 export type PatCreated = PatSummary & { token: string }
-export type PatCreateInput = { name: string } // 1 to 64 characters
+export type PatCreateInput = { name: string, expiresInDays?: number | null, upstreamIds?: string[] | null } // name 1 to 64 characters; expiresInDays 1 to 365 (null = never); upstreamIds null = all
 
 // Clients of the user (UI word "Clients", path stays "connections")
 export type ConnectionSummary = {

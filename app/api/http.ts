@@ -1,4 +1,5 @@
 import type { ApiErrorBody } from '#shared/api-types'
+import { t } from '~/lib/i18n'
 
 export class ApiError extends Error {
   statusCode: number
@@ -40,7 +41,7 @@ export async function http<T>(method: string, path: string, opts: { body?: unkno
   if (!res.ok) {
     if (res.status === 401 && !opts.skip401) onUnauthorized?.()
     const b = json as Partial<ApiErrorBody> & { message?: string, code?: string } | undefined
-    throw new ApiError(res.status, b?.data?.code ?? b?.code ?? 'unknown', b?.data?.message ?? b?.statusMessage ?? b?.message ?? `Fehler ${res.status}`, b?.data?.field)
+    throw new ApiError(res.status, b?.data?.code ?? b?.code ?? 'unknown', b?.data?.message ?? b?.statusMessage ?? b?.message ?? t('common.errorStatus', { status: res.status }), b?.data?.field)
   }
   return json as T
 }

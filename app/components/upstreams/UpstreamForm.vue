@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import LoadingButton from '~/components/common/LoadingButton.vue'
 import type { Capabilities, UpstreamTestResult as TestResultT, UpstreamDetail } from '#shared/api-types'
 import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { upstreamApi } from '~/api'
@@ -9,7 +10,6 @@ import { Button } from '~/components/ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '~/components/ui/collapsible'
 import { Input } from '~/components/ui/input'
 import { RadioGroup, RadioGroupItem } from '~/components/ui/radio-group'
-import { Spinner } from '~/components/ui/spinner'
 import { Textarea } from '~/components/ui/textarea'
 import { stdioReasonLabel } from '~/lib/labels'
 import { useZodForm } from '~/lib/useZodForm'
@@ -57,6 +57,13 @@ watch(() => fv.url as string, (url) => {
 onBeforeUnmount(() => clearTimeout(probeTimer))
 const oauthUnavailable = computed(() => probe.value === 'none' || probe.value === 'no_dcr')
 const stdioBlocked = computed(() => !props.caps.stdio.allowed)
+// Slim image has no stdio runtime at all: no type choice, no hint.
+const stdioAvailable = computed(() => props.caps.stdio.reason !== 'image_slim')
+const slugify = (s: string) => s.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+/, '').slice(0, 32).replace(/-+$/, '')
+// Short name follows the display name until the user edits it by hand.
+let slugTouched = !!i?.slug
+watch(() => fv.name as string, (n) => { if (!edit.value && !slugTouched) form.setFieldValue('slug', slugify(n ?? '')) })
+watch(() => fv.slug as string, (sl) => { if (sl !== slugify(fv.name ?? '')) slugTouched = true })
 watch(() => fv.type as string, (t) => { if (t === 'stdio' && stdioBlocked.value) form.setFieldValue('type', 'http') })
 
 const onSubmit = submit(async (v) => {
@@ -82,66 +89,58 @@ const onSubmit = submit(async (v) => {
   <form class="flex max-w-[600px] flex-col gap-5 rounded-lg border bg-card p-5" novalidate @submit.prevent="onSubmit">
     <Alert v-if="formError" variant="destructive" role="alert"><AlertDescription>{{ formError }}</AlertDescription></Alert>
 
-    <fieldset v-if="!edit" class="flex flex-col gap-2">
-      <legend class="mb-1 text-sm font-medium">Typ</legend>
-      <RadioGroup v-model="fv.type" class="grid grid-cols-2 gap-2" aria-label="Typ">
+    <fieldset v-if="!edit && stdioAvailable" class="flex flex-col gap-2">
+      <legend class="mb-1 text-sm font-medium">{{ $t('upstreams.form.type') }}</legend>
+      <RadioGroup v-model="fv.type" class="grid grid-cols-2 gap-2" :aria-label="$t('upstreams.form.type')">
         <label class="flex min-h-14 cursor-pointer items-start gap-2 rounded-sm border px-3 py-2" :class="fv.type === 'http' ? 'border-primary bg-primary-tint' : ''"><RadioGroupItem value="http" class="mt-0.5" /><span class="flex flex-col"><span class="font-semibold">HTTP</span><span class="text-xs text-secondary-foreground">Streamable HTTP, SSE</span></span></label>
         <label class="flex min-h-14 items-start gap-2 rounded-sm border px-3 py-2" :class="[fv.type === 'stdio' ? 'border-primary bg-primary-tint' : '', stdioBlocked ? 'cursor-not-allowed opacity-70' : 'cursor-pointer']">
-          <RadioGroupItem value="stdio" :disabled="stdioBlocked" class="mt-0.5" /><span class="flex flex-col"><span class="font-semibold">stdio</span><span class="text-xs text-secondary-foreground">Lokaler Befehl, braucht Freigabe</span></span>
+          <RadioGroupItem value="stdio" :disabled="stdioBlocked" class="mt-0.5" /><span class="flex flex-col"><span class="font-semibold">stdio</span><span class="text-xs text-secondary-foreground">{{ $t('upstreams.form.stdioHint') }}</span></span>
         </label>
       </RadioGroup>
-      <p v-if="stdioBlocked" class="text-[13px] text-muted-foreground" data-testid="stdio-reason">stdio ist gesperrt: {{ stdioReasonLabel(caps.stdio.reason ?? '') }}</p>
+      <p v-if="stdioBlocked" class="text-[13px] text-muted-foreground" data-testid="stdio-reason">{{ $t('upstreams.form.stdioBlocked', { reason: stdioReasonLabel(caps.stdio.reason ?? '') }) }}</p>
     </fieldset>
 
-    <FormRow id="u-name" label="Anzeigename" :error="err('name')"><template #default="{ id, invalid, describedby }"><Input :id="id" v-model="fv.name" :aria-invalid="invalid || undefined" :aria-describedby="describedby" /></template></FormRow>
-    <FormRow id="u-slug" label="Kurzname" description="Teil der Tool-Namen, danach nicht mehr änderbar." :error="err('slug')">
+    <FormRow id="u-name" :label="$t('upstreams.form.name')" :error="err('name')"><template #default="{ id, invalid, describedby }"><Input :id="id" v-model="fv.name" :aria-invalid="invalid || undefined" :aria-describedby="describedby" /></template></FormRow>
+    <FormRow id="u-slug" :label="$t('upstreams.form.slug')" :description="$t('upstreams.form.slugDesc')" :error="err('slug')">
       <template #default="{ id, invalid, describedby }"><SlugField :id="id" v-model="fv.slug" :invalid="invalid" :describedby="describedby" :disabled="edit" /></template>
     </FormRow>
 
     <div v-if="fv.type === 'http'" class="flex flex-col gap-5">
-      <FormRow id="u-url" label="Server-URL" :error="err('url')"><template #default="s"><Input :id="s.id" v-model="fv.url" class="mono" placeholder="mcp.example.com/mcp" :aria-invalid="s.invalid || undefined" :aria-describedby="s.describedby" /></template></FormRow>
+      <FormRow id="u-url" :label="$t('upstreams.form.url')" :error="err('url')"><template #default="s"><Input :id="s.id" v-model="fv.url" class="mono" placeholder="mcp.example.com/mcp" :aria-invalid="s.invalid || undefined" :aria-describedby="s.describedby" /></template></FormRow>
       <fieldset class="flex flex-col gap-2">
-        <legend class="mb-1 text-sm font-medium">Anmeldung</legend>
-        <RadioGroup v-model="fv.authType" class="grid grid-cols-2 gap-2 sm:grid-cols-4" aria-label="Anmeldung">
-          <label v-for="[v, l] in [['none', 'Keine'], ['bearer', 'Bearer'], ['header', 'Header'], ['oauth', 'OAuth']]" :key="v" class="flex min-h-11 items-center gap-2 rounded-sm border px-3 py-2" :class="[fv.authType === v ? 'border-primary bg-primary-tint' : '', v === 'oauth' && oauthUnavailable ? 'cursor-not-allowed opacity-60' : 'cursor-pointer']"><RadioGroupItem :value="v" :disabled="v === 'oauth' && oauthUnavailable" />{{ l }}</label>
+        <legend class="mb-1 text-sm font-medium">{{ $t('upstreams.form.auth') }}</legend>
+        <RadioGroup v-model="fv.authType" class="grid grid-cols-2 gap-2 sm:grid-cols-4" :aria-label="$t('upstreams.form.auth')">
+          <label v-for="[v, l] in [['none', $t('upstreams.form.authNone')], ['bearer', 'Bearer'], ['header', 'Header'], ['oauth', 'OAuth']]" :key="v" class="flex min-h-11 items-center gap-2 rounded-sm border px-3 py-2" :class="[fv.authType === v ? 'border-primary bg-primary-tint' : '', v === 'oauth' && oauthUnavailable ? 'cursor-not-allowed opacity-60' : 'cursor-pointer']"><RadioGroupItem :value="v" :disabled="v === 'oauth' && oauthUnavailable" />{{ l }}</label>
         </RadioGroup>
-        <p v-if="probe !== 'idle'" class="text-[13px] text-muted-foreground" role="status" data-testid="oauth-probe">
-          <template v-if="probe === 'checking'">Prüfe, ob der Server OAuth anbietet …</template>
-          <template v-else-if="probe === 'dcr'">OAuth erkannt: du verbindest dein Konto nach dem Anlegen im Reiter „Auth“.</template>
-          <template v-else-if="probe === 'no_dcr'">Der Server bietet OAuth ohne automatische Registrierung an. Das wird noch nicht unterstützt, nimm Bearer oder Header.</template>
-          <template v-else-if="probe === 'none'">Kein OAuth gefunden. Wähle Keine, Bearer oder Header.</template>
-          <template v-else>OAuth konnte nicht geprüft werden. Du kannst die Anmeldung trotzdem selbst wählen.</template>
-        </p>
+        <p v-if="probe !== 'idle'" class="text-[13px] text-muted-foreground" role="status" data-testid="oauth-probe">{{ $t(`upstreams.form.probe.${probe}`) }}</p>
       </fieldset>
-      <FormRow v-if="fv.authType === 'header'" id="u-hname" label="Header-Name" :error="err('authHeaderName')"><template #default="{ id, invalid, describedby }"><Input :id="id" v-model="fv.authHeaderName" class="mono" placeholder="X-Api-Key" :aria-invalid="invalid || undefined" :aria-describedby="describedby" /></template></FormRow>
-      <p v-if="fv.authType === 'oauth'" class="text-[13px] text-muted-foreground" data-testid="oauth-hint">
-        {{ edit && initial?.authType === 'oauth' ? 'Die Verbindung zum Konto beim Upstream verwaltest du im Reiter „Auth“.' : 'Nach dem Anlegen verbindest du dein Konto beim Upstream im Reiter „Auth“. Der Upstream muss OAuth mit Dynamic Client Registration anbieten.' }}
-      </p>
-      <FormRow v-if="fv.authType === 'bearer' || fv.authType === 'header'" id="u-secret" :label="edit ? 'Secret ersetzen' : 'Secret'" :description="initial?.hasSecret ? 'Ein Secret ist gesetzt. Es wird nie angezeigt, nur ersetzt.' : 'Wird verschlüsselt gespeichert und nie wieder angezeigt.'" :optional="edit">
+      <FormRow v-if="fv.authType === 'header'" id="u-hname" :label="$t('upstreams.form.headerName')" :error="err('authHeaderName')"><template #default="{ id, invalid, describedby }"><Input :id="id" v-model="fv.authHeaderName" class="mono" placeholder="X-Api-Key" :aria-invalid="invalid || undefined" :aria-describedby="describedby" /></template></FormRow>
+      <p v-if="fv.authType === 'oauth'" class="text-[13px] text-muted-foreground" data-testid="oauth-hint">{{ edit && initial?.authType === 'oauth' ? $t('upstreams.form.oauthHintEdit') : $t('upstreams.form.oauthHint') }}</p>
+      <FormRow v-if="fv.authType === 'bearer' || fv.authType === 'header'" id="u-secret" :label="edit ? $t('upstreams.form.secretReplace') : $t('upstreams.form.secret')" :description="initial?.hasSecret ? $t('upstreams.form.secretSet') : $t('upstreams.form.secretUnset')" :optional="edit">
         <template #default="{ id, invalid, describedby }"><SecretField :id="id" v-model="fv.secret" :invalid="invalid" :describedby="describedby" /></template>
       </FormRow>
     </div>
 
     <div v-if="fv.type === 'stdio'" class="flex flex-col gap-5">
-      <FormRow id="u-cmd" label="Befehl" :error="err('command')"><template #default="{ id, invalid, describedby }"><Input :id="id" v-model="fv.command" class="mono" placeholder="uvx mcp-server-duckdb" :aria-invalid="invalid || undefined" :aria-describedby="describedby" /></template></FormRow>
-      <FormRow id="u-args" label="Argumente" description="Ein Argument pro Zeile." optional><template #default="{ id }"><Textarea :id="id" v-model="fv.args" rows="3" class="mono" /></template></FormRow>
-      <FormRow id="u-cwd" label="Arbeitsordner" description="Relativ zum Nutzerverzeichnis, ohne „..“." :error="err('cwd')" optional><template #default="{ id, invalid, describedby }"><Input :id="id" v-model="fv.cwd" class="mono" :aria-invalid="invalid || undefined" :aria-describedby="describedby" /></template></FormRow>
+      <FormRow id="u-cmd" :label="$t('upstreams.form.command')" :error="err('command')"><template #default="{ id, invalid, describedby }"><Input :id="id" v-model="fv.command" class="mono" placeholder="uvx mcp-server-duckdb" :aria-invalid="invalid || undefined" :aria-describedby="describedby" /></template></FormRow>
+      <FormRow id="u-args" :label="$t('upstreams.form.args')" :description="$t('upstreams.form.argsDesc')" optional><template #default="{ id }"><Textarea :id="id" v-model="fv.args" rows="3" class="mono" /></template></FormRow>
+      <FormRow id="u-cwd" :label="$t('upstreams.form.cwd')" :description="$t('upstreams.form.cwdDesc')" :error="err('cwd')" optional><template #default="{ id, invalid, describedby }"><Input :id="id" v-model="fv.cwd" class="mono" :aria-invalid="invalid || undefined" :aria-describedby="describedby" /></template></FormRow>
     </div>
 
     <Collapsible v-model:open="advanced">
-      <CollapsibleTrigger as-child><Button type="button" variant="ghost" class="px-0">Erweitert: Limits und Timeouts {{ advanced ? '▴' : '▾' }}</Button></CollapsibleTrigger>
+      <CollapsibleTrigger as-child><Button type="button" variant="ghost" class="px-0">{{ $t('upstreams.form.advanced') }} {{ advanced ? '▴' : '▾' }}</Button></CollapsibleTrigger>
       <CollapsibleContent class="mt-2 grid grid-cols-2 gap-3">
-        <FormRow id="u-rate" label="Aufrufe pro Minute" :error="err('ratePerMin')"><template #default="{ id, invalid, describedby }"><Input :id="id" v-model="fv.ratePerMin" type="number" min="1" :aria-invalid="invalid || undefined" :aria-describedby="describedby" /></template></FormRow>
-        <FormRow id="u-par" label="Parallel" :error="err('maxConcurrent')"><template #default="{ id, invalid, describedby }"><Input :id="id" v-model="fv.maxConcurrent" type="number" min="1" :aria-invalid="invalid || undefined" :aria-describedby="describedby" /></template></FormRow>
-        <FormRow id="u-tc" label="Timeout Verbinden (s)" :error="err('connectS')"><template #default="{ id, invalid, describedby }"><Input :id="id" v-model="fv.connectS" type="number" min="1" :aria-invalid="invalid || undefined" :aria-describedby="describedby" /></template></FormRow>
-        <FormRow id="u-tl" label="Timeout Liste (s)" :error="err('listS')"><template #default="{ id, invalid, describedby }"><Input :id="id" v-model="fv.listS" type="number" min="1" :aria-invalid="invalid || undefined" :aria-describedby="describedby" /></template></FormRow>
-        <FormRow id="u-tk" label="Timeout Aufruf (s)" :error="err('callS')"><template #default="{ id, invalid, describedby }"><Input :id="id" v-model="fv.callS" type="number" min="1" :aria-invalid="invalid || undefined" :aria-describedby="describedby" /></template></FormRow>
+        <FormRow id="u-rate" :label="$t('upstreams.form.rate')" :error="err('ratePerMin')"><template #default="{ id, invalid, describedby }"><Input :id="id" v-model="fv.ratePerMin" type="number" min="1" :aria-invalid="invalid || undefined" :aria-describedby="describedby" /></template></FormRow>
+        <FormRow id="u-par" :label="$t('upstreams.form.parallel')" :error="err('maxConcurrent')"><template #default="{ id, invalid, describedby }"><Input :id="id" v-model="fv.maxConcurrent" type="number" min="1" :aria-invalid="invalid || undefined" :aria-describedby="describedby" /></template></FormRow>
+        <FormRow id="u-tc" :label="$t('upstreams.form.tConnect')" :error="err('connectS')"><template #default="{ id, invalid, describedby }"><Input :id="id" v-model="fv.connectS" type="number" min="1" :aria-invalid="invalid || undefined" :aria-describedby="describedby" /></template></FormRow>
+        <FormRow id="u-tl" :label="$t('upstreams.form.tList')" :error="err('listS')"><template #default="{ id, invalid, describedby }"><Input :id="id" v-model="fv.listS" type="number" min="1" :aria-invalid="invalid || undefined" :aria-describedby="describedby" /></template></FormRow>
+        <FormRow id="u-tk" :label="$t('upstreams.form.tCall')" :error="err('callS')"><template #default="{ id, invalid, describedby }"><Input :id="id" v-model="fv.callS" type="number" min="1" :aria-invalid="invalid || undefined" :aria-describedby="describedby" /></template></FormRow>
       </CollapsibleContent>
     </Collapsible>
 
     <div class="flex flex-wrap justify-end gap-2">
-      <Button as-child variant="outline"><NuxtLink :to="edit ? `/upstreams/${initial!.id}` : '/upstreams'">Abbrechen</NuxtLink></Button>
-      <Button type="submit" :disabled="busy" :aria-busy="busy"><Spinner v-if="busy" />{{ edit ? 'Speichern' : 'Anlegen und verbinden' }}</Button>
+      <Button as-child variant="outline"><NuxtLink :to="edit ? `/upstreams/${initial!.id}` : '/upstreams'">{{ $t('upstreams.form.cancel') }}</NuxtLink></Button>
+      <LoadingButton :busy="busy">{{ edit ? $t('upstreams.form.save') : $t('upstreams.form.create') }}</LoadingButton>
     </div>
   </form>
 </template>
