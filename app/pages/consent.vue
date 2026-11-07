@@ -18,7 +18,11 @@ const route = useRoute()
 const { user } = useSessionUser()
 const query = computed(() => {
   const q = new URLSearchParams()
-  for (const [k, v] of Object.entries(route.query)) if (k !== 'redirect' && typeof v === 'string') q.set(k, v)
+  // Repeated keys (ba_param) are part of the signed query: keep every value, in order, or the signature no longer matches.
+  for (const [k, v] of Object.entries(route.query)) {
+    if (k === 'redirect') continue
+    for (const item of Array.isArray(v) ? v : [v]) if (typeof item === 'string') q.append(k, item)
+  }
   return `?${q.toString()}`
 })
 const { data: info, error, status, refresh } = useAsyncData('consent', () => oauthApi.consentInfo(query.value), { server: false })
