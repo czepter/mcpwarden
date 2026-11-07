@@ -64,6 +64,13 @@
       "when": 1794037042684,
       "tag": "0008_odd_nightcrawler",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1794078400271,
+      "tag": "0009_stats_hourly_rollup",
+      "breakpoints": true
     }
   ]
 }

@@ -12,5 +12,5 @@ export default defineEventHandler(async (event) => {
   const rt = await getRuntime()
   noStore(event)
   const list = await listConnections(await getDb(), who.id, new Date())
-  return await svc.dashboard(rt, who, { connections: list.map(c => ({ clientId: c.clientId, name: c.name, allowlisted: c.allowlisted, lastUsedAt: c.lastUsedAt })) }) satisfies Dashboard
+  return await svc.dashboard(rt, who, { connections: list.map(c => ({ clientId: c.clientId, name: c.name, allowlisted: c.allowlisted, lastUsedAt: c.lastUsedAt })), window: getQuery(event).window }) satisfies Dashboard
 })

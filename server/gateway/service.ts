@@ -4,14 +4,15 @@
  */
 import { createError } from 'h3'
 import type {
-  AdminSettings, AdminSettingsResult, AdminUser, AdminUserList, AdminUserLimitsInput, AuditItem, Capabilities, Dashboard, InviteSummary,
+  AdminSettings, AdminSettingsResult, AdminUser, AdminUserList, AdminUserLimitsInput, AuditItem, AdminStats, Capabilities, Dashboard, HealthHistory, InviteSummary, StatsSummary, UpstreamStats,
   UpstreamAuthProbe, UpstreamDetail, UpstreamOAuthStart, UpstreamSummary, UpstreamTestResult, UpstreamToolList, UserLimits,
 } from '#shared/api-types'
 import { apiError } from '../utils/api'
 import { trySendMail, type Mailer } from '../mail'
 import { inviteMail } from '../mail/templates'
 import { audit, type AuditAction } from '../utils/audit'
-import { isValidSlug } from './upstream/slug'
+import { isValidSlug, SLUG_RE } from './upstream/slug'
+import { isStatsWindow } from './stats/query'
 import { ACTIVE_WINDOW_MS, DEFAULT_LIMITS, TIMEOUTS, mergeTimeouts, type Timeouts } from './config'
 import { assertUrlAllowed, SsrfBlockedError, validateAllowEntry, AllowList } from './net/ssrf'
 import { encryptSecret } from './crypto/secrets'
@@ -161,8 +162,17 @@ async function load(rt: Runtime, who: Who, id: string): Promise<DbUpstream> {
 
 // ---------- Upstreams ----------
 
-export async function listUpstreams(rt: Runtime, who: Who) {
-  return { items: (await rt.repo.listUpstreams(who.id)).map(r => toSummary(rt, r)) }
+/** `window` (default 7d) only steers the p95 column; `recent` and `hourly` are always the last 24 calls / hours. */
+export async function listUpstreams(rt: Runtime, who: Who, q: { window?: unknown } = {}) {
+  const window = q.window ?? '7d'
+  if (!isStatsWindow(window)) throw bad('window', 'window ungültig (5m, 1h, 24h, 7d)')
+  const [rows, overview] = await Promise.all([rt.repo.listUpstreams(who.id), rt.repo.upstreamOverview({ userId: who.id, window })])
+  return {
+    items: rows.map((r) => {
+      const o = overview.get(r.slug)
+      return { ...toSummary(rt, r), p95Ms: o?.p95Ms ?? null, recent: o?.recent ?? Array.from({ length: 24 }, () => 'none' as const), hourly: o?.hourly ?? Array.from({ length: 24 }, () => 'none' as const) }
+    }),
+  }
 }
 export async function getUpstream(rt: Runtime, who: Who, id: string) {
   return toDetail(rt, await load(rt, who, id))
@@ -430,10 +440,13 @@ export async function capabilities(rt: Runtime, who: Who, baseUrl: URL): Promise
     stdio: pol.allowed ? { allowed: true } : { allowed: false, reason: pol.reason },
     limits: { maxUpstreams: limits.maxUpstreams, upstreamsUsed: await rt.repo.countUpstreams(who.id), maxConnections: limits.maxConnections, callsPerMin: limits.callsPerMin },
     defaults: { ratePerMin: DEFAULT_LIMITS.ratePerMin, maxConcurrent: DEFAULT_LIMITS.maxConcurrent, timeouts: { connectMs: TIMEOUTS.connectMs, listMs: TIMEOUTS.listMs, callMs: TIMEOUTS.callMs } },
+    features: { healthHistory: true },
   }
 }
 
-export async function dashboard(rt: Runtime, who: Who, deps: { connections: Array<{ clientId: string, name: string, allowlisted: boolean, lastUsedAt: string | null }> }, now = new Date()): Promise<Dashboard> {
+export async function dashboard(rt: Runtime, who: Who, deps: { connections: Array<{ clientId: string, name: string, allowlisted: boolean, lastUsedAt: string | null }>, window?: unknown }, now = new Date()): Promise<Dashboard> {
+  const window = deps.window ?? '1h'
+  if (!isStatsWindow(window)) throw bad('window', 'window ungültig (5m, 1h, 24h, 7d)')
   const usage = await rt.repo.dashboardUsage(who.id, now)
   const pats = await rt.repo.patNames(who.id)
   const clients: Dashboard['clients'] = []
@@ -454,7 +467,51 @@ export async function dashboard(rt: Runtime, who: Who, deps: { connections: Arra
     const waiting = s.setup === 'awaiting_auth' ? 'Zugangsdaten fehlen noch' : s.setup === 'awaiting_approval' ? 'Wartet auf Freigabe' : null
     return { upstreamId: r.id, slug: r.slug, name: r.name, status: s.status, setup: s.setup, statusReason: s.statusReason ?? waiting, nextRetryAt: s.nextRetryAt }
   })
-  return { clients, attention, attentionCount: attention.length }
+  const sum = await rt.repo.statsSummary({ userId: who.id, window }, now)
+  // Series: calls per minute per bucket (the bucket is window / 24 wide), so the chart reads "Aufrufe pro Minute" for every window.
+  const bucketMin = STATS_WINDOW_MIN[window] / sum.perHour.length
+  return {
+    clients, attention, attentionCount: attention.length,
+    kpis: { clientsActive: clients.filter(c => c.active).length, clientsTotal: clients.length, callsPerMin: sum.callsPerMin, successRate: sum.calls ? sum.okRate : 1, overheadP95Ms: sum.overheadP95Ms },
+    series: sum.perHour.map(p => ({ t: p.t, calls: Math.round((p.calls / bucketMin) * 10) / 10 })),
+  }
+}
+const STATS_WINDOW_MIN = { '5m': 5, '1h': 60, '24h': 1440, '7d': 10080 } as const
+
+// ---------- Statistics ----------
+
+/** Own figures only (spec P0-15): the user ID comes from the session, never from the query. `upstream` and `tool` narrow the view. */
+export async function statsSummary(rt: Runtime, who: Who, q: { window?: unknown, upstream?: unknown, tool?: unknown }, opts: { upstreamIds?: string[] | null } = {}): Promise<StatsSummary> {
+  const window = q.window ?? '24h'
+  if (!isStatsWindow(window)) throw bad('window', 'window ungültig (5m, 1h, 24h, 7d)')
+  const text = (k: 'upstream' | 'tool', max: number) => {
+    const v = q[k]
+    if (v === undefined || v === null || v === '') return undefined
+    if (typeof v !== 'string' || v.length > max) throw bad(k, `${k} ungültig`)
+    return v
+  }
+  const upstream = text('upstream', 32)
+  if (upstream && !SLUG_RE.test(upstream)) throw bad('upstream', 'upstream ungültig')
+  return await rt.repo.statsSummary({ userId: who.id, window, upstream, tool: text('tool', 256), upstreamIds: opts.upstreamIds })
+}
+
+export async function upstreamStats(rt: Runtime, who: Who, id: string, q: { window?: unknown }): Promise<UpstreamStats> {
+  const window = q.window ?? '24h'
+  if (!isStatsWindow(window)) throw bad('window', 'window ungültig (5m, 1h, 24h, 7d)')
+  const up = await load(rt, who, id)
+  return await rt.repo.upstreamStats({ userId: who.id, slug: up.slug, window })
+}
+
+export async function healthHistory(rt: Runtime, who: Who, id: string): Promise<HealthHistory> {
+  const up = await load(rt, who, id)
+  return await rt.repo.healthHistory({ userId: who.id, slug: up.slug })
+}
+
+/** Instance figures for the admin: aggregated counters, never contents of other users (spec P0-15). */
+export async function adminStats(rt: Runtime, q: { window?: unknown }, statsDropped = 0): Promise<AdminStats> {
+  const window = q.window ?? '24h'
+  if (!isStatsWindow(window)) throw bad('window', 'window ungültig (5m, 1h, 24h, 7d)')
+  return { ...(await rt.repo.adminStats(window)), statsDropped }
 }
 
 // ---------- Audit ----------

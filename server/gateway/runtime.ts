@@ -79,6 +79,7 @@ async function create(): Promise<Runtime> {
     oauth: { vault: new OAuthVault(repo, getMasterKey()), redirectUrl: new URL(UPSTREAM_OAUTH_CALLBACK_PATH, cfg.baseUrl).href },
     getAllow: async () => (await settings()).allow,
     statsWrite: rows => repo.writeStats(rows),
+    statsRead: q => repo.statsSummary(q),
     notifyChanged: notifyToolsChanged,
     log,
     statusSink: {
@@ -113,6 +114,9 @@ async function create(): Promise<Runtime> {
 
   const purge = setInterval(() => { void repo.purgeStats(STATS.retentionDays).catch(e => log('stats purge', e)) }, 24 * 3_600_000)
   purge.unref()
+  // Latency check (spec P0-14): p95 of the last 15 minutes above 3x the 7-day baseline makes an upstream `degraded`.
+  const slowCheck = setInterval(() => { void repo.slowUpstreams().then(m => gw.applySlow(m)).catch(e => log('slow check', e)) }, 60_000)
+  slowCheck.unref()
 
   const rt: Runtime = Object.assign(rtRef, {
     repo, gw, supervisor, imageTarget, draining: false,
@@ -129,6 +133,7 @@ async function create(): Promise<Runtime> {
   g.__mcpwRuntimeStop = async () => {
     rt.draining = true
     clearInterval(purge)
+    clearInterval(slowCheck)
     g.__mcpwSupervisorPing = undefined
     sessions.closeAll()
     await gw.shutdown(SHUTDOWN_DRAIN_MS)

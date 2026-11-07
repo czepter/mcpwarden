@@ -128,7 +128,7 @@ test('Upstream detail: status chip sits next to the heading, actions stay on the
   await login(page)
   await page.goto('/upstreams/up_4')
   const h1 = (await page.locator('h1').boundingBox())!
-  const chip = (await page.getByTestId('status-badge').first().boundingBox())!
+  const chip = (await page.locator('header').getByTestId('status-badge').first().boundingBox())!
   const testBtn = (await page.getByRole('button', { name: 'Verbindung testen' }).boundingBox())!
   expect(chip.x).toBeGreaterThan(h1.x + h1.width - 1)
   expect(Math.abs((chip.y + chip.height / 2) - (h1.y + h1.height / 2))).toBeLessThan(16)
@@ -146,12 +146,16 @@ test('Admin users: "+ Einladung erzeugen" sits in the invitations section, not i
   await expect(page.getByRole('dialog')).toBeVisible()
 })
 
-test('Dashboard: "Braucht Aufmerksamkeit" sits above the clients table, only with items', async ({ page }) => {
+test('Dashboard: "Braucht Aufmerksamkeit" sits beside the clients table (desktop) and above it (mobile), only with items', async ({ page }) => {
   await login(page)
   const attention = page.getByRole('heading', { name: 'Braucht Aufmerksamkeit' })
   await expect(attention).toBeVisible()
   const clients = page.getByRole('heading', { name: 'Verbundene Clients' })
+  const a = (await attention.boundingBox())!; const c = (await clients.boundingBox())!
+  expect(a.x).toBeGreaterThan(c.x) // right column at desktop width
+  await page.setViewportSize({ width: 390, height: 844 })
   expect((await attention.boundingBox())!.y).toBeLessThan((await clients.boundingBox())!.y)
+  await page.setViewportSize({ width: 1440, height: 900 })
   // Without items the card is gone (the client table stays)
   await page.evaluate(() => {
     const k = 'mcpwarden.mock.state'

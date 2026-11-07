@@ -199,5 +199,41 @@
       "denied": "Der Zugriff wurde beim Upstream abgelehnt.",
       "failed": "Die Anmeldung beim Upstream ist fehlgeschlagen."
     }
+  },
+  "stats": {
+    "sideList": "Alle Upstreams",
+    "kpis": "Kennzahlen",
+    "kpiP50": "Latenz p50",
+    "kpiP95": "Latenz p95",
+    "kpiOverhead": "Gateway-Overhead p95",
+    "kpiErrorRate": "Fehlerquote",
+    "kpiCallsPerMin": "Aufrufe pro Minute",
+    "note7d": "7 Tage: {ms}",
+    "noteTarget": "Ziel ≤ 50 ms",
+    "noteErrors": "{errors} von {calls} Aufrufen",
+    "noteLimit": "Limit {n} / min",
+    "slowNote": "p95 liegt beim {factor}-Fachen der 7-Tage-Basislinie.",
+    "statusTitle": "Status, letzte 24 Stunden",
+    "available": "Verfügbar {pct}",
+    "availableNone": "Keine Daten",
+    "ago24h": "vor 24 h",
+    "heatTitle": "Status je Stunde, letzte 7 Tage",
+    "heatAria": "Status je Stunde über sieben Tage: {err} Stunden mit vielen Fehlern, {warn} Stunden mit ein paar Fehlern.",
+    "legend": {
+      "ok": "keine Fehler",
+      "warn": "ein paar Fehler",
+      "err": "viele Fehler",
+      "none": "keine Daten"
+    },
+    "percentileTitle": "Latenz-Perzentile",
+    "percentileAria": "Latenz über 24 Stunden: p50 aktuell {p50}, p95 aktuell {p95}",
+    "errorsTitle": "Fehler nach Art",
+    "noErrors": "Keine Fehler im Zeitraum.",
+    "colKind": "Art",
+    "colShare": "Anteil",
+    "colCount": "Anzahl",
+    "colAvg": "Ø Dauer",
+    "errorsNote": "Ø Dauer ist die Zeit bis zum Fehler. Ungültige Argumente und Tool-Fehler zählen nicht in den Breaker.",
+    "colErrors": "Fehler"
   }
 }

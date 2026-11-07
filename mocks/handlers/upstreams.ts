@@ -1,5 +1,6 @@
-import type { SecretInput, UpstreamTestResult, UpstreamDetail, UpstreamInput, UpstreamList, UpstreamPatch, UpstreamSummary, UpstreamToolItem } from '#shared/api-types'
+import type { HealthHistory, UpstreamStats, StatsWindow, SecretInput, UpstreamTestResult, UpstreamDetail, UpstreamInput, UpstreamList, UpstreamPatch, UpstreamSummary, UpstreamToolItem } from '#shared/api-types'
 import { seedTools } from '../seed'
+import { WINDOW_FACTOR, WINDOW_MIN, heatmapFor, hoursFor } from '../stats-data'
 import { getState, role, save, scenario } from '../state'
 import { body, err, json, nid, noContent, route } from '../util'
 
@@ -18,6 +19,11 @@ function toSummary(u: UpstreamDetail): UpstreamSummary {
   return { id, slug, name, description, type, url, command, enabled, status, statusReason, statusChangedAt, lastError, lastOkAt, setup, toolsEnabled, toolsTotal, nextRetryAt, rateLimitHits5m, hasSecret, ...(p95Ms !== undefined && { p95Ms }), ...(recent && { recent }) }
 }
 
+function withStats(s: UpstreamSummary): UpstreamSummary {
+  const hours = hoursFor(s.status)
+  return { ...s, p95Ms: s.status === 'disabled' || s.status === 'unknown' ? null : s.status === 'degraded' ? 1240 : 212, recent: hours, hourly: hours }
+}
+
 function huge(): UpstreamDetail[] {
   const base = getState().upstreams
   return Array.from({ length: 60 }, (_, i) => ({ ...base[i % base.length]!, id: `h_${i}`, slug: `bulk-${i}`, name: `Bulk ${i}` }))
@@ -28,7 +34,30 @@ export const upstreamHandlers = [
     const sc = scenario()
     if (sc === 'empty') return json({ items: [] })
     // Summary: detail fields (env, secretNames, timeouts ...) stay in the detail (never a secret in the list).
-    return json<UpstreamList>({ items: (sc === 'huge' ? huge() : getState().upstreams).map(toSummary) })
+    return json<UpstreamList>({ items: (sc === 'huge' ? huge() : getState().upstreams).map(u => withStats(toSummary(u))) })
+  }),
+  route('get', '/api/upstreams/:id/stats', ({ params, request }) => {
+    const u = find(params.id); if (!u) return NF()
+    const w = (new URL(request.url).searchParams.get('window') ?? '24h') as StatsWindow
+    const f = WINDOW_FACTOR[w] ?? 1
+    const bad = u.status === 'degraded' || u.status === 'open'
+    const calls = Math.round(374 * f)
+    const errorCount = Math.round(calls * (bad ? 0.083 : 0.012))
+    const body: UpstreamStats = {
+      window: w, calls, errorCount, errorRate: calls ? errorCount / calls : 0, callsPerMin: Math.round((calls / WINDOW_MIN[w]!) * 100) / 100,
+      p50Ms: 312, p95Ms: bad ? 1240 : 212, p99Ms: bad ? 2100 : 340, overheadP95Ms: 18, baseline: { p50Ms: 298, p95Ms: 364 },
+      series: Array.from({ length: 24 }, (_, i) => ({ t: new Date(Date.now() - ((24 - i) * WINDOW_MIN[w]! * 60_000) / 24).toISOString(), p50Ms: 300 + (i % 5) * 6, p95Ms: bad ? 400 + i * i * 1.5 : 200 + (i % 4) * 10, p99Ms: bad ? 600 + i * i * 2.6 : 330 + (i % 3) * 14 })),
+      errors: bad ? [{ outcome: 'timeout', count: Math.round(19 * f), avgMs: 60000 }, { outcome: 'upstream_error', count: Math.round(9 * f), avgMs: 1800 }, { outcome: 'rate_limited', count: Math.round(3 * f), avgMs: 3 }] : [],
+      tools: (getState().tools[u.id] ?? []).filter(t => !t.gone).slice(0, 8).map((t, i) => ({ name: t.name, calls: Math.round((120 - i * 12) * f), errorRate: bad ? 0.05 + i * 0.04 : 0.01, p95Ms: 400 + i * 300 })),
+    }
+    return json(body)
+  }),
+  route('get', '/api/upstreams/:id/health-history', ({ params }) => {
+    const u = find(params.id); if (!u) return NF()
+    const hours = heatmapFor(u.status)
+    const last = hours.slice(-24).filter(h => h !== 'none')
+    const start = new Date(Math.floor(Date.now() / 3_600_000) * 3_600_000 - 167 * 3_600_000).toISOString()
+    return json<HealthHistory>({ start, hours, availability: last.length ? last.filter(h => h === 'ok').length / last.length : null })
   }),
   route('post', '/api/upstreams', async ({ request }) => {
     const b = await body<UpstreamInput>(request); const s = getState()

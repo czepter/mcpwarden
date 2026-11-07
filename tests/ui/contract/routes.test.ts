@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { z } from 'zod'
-import type { LinkInfo, StatsSummary, StdioDraft } from '#shared/api-types'
+import type { LinkInfo, StdioDraft } from '#shared/api-types'
 import { schemas as baseSchemas } from '../../contract/schemas'
 import { makeServer } from '../../../mocks/node'
 import { getState, resetState } from '../../../mocks/state'
@@ -8,17 +8,11 @@ import { getState, resetState } from '../../../mocks/state'
 // Strict schemas (strictObject): missing AND unknown fields in mock responses stand out.
 // `satisfies z.ZodType<T>` binds each schema to the contract type in shared/api-types.ts; backend tests can use the same schemas.
 const BASE = process.env.CONTRACT_BASE_URL ?? 'http://localhost:3000'
-const { string: str, number: num } = z
+const { string: str } = z
 
-// Phase 2 routes (statistics, auth links, stdio draft): there is no backend, only the mocks; the other schemas come from tests/contract/schemas.ts.
+// Phase 2 routes (auth links, stdio draft): there is no backend, only the mocks; the other schemas come from tests/contract/schemas.ts.
 const phase2 = {
   draft: z.strictObject({ id: str(), slug: str(), command: str(), args: z.array(str()), cwd: str(), envNames: z.array(str()), createdVia: z.strictObject({ client: str(), at: str() }) }) satisfies z.ZodType<StdioDraft>,
-  stats: z.strictObject({
-    window: z.enum(['5m', '1h', '24h', '7d']), calls: num(), callsPerMin: num(), okRate: num(), peakConcurrent: num(), activeClients: num(),
-    perHour: z.array(z.strictObject({ t: str(), calls: num() })),
-    outcomes: z.array(z.strictObject({ outcome: z.enum(['ok', 'tool_error', 'timeout', 'upstream_error', 'rate_limited', 'breaker_open', 'denied']), count: num() })),
-    rows: z.array(z.strictObject({ upstream: str(), calls: num(), okRate: num(), p5Ms: num(), p50Ms: num(), p75Ms: num(), p95Ms: num(), p99Ms: num(), overheadP95Ms: num() })),
-  }) satisfies z.ZodType<StatsSummary>,
   link: z.union([
     z.strictObject({ state: z.literal('open'), kind: z.enum(['token', 'header', 'oauth']), upstream: z.strictObject({ slug: str(), url: str() }), headerName: str().optional(), expiresAt: str() }),
     z.strictObject({ state: z.enum(['expired', 'used', 'forbidden']) }),
@@ -54,6 +48,10 @@ describe('all GET routes: strict contract schemas', () => {
     ['Consent (unknown)', '/api/oauth/consent-info?client_id=agent-x&sig=ok', 'consent'],
     ['Consent (known)', '/api/oauth/consent-info?client_id=claude-code&sig=ok', 'consent'],
     ['Statistics', '/api/stats/summary?window=24h', 'stats'],
+    ['Statistics, one upstream and tool', '/api/stats/summary?window=7d&upstream=github&tool=get_item', 'stats'],
+    ['Upstream statistics', '/api/upstreams/up_1/stats?window=24h', 'upstreamStats'],
+    ['Health history', '/api/upstreams/up_1/health-history', 'healthHistory'],
+    ['Admin statistics', '/api/admin/stats?window=24h', 'adminStats'],
     ['Link open', '/api/links/abc', 'link'],
     ['Link expired', '/api/links/expired', 'link'],
     ['Audit', '/api/audit', 'audit'],

@@ -39,7 +39,10 @@
     "revokeLabel": "{name} widerrufen",
     "confirmTitle": "Zugriff widerrufen?",
     "confirmBodyOauth": "Die Verbindung „{name}“ wird beendet. Das wirkt beim nächsten Aufruf.",
-    "confirmBodyToken": "Das Token „{name}“ wird beendet. Das wirkt beim nächsten Aufruf."
+    "confirmBodyToken": "Das Token „{name}“ wird beendet. Das wirkt beim nächsten Aufruf.",
+    "kpiClientsNote": "Aufruf in den letzten 5 min",
+    "callsPerMinChart": "Aufrufe pro Minute",
+    "callsPerMinAria": "Aufrufe pro Minute, {window}, Spitze {peak}"
   },
   "audit": {
     "title": "Audit-Log",
@@ -84,6 +87,26 @@
     "colUpstream": "Upstream",
     "colCalls": "Aufrufe",
     "colSuccess": "Erfolg",
-    "colOverhead": "Overhead p95"
+    "colOverhead": "Overhead p95",
+    "filterUpstream": "Upstream filtern",
+    "allUpstreams": "Alle Upstreams",
+    "empty": "Im gewählten Zeitraum gab es keine Aufrufe.",
+    "callsOverTime": "Aufrufe im Zeitverlauf",
+    "noData": "keine Daten",
+    "callsOverTimePeak": "Aufrufe im Zeitverlauf, Spitze {peak}",
+    "window5m": "5 Minuten",
+    "window1h": "1 Stunde",
+    "window24h": "24 Stunden",
+    "window7d": "7 Tage",
+    "filterTool": "Tool filtern",
+    "allTools": "Alle Tools",
+    "kpiAvg": "Ø Dauer",
+    "kpiMax": "Längster Aufruf",
+    "toolLatency": "Latenz je Tool",
+    "toolLatencyDesc": "Gesamtdauer je Tool, die meistgenutzten zuerst. Ø und Max in Millisekunden bzw. Sekunden.",
+    "toolCaption": "Statistik je Tool",
+    "colTool": "Tool",
+    "colAvg": "Ø",
+    "colMax": "Max"
   }
 }

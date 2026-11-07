@@ -74,7 +74,17 @@
       "newException": "Neue Ausnahme",
       "placeholder": "10.0.0.0/8 oder intern.example",
       "addEntry": "+ Eintrag",
-      "registrationNote": "Registrierung ist nur per Einladungslink möglich (Admin › Nutzer)."
+      "registrationNote": "Registrierung ist nur per Einladungslink möglich (Admin › Nutzer).",
+      "usageTitle": "Nutzung der Instanz",
+      "usageDesc": "Zusammengefasste Kennzahlen aller Nutzer. Inhalte der Aufrufe siehst du nie.",
+      "usageUsers": "Aktive Nutzer",
+      "usageUsersNote": "mit Aufrufen im Zeitraum",
+      "usageUpstreams": "Upstreams",
+      "usageCalls": "Aufrufe",
+      "usagePerMin": "{n} / min",
+      "usageSuccess": "Erfolgsquote",
+      "usageOverhead": "Gateway-Overhead p95",
+      "usageDropped": "{n} Messwerte wurden verworfen (Puffer voll oder Datenbank nicht erreichbar)."
     },
     "users": {
       "pageTitle": "Admin: Nutzer · mcpwarden",

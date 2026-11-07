@@ -10,7 +10,7 @@ export const meHandlers = [
       stdio: stdioReasonOverride() ? { allowed: false, reason: stdioReasonOverride()! } : role() === 'admin' && s.settings['stdio.enabled'] ? { allowed: true } : { allowed: false, reason: !s.settings['stdio.enabled'] ? 'instance_disabled' : 'not_granted' },
       limits: { maxUpstreams: 50, upstreamsUsed: s.upstreams.length, maxConnections: 20, callsPerMin: 120 },
       defaults: { ratePerMin: 60, maxConcurrent: 5, timeouts: { connectMs: 10_000, listMs: 15_000, callMs: 60_000 } },
-      features: { healthHistory: false, toolMode: false, callLog: false },
+      features: { healthHistory: true, toolMode: false, callLog: false },
     }
     return json(caps)
   }),

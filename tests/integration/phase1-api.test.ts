@@ -259,13 +259,21 @@ describe('upstreams, secrets, tools and the proxy path', () => {
     expect(over.json.data.code).toBe('limit_reached')
   })
 
-  it('dashboard: client rows with activity, attention list, no KPIs', async () => {
+  it('dashboard: client rows with activity, attention list, key figures and series', async () => {
     const c = await mcp(patA.token)
     await c.listTools()
     await c.close()
     await new Promise(r => setTimeout(r, 5500)) // the stats buffer writes every 5 s
     const d = (await userA.request('/api/dashboard')).json as Dashboard
-    expect(Object.keys(d).sort()).toEqual(['attention', 'attentionCount', 'clients'])
+    expect(Object.keys(d).sort()).toEqual(['attention', 'attentionCount', 'clients', 'kpis', 'series'])
+    expect(d.kpis).toMatchObject({ clientsActive: expect.any(Number), clientsTotal: d.clients.length, successRate: expect.any(Number) })
+    expect(d.series).toHaveLength(24)
+    // Own figures only: user B has no calls, so the 24 h view of B is empty while A's tools/list rows do not count as calls
+    const other = (await userB.request('/api/dashboard?window=24h')).json as Dashboard
+    expect(other.kpis!.callsPerMin).toBe(0); expect(other.kpis!.successRate).toBe(1)
+    expect((await userA.request('/api/dashboard?window=bogus')).status).toBe(422)
+    expect((await userA.request('/api/admin/stats')).status).toBe(403) // instance figures are for admins only
+    expect((await admin.request('/api/admin/stats')).status).toBe(200)
     const pat = d.clients.find(x => x.kind === 'pat')
     expect(pat).toMatchObject({ name: 'a', allowlisted: null, active: true })
     expect(pat!.contextTokensEstimate).not.toBeNull()
