@@ -20,7 +20,7 @@ const S: Meta = { scope: 'user', category: 'status', result: 'status_change' }
 
 export const AUDIT_ACTIONS = {
   'upstream.create': U, 'upstream.update': U, 'upstream.delete': U, 'upstream.enable': U, 'upstream.disable': U,
-  'secret.replace': U, 'secret.delete': U, 'tool.enable': U, 'tool.disable': U,
+  'secret.replace': U, 'secret.delete': U, 'upstream.oauth_connect': U, 'upstream.oauth_disconnect': U, 'tool.enable': U, 'tool.disable': U,
   'upstream.status': S,
   'user.ban': I, 'user.unban': I, 'user.delete': I, 'user.limits': I,
   'invite.create': I, 'invite.use': I, 'invite.revoke': I,

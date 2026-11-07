@@ -11,7 +11,7 @@ export type UpstreamRow = {
   version: number
   url: string | null
   transport: 'auto' | 'streamable' | 'sse'
-  authType: 'none' | 'bearer' | 'header' | 'env'
+  authType: 'none' | 'bearer' | 'header' | 'env' | 'oauth'
   authHeaderName: string | null
   command: string | null
   args: string[]

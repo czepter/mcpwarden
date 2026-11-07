@@ -1,8 +1,8 @@
 import { Client, SSEClientTransport, StreamableHTTPClientTransport } from '@modelcontextprotocol/client'
-import type { Transport } from '@modelcontextprotocol/client'
+import type { OAuthClientProvider, Transport } from '@modelcontextprotocol/client'
 import type { FetchLike } from '../net/safe-fetch'
 import { mergeTimeouts } from '../config'
-import { classifyError, CredentialsMissingError } from './errors'
+import { classifyError, CredentialsMissingError, OAuthReauthError } from './errors'
 import { withRetry } from './retry'
 import type { UpstreamRow } from './types'
 
@@ -15,6 +15,8 @@ export type ConnectDeps = {
   clientInfo?: { name: string, version: string }
   /** For stdio: supplies the transport via the worker (task 1.3). */
   stdioTransport?: (up: UpstreamRow, creds: Credentials) => Promise<Transport>
+  /** OAuth upstreams: session provider (tokens from the encrypted store, refresh through the SDK). */
+  oauthProvider?: (up: UpstreamRow, owner: string) => OAuthClientProvider
 }
 
 /** The default is `legacy`; only `auto` speaks revision 2026-07-28 (abort = close stream) and otherwise falls back to `initialize`. */
@@ -41,19 +43,19 @@ export function authHeaders(up: UpstreamRow, c: Credentials): Record<string, str
  * The ONLY place where HTTP transports are built (lint rule/test `no-direct-transport`);
  * all with `fetch: safeFetch`.
  */
-function httpTransport(kind: 'streamable' | 'sse', url: URL, headers: Record<string, string>, safeFetch: FetchLike): Transport {
+function httpTransport(kind: 'streamable' | 'sse', url: URL, headers: Record<string, string>, safeFetch: FetchLike, authProvider?: OAuthClientProvider): Transport {
   const requestInit = { headers }
   return kind === 'streamable'
-    ? new StreamableHTTPClientTransport(url, { fetch: safeFetch, requestInit })
-    : new SSEClientTransport(url, { fetch: safeFetch, requestInit })
+    ? new StreamableHTTPClientTransport(url, { fetch: safeFetch, requestInit, authProvider })
+    : new SSEClientTransport(url, { fetch: safeFetch, requestInit, authProvider })
 }
 
 export type Connected = { client: Client, transport: 'streamable' | 'sse' | 'stdio' }
 
-async function connectOnce(up: UpstreamRow, connectMs: number, kind: 'streamable' | 'sse', deps: ConnectDeps, headers: Record<string, string>, signal: AbortSignal): Promise<Client> {
+async function connectOnce(up: UpstreamRow, connectMs: number, kind: 'streamable' | 'sse', deps: ConnectDeps, headers: Record<string, string>, signal: AbortSignal, authProvider?: OAuthClientProvider): Promise<Client> {
   const client = new Client(deps.clientInfo ?? { name: 'mcpwarden', version: '0.1.0' }, clientOptions(connectMs))
   try {
-    await raceAbort(client.connect(httpTransport(kind, new URL(up.url!), headers, deps.safeFetch), { signal }), signal)
+    await raceAbort(client.connect(httpTransport(kind, new URL(up.url!), headers, deps.safeFetch, authProvider), { signal }), signal)
     return client
   } catch (e) {
     await client.close().catch(() => {})
@@ -84,12 +86,19 @@ export async function connectUpstream(up: UpstreamRow, deps: ConnectDeps, signal
   // Never connect silently without a header for an auth kind without a matching secret
   if ((up.authType === 'bearer' && !creds.bearer) || (up.authType === 'header' && !(up.authHeaderName && creds.headers?.[up.authHeaderName]))) throw new CredentialsMissingError()
   const headers = authHeaders(up, creds)
+  let authProvider: OAuthClientProvider | undefined
+  if (up.authType === 'oauth') {
+    if (!deps.oauthProvider) throw new CredentialsMissingError()
+    authProvider = deps.oauthProvider(up, owner)
+    // No stored session (never connected, or credentials were invalidated): connecting would only start a flow nobody can finish
+    if (!(await authProvider.tokens())) throw new OAuthReauthError()
+  }
   const attempt = async () => {
     const sig = AbortSignal.any([AbortSignal.timeout(t.connectMs), ...(signal ? [signal] : [])])
     const order: Array<'streamable' | 'sse'> = up.transport === 'auto' ? ['streamable', 'sse'] : [up.transport]
     let lastErr: unknown
     for (const kind of order) {
-      try { return { client: await connectOnce(up, t.connectMs, kind, deps, headers, sig), transport: kind } } catch (e) {
+      try { return { client: await connectOnce(up, t.connectMs, kind, deps, headers, sig, authProvider), transport: kind } } catch (e) {
         lastErr = e
         const c = classifyError(e, { hasAuth: up.authType !== 'none' })
         // Fallback only if the server does not speak Streamable; never on SSRF/redirect/auth/timeout.

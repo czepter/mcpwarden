@@ -14,6 +14,7 @@ import PageHeader from '~/components/shell/PageHeader.vue'
 import { Alert } from '~/components/ui/alert'
 import { Badge } from '~/components/ui/badge'
 import { Button } from '~/components/ui/button'
+import { Spinner } from '~/components/ui/spinner'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '~/components/ui/tabs'
 import TestResult from '~/components/upstreams/TestResult.vue'
 import ToolTable from '~/components/upstreams/ToolTable.vue'
@@ -47,6 +48,25 @@ const saveSecret = sec.submit(async (v) => {
   try { await upstreamApi.putSecret(id, { kind: u.value?.authType === 'header' ? 'header' : 'bearer', name: u.value?.authHeaderName ?? undefined, value: v.value }) } finally { sec.form.resetForm({ values: { value: '' } }) }
   replaced.value = true; await up.refresh(); toast.success('Secret ersetzt.')
 }, ['value'])
+// OAuth against the upstream: the browser leaves for the upstream's authorization server and returns with ?oauth=ok|denied|error
+const connecting = ref(false)
+async function oauthConnect() {
+  connecting.value = true
+  try {
+    const r = await upstreamApi.oauthStart(id)
+    if (r.authorizationUrl) { window.location.href = r.authorizationUrl; return }
+    await up.refresh(); toast.success('Verbunden.')
+  } catch { toast.error('Verbindung konnte nicht gestartet werden. Bietet der Upstream OAuth mit Dynamic Client Registration an?') } finally { connecting.value = false }
+}
+async function oauthDisconnect() {
+  try { await upstreamApi.oauthDisconnect(id); await up.refresh(); toast.success('Verbindung getrennt.') } catch { toast.error('Trennen fehlgeschlagen.') }
+}
+onMounted(async () => {
+  const r = String(route.query.oauth ?? '')
+  if (!r) return
+  await navigateTo({ query: { tab: 'auth' } }, { replace: true })
+  if (r === 'ok') { toast.success('Verbunden.'); await runTest() } else toast.error(r === 'denied' ? 'Der Zugriff wurde beim Upstream abgelehnt.' : 'Die Anmeldung beim Upstream ist fehlgeschlagen.')
+})
 // Tabs as in the draft: underline in the accent color, 44 px high.
 const TABS = [['overview', 'Übersicht'], ['tools', 'Tools'], ['auth', 'Auth']] as const
 const TAB_CLASS = '-mb-px h-11 flex-none rounded-none border-0 border-b-2 border-transparent bg-transparent px-4 text-secondary-foreground shadow-none data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none dark:data-[state=active]:border-transparent dark:data-[state=active]:border-b-primary dark:data-[state=active]:bg-transparent'
@@ -86,7 +106,7 @@ const saveTool = (name: string, enabled: boolean) => upstreamApi.setTool(id, nam
             <dt class="text-muted-foreground">Typ</dt><dd>{{ typeLabel(u.type) }}</dd>
             <dt class="text-muted-foreground">Kurzname</dt><dd><code>{{ u.slug }}</code></dd>
             <dt class="text-muted-foreground">{{ u.type === 'http' ? 'URL' : 'Befehl' }}</dt><dd class="mono text-xs">{{ u.url ?? u.command }}</dd>
-            <dt class="text-muted-foreground">Anmeldung</dt><dd>{{ authTypeLabel(u.authType) }}<Badge v-if="u.hasSecret" variant="secondary" class="ml-2">Gesetzt</Badge></dd>
+            <dt class="text-muted-foreground">Anmeldung</dt><dd>{{ authTypeLabel(u.authType) }}<Badge v-if="u.hasSecret" variant="secondary" class="ml-2">{{ u.authType === 'oauth' ? 'Verbunden' : 'Gesetzt' }}</Badge></dd>
             <dt class="text-muted-foreground">Rate-Limit</dt><dd class="tnum">{{ u.ratePerMin }} / min · {{ u.maxConcurrent }} parallel</dd>
             <dt class="text-muted-foreground">Timeouts</dt><dd class="tnum">{{ u.timeouts.connectMs / 1000 }} s · {{ u.timeouts.listMs / 1000 }} s · {{ u.timeouts.callMs / 1000 }} s</dd>
             <dt class="text-muted-foreground">Zuletzt erfolgreich</dt><dd><RelativeTime :value="u.lastOkAt" empty="noch nie" /></dd>
@@ -105,6 +125,14 @@ const saveTool = (name: string, enabled: boolean) => upstreamApi.setTool(id, nam
         <section class="flex max-w-[600px] flex-col gap-3 rounded-lg border bg-card p-5" aria-labelledby="h-auth">
           <h2 id="h-auth" class="text-[15px] font-semibold">Anmeldung: {{ authTypeLabel(u.authType) }}</h2>
           <template v-if="u.authType === 'none'"><p class="text-[13px] text-muted-foreground">Dieser Upstream braucht keine Anmeldedaten.</p></template>
+          <template v-else-if="u.authType === 'oauth'">
+            <p class="text-sm">Zustand: <Badge variant="secondary" data-testid="oauth-state">{{ u.hasSecret ? 'Verbunden' : 'Nicht verbunden' }}</Badge></p>
+            <p class="text-[13px] text-muted-foreground">Du meldest dich im Browser beim Upstream an. mcpwarden speichert die Tokens verschlüsselt und erneuert sie selbst; sie werden nie angezeigt.</p>
+            <div class="flex flex-wrap gap-2">
+              <Button type="button" :disabled="connecting" :aria-busy="connecting" @click="oauthConnect"><Spinner v-if="connecting" />{{ u.hasSecret ? 'Neu verbinden' : 'Mit Upstream verbinden' }}</Button>
+              <Button v-if="u.hasSecret" type="button" variant="outline" @click="oauthDisconnect">Trennen</Button>
+            </div>
+          </template>
           <template v-else>
             <p class="text-sm">Zustand: <Badge variant="secondary">{{ u.hasSecret ? 'Gesetzt' : 'Nicht gesetzt' }}</Badge></p>
             <p v-if="replaced" role="status" class="text-[13px] text-ok-fg">Das Secret wurde ersetzt.</p>

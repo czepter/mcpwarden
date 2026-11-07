@@ -7,6 +7,7 @@ import { StatsBuffer, type CallStatRow } from './stats/buffer'
 import { Catalog } from './upstream/catalog'
 import { connectUpstream, type ConnectDeps, type Credentials } from './upstream/connect'
 import { Limiter } from './upstream/limiter'
+import { UpstreamOAuthProvider, type OAuthVault } from './upstream/oauth'
 import { upstreamContext } from './upstream/context'
 import { Pool } from './upstream/pool'
 import { UpstreamHealth, type StatusSink } from './upstream/status'
@@ -21,6 +22,8 @@ export type GatewayOptions = {
   getAllow?: () => AllowList | Promise<AllowList>
   safeFetch?: FetchLike
   stdioTransport?: (up: UpstreamRow, creds: Credentials) => Promise<Transport>
+  /** OAuth upstreams: encrypted session store and the callback URL registered at the upstream's authorization server. */
+  oauth?: { vault: OAuthVault, redirectUrl: string }
   notifyChanged?: (userId: string) => void
   log?: (msg: string, err?: unknown) => void
   now?: () => number
@@ -53,7 +56,11 @@ export function createGateway(o: GatewayOptions) {
     }
     return out
   }
-  const deps: ConnectDeps = { safeFetch, credentials, stdioTransport: o.stdioTransport }
+  const oauth = o.oauth
+  const deps: ConnectDeps = {
+    safeFetch, credentials, stdioTransport: o.stdioTransport,
+    oauthProvider: oauth ? (up, owner) => new UpstreamOAuthProvider({ vault: oauth.vault, userId: owner, upstreamId: up.id, redirectUrl: oauth.redirectUrl, interactive: false }) : undefined,
+  }
   const pool = new Pool({ connect: (up, signal, owner) => connectUpstream(up, deps, signal, owner), maxFor: async u => (await o.store.getLimits(u)).maxConnections })
   // Without a cleanup loop connections (and thus stdio child processes) would stay open forever: the worker's idle timer
   // (processes = 0) would never kick in.
@@ -72,7 +79,7 @@ export function createGateway(o: GatewayOptions) {
   const core = new GatewayCore({ store: o.store, pool, catalog, limiter, stats, healthFor, notifyChanged: o.notifyChanged })
   return {
     toolSource: core as import('./ports').ToolSource,
-    core, pool, catalog, limiter, stats, healthFor, safeFetch, credentials,
+    core, pool, catalog, limiter, stats, healthFor, safeFetch, credentials, oauth,
     /** Lifecycle: ban/delete. */
     async onUserDisabled(userId: string) {
       await pool.closeUser(userId)

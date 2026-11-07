@@ -27,7 +27,7 @@ export const schemas = {
   session: z.union([z.null(), z.strictObject({ user: z.strictObject({ id: str(), name: str(), email: str(), role: z.enum(['admin', 'user']), banned: bool() }), session: z.strictObject({ id: str(), expiresAt: str() }) })]) satisfies z.ZodType<AuthSession>,
   upstreamList: z.strictObject({ items: z.array(z.strictObject(summaryShape)) }) satisfies z.ZodType<UpstreamList>,
   upstreamDetail: z.strictObject({
-    ...summaryShape, transport: z.enum(['auto', 'streamable', 'sse']), authType: z.enum(['none', 'bearer', 'header', 'env']), authHeaderName: nstr,
+    ...summaryShape, transport: z.enum(['auto', 'streamable', 'sse']), authType: z.enum(['none', 'bearer', 'header', 'env', 'oauth']), authHeaderName: nstr,
     ratePerMin: num(), maxConcurrent: num(), timeouts, args: z.array(str()), cwd: nstr, env: z.record(str(), str()), secretNames: z.array(str()),
     version: num(), createdAt: str(), updatedAt: str(),
   }) satisfies z.ZodType<UpstreamDetail>,

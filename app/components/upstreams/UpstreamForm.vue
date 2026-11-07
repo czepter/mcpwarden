@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { Capabilities, UpstreamTestResult as TestResultT, UpstreamDetail } from '#shared/api-types'
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { upstreamApi } from '~/api'
 import FormRow from '~/components/common/FormRow.vue'
 import SecretField from '~/components/common/SecretField.vue'
@@ -33,6 +33,29 @@ const KEYS = ['type', 'name', 'slug', 'url', 'transport', 'authType', 'authHeade
 const fv = reactive(Object.fromEntries(KEYS.map(k => [k, form.defineField(k)[0]]))) as unknown as Record<(typeof KEYS)[number], any>
 const err = (k: string) => (form.errors.value as Record<string, string | undefined>)[k]
 const advanced = ref(false)
+// Auto-detection: once the URL looks complete, ask the server whether it offers OAuth (before the user picks a sign-in)
+type Probe = 'idle' | 'checking' | 'dcr' | 'no_dcr' | 'none' | 'error'
+const probe = ref<Probe>('idle')
+let probeTimer: ReturnType<typeof setTimeout> | undefined
+let probeSeq = 0
+const URL_RE = /^https?:\/\/[^/@\s]+(\/\S*)?$/
+watch(() => fv.url as string, (url) => {
+  clearTimeout(probeTimer)
+  const u = (url ?? '').trim()
+  if (fv.type !== 'http' || !URL_RE.test(u) || u === props.initial?.url) { probe.value = 'idle'; return }
+  probe.value = 'checking'
+  const seq = ++probeSeq
+  probeTimer = setTimeout(async () => {
+    let r: Probe
+    try { r = (await upstreamApi.probe(u)).oauth } catch { r = 'error' }
+    if (seq !== probeSeq) return // a newer URL was entered meanwhile
+    probe.value = r
+    if (r === 'dcr' && fv.authType === 'none') form.setFieldValue('authType', 'oauth')
+    if ((r === 'none' || r === 'no_dcr') && fv.authType === 'oauth') form.setFieldValue('authType', 'none')
+  }, 600)
+})
+onBeforeUnmount(() => clearTimeout(probeTimer))
+const oauthUnavailable = computed(() => probe.value === 'none' || probe.value === 'no_dcr')
 const stdioBlocked = computed(() => !props.caps.stdio.allowed)
 watch(() => fv.type as string, (t) => { if (t === 'stdio' && stdioBlocked.value) form.setFieldValue('type', 'http') })
 
@@ -48,9 +71,9 @@ const onSubmit = submit(async (v) => {
   if (props.initial) u = await upstreamApi.patch(props.initial.id, body)
   else u = await upstreamApi.create({ ...body, slug: v.slug, type: v.type })
   try {
-    if (v.secret) { await upstreamApi.putSecret(u.id, { kind: v.authType === 'header' ? 'header' : 'bearer', name: v.authType === 'header' ? v.authHeaderName : undefined, value: v.secret }); u.hasSecret = true }
+    if (v.secret && v.authType !== 'oauth') { await upstreamApi.putSecret(u.id, { kind: v.authType === 'header' ? 'header' : 'bearer', name: v.authType === 'header' ? v.authHeaderName : undefined, value: v.secret }); u.hasSecret = true }
   } finally { form.setFieldValue('secret', '') }
-  if (!props.initial) test = await upstreamApi.test(u.id)
+  if (!props.initial && v.authType !== 'oauth') test = await upstreamApi.test(u.id) // OAuth: nothing to test before the account is connected
   emit('saved', u, test)
 }, ['name', 'slug', 'url', 'command', 'authHeaderName'])
 </script>
@@ -79,12 +102,22 @@ const onSubmit = submit(async (v) => {
       <FormRow id="u-url" label="Server-URL" :error="err('url')"><template #default="s"><Input :id="s.id" v-model="fv.url" class="mono" placeholder="mcp.example.com/mcp" :aria-invalid="s.invalid || undefined" :aria-describedby="s.describedby" /></template></FormRow>
       <fieldset class="flex flex-col gap-2">
         <legend class="mb-1 text-sm font-medium">Anmeldung</legend>
-        <RadioGroup v-model="fv.authType" class="grid grid-cols-3 gap-2" aria-label="Anmeldung">
-          <label v-for="[v, l] in [['none', 'Keine'], ['bearer', 'Bearer'], ['header', 'Header']]" :key="v" class="flex min-h-11 cursor-pointer items-center gap-2 rounded-sm border px-3 py-2" :class="fv.authType === v ? 'border-primary bg-primary-tint' : ''"><RadioGroupItem :value="v" />{{ l }}</label>
+        <RadioGroup v-model="fv.authType" class="grid grid-cols-2 gap-2 sm:grid-cols-4" aria-label="Anmeldung">
+          <label v-for="[v, l] in [['none', 'Keine'], ['bearer', 'Bearer'], ['header', 'Header'], ['oauth', 'OAuth']]" :key="v" class="flex min-h-11 items-center gap-2 rounded-sm border px-3 py-2" :class="[fv.authType === v ? 'border-primary bg-primary-tint' : '', v === 'oauth' && oauthUnavailable ? 'cursor-not-allowed opacity-60' : 'cursor-pointer']"><RadioGroupItem :value="v" :disabled="v === 'oauth' && oauthUnavailable" />{{ l }}</label>
         </RadioGroup>
+        <p v-if="probe !== 'idle'" class="text-[13px] text-muted-foreground" role="status" data-testid="oauth-probe">
+          <template v-if="probe === 'checking'">Prüfe, ob der Server OAuth anbietet …</template>
+          <template v-else-if="probe === 'dcr'">OAuth erkannt: du verbindest dein Konto nach dem Anlegen im Reiter „Auth“.</template>
+          <template v-else-if="probe === 'no_dcr'">Der Server bietet OAuth ohne automatische Registrierung an. Das wird noch nicht unterstützt, nimm Bearer oder Header.</template>
+          <template v-else-if="probe === 'none'">Kein OAuth gefunden. Wähle Keine, Bearer oder Header.</template>
+          <template v-else>OAuth konnte nicht geprüft werden. Du kannst die Anmeldung trotzdem selbst wählen.</template>
+        </p>
       </fieldset>
       <FormRow v-if="fv.authType === 'header'" id="u-hname" label="Header-Name" :error="err('authHeaderName')"><template #default="{ id, invalid, describedby }"><Input :id="id" v-model="fv.authHeaderName" class="mono" placeholder="X-Api-Key" :aria-invalid="invalid || undefined" :aria-describedby="describedby" /></template></FormRow>
-      <FormRow v-if="fv.authType !== 'none'" id="u-secret" :label="edit ? 'Secret ersetzen' : 'Secret'" :description="initial?.hasSecret ? 'Ein Secret ist gesetzt. Es wird nie angezeigt, nur ersetzt.' : 'Wird verschlüsselt gespeichert und nie wieder angezeigt.'" :optional="edit">
+      <p v-if="fv.authType === 'oauth'" class="text-[13px] text-muted-foreground" data-testid="oauth-hint">
+        {{ edit && initial?.authType === 'oauth' ? 'Die Verbindung zum Konto beim Upstream verwaltest du im Reiter „Auth“.' : 'Nach dem Anlegen verbindest du dein Konto beim Upstream im Reiter „Auth“. Der Upstream muss OAuth mit Dynamic Client Registration anbieten.' }}
+      </p>
+      <FormRow v-if="fv.authType === 'bearer' || fv.authType === 'header'" id="u-secret" :label="edit ? 'Secret ersetzen' : 'Secret'" :description="initial?.hasSecret ? 'Ein Secret ist gesetzt. Es wird nie angezeigt, nur ersetzt.' : 'Wird verschlüsselt gespeichert und nie wieder angezeigt.'" :optional="edit">
         <template #default="{ id, invalid, describedby }"><SecretField :id="id" v-model="fv.secret" :invalid="invalid" :describedby="describedby" /></template>
       </FormRow>
     </div>

@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm'
-import { bigserial, boolean, check, foreignKey, index, integer, jsonb, pgTable, smallint, text, timestamp, unique, uuid, primaryKey } from 'drizzle-orm/pg-core'
+import { bigserial, boolean, check, foreignKey, index, integer, jsonb, pgTable, smallint, text, timestamp, unique, uniqueIndex, uuid, primaryKey } from 'drizzle-orm/pg-core'
 import { user } from './auth'
 
 const userFk = () => text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' })
@@ -38,7 +38,7 @@ export const upstream = pgTable('upstream', {
   unique('upstream_user_id_id_uq').on(t.userId, t.id),
   check('upstream_type_ck', sql`${t.type} in ('http','stdio')`),
   check('upstream_transport_ck', sql`${t.transport} in ('auto','streamable','sse')`),
-  check('upstream_auth_type_ck', sql`${t.authType} in ('none','bearer','header','env')`),
+  check('upstream_auth_type_ck', sql`${t.authType} in ('none','bearer','header','env','oauth')`),
   check('upstream_status_ck', sql`${t.status} in ('unknown','healthy','degraded','open','auth_expired','disabled')`),
   check('upstream_setup_ck', sql`${t.setup} in ('ready','awaiting_auth','awaiting_approval')`),
   check('upstream_slug_ck', sql`${t.slug} ~ '^[a-z0-9][a-z0-9-]{0,31}$'`),
@@ -60,6 +60,25 @@ export const upstreamSecret = pgTable('upstream_secret', {
   unique('upstream_secret_uq').on(t.upstreamId, t.kind, t.name),
   foreignKey({ name: 'upstream_secret_user_upstream_fk', columns: [t.userId, t.upstreamId], foreignColumns: [upstream.userId, upstream.id] }).onDelete('cascade'),
   check('upstream_secret_kind_ck', sql`${t.kind} in ('bearer','header','env')`),
+])
+
+/**
+ * OAuth session of one upstream (`authType = 'oauth'`). `data` is one encrypted JSON document (client registration, tokens,
+ * discovery state, PKCE verifier); only the hash of the pending `state` and its expiry are readable so that the callback can
+ * find the row. `connectedAt` is set while tokens are stored (drives `hasSecret` without decrypting).
+ */
+export const upstreamOauth = pgTable('upstream_oauth', {
+  upstreamId: uuid('upstream_id').primaryKey(),
+  userId: userFk(),
+  data: text('data'),
+  stateHash: text('state_hash'),
+  stateExpiresAt: timestamp('state_expires_at', { withTimezone: true }),
+  connectedAt: timestamp('connected_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, t => [
+  foreignKey({ name: 'upstream_oauth_user_upstream_fk', columns: [t.userId, t.upstreamId], foreignColumns: [upstream.userId, upstream.id] }).onDelete('cascade'),
+  uniqueIndex('upstream_oauth_state_uq').on(t.stateHash),
 ])
 
 export const upstreamTool = pgTable('upstream_tool', {

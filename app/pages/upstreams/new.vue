@@ -22,5 +22,5 @@ const done = ref<{ u: UpstreamDetail, test: TestResultT | null } | null>(null)
     <TestResult v-if="done.test" :result="done.test" />
     <div class="flex gap-2"><Button as-child><NuxtLink :to="`/upstreams/${done.u.id}`">Zum Upstream</NuxtLink></Button></div>
   </div>
-  <UpstreamForm v-else :caps="caps" @saved="(u, test) => (done = { u, test })" />
+  <UpstreamForm v-else :caps="caps" @saved="(u, test) => (u.authType === 'oauth' ? navigateTo(`/upstreams/${u.id}?tab=auth`) : (done = { u, test }))" />
 </template>

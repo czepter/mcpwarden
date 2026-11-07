@@ -42,7 +42,7 @@ export const upstreamSchema = z.object({
   name: z.string().trim().min(1, 'Der Anzeigename darf nicht leer sein.'),
   slug: z.string().regex(SLUG_RE, 'Nur a–z, 0–9 und Bindestrich, nicht am Anfang, höchstens 32 Zeichen.'),
   url: z.string(), transport: z.enum(['auto', 'streamable', 'sse']),
-  authType: z.enum(['none', 'bearer', 'header']), authHeaderName: z.string(), secret: z.string(),
+  authType: z.enum(['none', 'bearer', 'header', 'oauth']), authHeaderName: z.string(), secret: z.string(),
   command: z.string(), args: z.string(), cwd: z.string(),
   ratePerMin: posInt('Aufrufe pro Minute'), maxConcurrent: posInt('Parallel'),
   connectS: posInt('Verbinden'), listS: posInt('Liste'), callS: posInt('Aufruf'),

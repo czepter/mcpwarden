@@ -9,6 +9,7 @@ import { IpcTransport } from './stdio/ipc-transport'
 import { SessionCache } from './stdio/session-cache'
 import { SupervisorClient, type WorkerSession } from './stdio/supervisor-client'
 import { stdioPolicy, type StdioReason } from './stdio/policy'
+import { OAuthVault } from './upstream/oauth'
 import { GatewayRepo } from './upstream/repo'
 import type { UpstreamRow } from './upstream/types'
 import { getDb } from '../db'
@@ -20,6 +21,7 @@ import { getConfig } from '../utils/config'
 import { notifyToolsChanged } from '../mcp/notify'
 import { registerGatewayLifecycle } from './lifecycle'
 import { registerLifecycleHandler } from '../utils/user-lifecycle'
+import { UPSTREAM_OAUTH_CALLBACK_PATH } from '../../shared/api-types'
 import { revokeOAuthGrantsOfUser, revokePatsOfUser } from '../auth/pat-store'
 
 export type Runtime = {
@@ -74,6 +76,7 @@ async function create(): Promise<Runtime> {
   const gw = createGateway({
     store: repo,
     masterKey: getMasterKey(),
+    oauth: { vault: new OAuthVault(repo, getMasterKey()), redirectUrl: new URL(UPSTREAM_OAUTH_CALLBACK_PATH, cfg.baseUrl).href },
     getAllow: async () => (await settings()).allow,
     statsWrite: rows => repo.writeStats(rows),
     notifyChanged: notifyToolsChanged,
