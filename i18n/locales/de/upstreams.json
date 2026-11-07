@@ -140,7 +140,7 @@
     },
     "form": {
       "type": "Typ",
-      "stdioHint": "Lokaler Befehl, braucht Freigabe",
+      "stdioHint": "Lokaler Befehl, z. B. npx oder uvx, braucht Freigabe",
       "stdioBlocked": "stdio ist gesperrt: {reason}",
       "name": "Anzeigename",
       "slug": "Kurzname",
@@ -155,7 +155,6 @@
       "secretUnset": "Wird verschlüsselt gespeichert und nie wieder angezeigt.",
       "command": "Befehl",
       "args": "Argumente",
-      "argsDesc": "Ein Argument pro Zeile.",
       "cwd": "Arbeitsordner",
       "cwdDesc": "Relativ zum Nutzerverzeichnis, ohne „..“.",
       "advanced": "Erweitert: Limits und Timeouts",
@@ -175,7 +174,16 @@
         "no_dcr": "Der Server bietet OAuth ohne automatische Registrierung an. Das wird noch nicht unterstützt, nimm Bearer oder Header.",
         "none": "Kein OAuth gefunden. Wähle Keine, Bearer oder Header.",
         "error": "OAuth konnte nicht geprüft werden. Du kannst die Anmeldung trotzdem selbst wählen."
-      }
+      },
+      "typeCommand": "Befehl",
+      "remove": "Entfernen",
+      "addArg": "Argument hinzufügen",
+      "env": "Umgebungsvariablen",
+      "envName": "Variablenname",
+      "envValue": "Wert",
+      "addEnv": "Variable hinzufügen",
+      "envDesc": "Werden an den Befehl übergeben. Werte werden als Geheimnisse gespeichert.",
+      "envDescEdit": "Werte werden nie angezeigt. Leer lassen behält den Wert; neue Werte ersetzen den gespeicherten."
     },
     "oauth": {
       "badge": "Verbunden",

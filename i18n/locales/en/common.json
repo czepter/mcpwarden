@@ -200,7 +200,8 @@
         "connect": "Connect",
         "list": "List",
         "call": "Call"
-      }
+      },
+      "envName": "Variable names may only contain letters, digits and underscores."
     }
   }
 }

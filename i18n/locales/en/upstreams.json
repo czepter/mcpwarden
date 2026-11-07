@@ -140,7 +140,7 @@
     },
     "form": {
       "type": "Type",
-      "stdioHint": "Local command, requires approval",
+      "stdioHint": "Local command, e.g. npx or uvx, requires approval",
       "stdioBlocked": "stdio is blocked: {reason}",
       "name": "Display name",
       "slug": "Short name",
@@ -155,7 +155,6 @@
       "secretUnset": "Stored encrypted and never shown again.",
       "command": "Command",
       "args": "Arguments",
-      "argsDesc": "One argument per line.",
       "cwd": "Working directory",
       "cwdDesc": "Relative to the user directory, without “..”.",
       "advanced": "Advanced: limits and timeouts",
@@ -175,7 +174,16 @@
         "no_dcr": "The server offers OAuth without automatic registration. That is not supported yet, use Bearer or Header.",
         "none": "No OAuth found. Choose None, Bearer or Header.",
         "error": "OAuth could not be checked. You can still pick the sign-in yourself."
-      }
+      },
+      "typeCommand": "Command",
+      "remove": "Remove",
+      "addArg": "Add argument",
+      "env": "Environment variables",
+      "envName": "Variable name",
+      "envValue": "Value",
+      "addEnv": "Add variable",
+      "envDesc": "Passed to the command. Values are stored as secrets.",
+      "envDescEdit": "Values are never shown. Leave a value empty to keep it; new values replace the stored one."
     },
     "oauth": {
       "badge": "Connected",
