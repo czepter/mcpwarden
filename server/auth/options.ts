@@ -9,6 +9,7 @@ import { dcrAfter, dcrBefore, type DcrDeps } from './dcr-hook'
 import { CLIENT_IP_HEADER } from '../utils/client-ip'
 import { isBlockedOverHttp } from './http-guard'
 import { consentGuard, mcpPlugins, mcpResource, oauthRequestRewrite } from './mcp-plugin'
+import { consentOnApprove, DEVICE_APPROVE_PATH, DEVICE_CODE_PATH, fillDeviceDefaults } from './device'
 
 export interface AuthDeps {
   baseUrl: string
@@ -83,6 +84,9 @@ export function buildAuthOptions(d: AuthDeps) {
       customRules: {
         '/sign-in/email': { window: 60, max: 10 },
         '/sign-up/email': { window: 60, max: 10 },
+        '/device/code': { window: 60, max: 10 },
+        '/device/approve': { window: 60, max: 10 },
+        '/device/deny': { window: 60, max: 10 },
       },
     },
     hooks: {
@@ -104,6 +108,12 @@ export function buildAuthOptions(d: AuthDeps) {
       }),
       after: createAuthMiddleware(async (ctx) => {
         if (d.dcr) await dcrAfter(ctx.path, ctx.body, ctx.context.returned, d.dcr)
+        if (ctx.path === DEVICE_CODE_PATH) await fillDeviceDefaults(ctx.context.adapter, ctx.context.returned, resource)
+        // `returned` is an APIError when the approval failed
+        if (ctx.path === DEVICE_APPROVE_PATH && !(ctx.context.returned instanceof Error)) {
+          const userCode = (ctx.body as { userCode?: unknown } | null)?.userCode
+          if (typeof userCode === 'string') await consentOnApprove(ctx.context.adapter, userCode)
+        }
         // An entry in `claimed` survives only if creation failed after claiming (`user.create.after` otherwise cleans it up):
         // release the invitation again, otherwise it is burned for the invitee.
         if (ctx.path === '/sign-up/email') {

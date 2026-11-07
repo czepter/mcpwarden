@@ -20,6 +20,16 @@ export const oauthHandlers = [
     }
     return json(info)
   }),
+  // Device grant (RFC 8628 verification). Codes: ZZZZZZZZ invalid, EEEEEEEE expired, OOOOOOOO claimed by another account; anything else is pending.
+  route('get', '/api/auth/device', ({ request }) => {
+    const c = new URL(request.url).searchParams.get('user_code') ?? ''
+    if (c === 'ZZZZZZZZ') return json({ error: 'invalid_request', error_description: 'Invalid user code' }, 400)
+    if (c === 'EEEEEEEE') return json({ error: 'expired_token', error_description: 'User code has expired' }, 400)
+    if (c === 'OOOOOOOO') return json({ user_code: c, status: 'pending' })
+    return json({ user_code: c, status: 'pending', client_id: 'mcpwarden-cli', scope: 'openid offline_access mcp:tools', resource: 'https://mcp.example.test/mcp' })
+  }),
+  route('post', '/api/auth/device/approve', () => json({ success: true })),
+  route('post', '/api/auth/device/deny', () => json({ success: true })),
   route('post', '/api/auth/oauth2/consent', async ({ request }) => {
     const b = await request.json().catch(() => ({})) as { accept?: boolean }
     return json({ redirectURI: b.accept ? '/consent?done=granted' : '/consent?done=denied' })

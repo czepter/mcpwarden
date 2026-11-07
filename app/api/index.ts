@@ -1,11 +1,11 @@
 import type {
   AdminUserLimitsInput, AdminSettings, AdminSettingsResult, AdminUserList, AllowlistEntry, AllowlistInput, AllowlistList,
-  AuditList, AuthSession, Capabilities, PublicConfig, MeSettings, ConnectionList, ConsentInfo, Dashboard, DcrMode, DcrPolicy, InviteInfo, InviteCreated,
+  AuditList, AuthSession, DeviceVerification, Capabilities, PublicConfig, MeSettings, ConnectionList, ConsentInfo, Dashboard, DcrMode, DcrPolicy, InviteInfo, InviteCreated,
   InviteList, LinkInfo, LinkTestResult, OAuthClientAdminList, PatCreateInput, PatCreated, PatList, SecretInput, SecretResult,
   StatsSummary, StatsWindow, StdioDraft, UpstreamAuthProbe, UpstreamOAuthStart, UpstreamTestResult, UpstreamToolList, UpstreamDetail, UpstreamInput, UpstreamList, UpstreamPatch, UpstreamToolItem, AdminUser,
 } from '#shared/api-types'
 import { API_PATHS } from '#shared/api-types'
-import { del, get, http, patch, post, put } from './http'
+import { ApiError, del, get, http, patch, post, put } from './http'
 
 const enc = encodeURIComponent
 
@@ -31,6 +31,25 @@ export const oauthApi = {
   // Better Auth oauth2.consent (verified against the real backend by tests/smoke and tests/integration/oauth); the server grants only the chosen scopes.
   consent: (accept: boolean, scope: string[], query: string) =>
     post<{ redirectURI?: string, url?: string }>('/api/auth/oauth2/consent', { accept, scope: scope.join(' '), oauth_query: query.replace(/^\?/, '') }),
+}
+
+// Device grant endpoints of Better Auth (RFC 8628 error format `{ error, error_description }`, hence not the shared `http`).
+async function deviceCall<T>(method: string, path: string, body?: unknown): Promise<T> {
+  const res = await fetch(path, {
+    method, credentials: 'same-origin',
+    headers: { accept: 'application/json', ...(body !== undefined ? { 'content-type': 'application/json' } : {}) },
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+  })
+  const j = await res.json().catch(() => undefined) as { error?: string, error_description?: string, code?: string, message?: string } | undefined
+  if (!res.ok) throw new ApiError(res.status, j?.error ?? j?.code ?? 'unknown', j?.error_description ?? j?.message ?? `HTTP ${res.status}`)
+  return j as T
+}
+
+export const deviceApi = {
+  // Looking a code up binds it to the signed-in user (only that user may approve it).
+  lookup: (userCode: string) => deviceCall<DeviceVerification>('GET', `/api/auth/device?user_code=${enc(userCode)}`),
+  approve: (userCode: string) => deviceCall<{ success: boolean }>('POST', '/api/auth/device/approve', { userCode }),
+  deny: (userCode: string) => deviceCall<{ success: boolean }>('POST', '/api/auth/device/deny', { userCode }),
 }
 
 export const meApi = {

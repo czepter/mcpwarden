@@ -57,9 +57,11 @@
  *    returns 400.
  */
 import { mcp } from '@better-auth/mcp'
+import { oauthDeviceAuthorization } from '@better-auth/oauth-provider'
 import { APIError } from 'better-auth/api'
 import { jwt } from 'better-auth/plugins'
 import { buildConsentScopes, validateAcceptedScopes } from './consent'
+import { assertDeviceClient, DEVICE_CODE_TTL, DEVICE_POLL_INTERVAL, USER_CODE_LENGTH } from './device'
 import { ACCESS_TOKEN_TTL_SECONDS, parseScopeString, REFRESH_TOKEN_TTL_SECONDS, SCOPES_SUPPORTED } from './scopes'
 
 export function mcpResource(baseUrl: string): string {
@@ -81,6 +83,15 @@ export function mcpPlugins(baseUrl: string) {
       allowDynamicClientRegistration: true,
       allowUnauthenticatedClientRegistration: true,
       clientRegistrationDefaultApplicationType: 'infer',
+    }),
+    // RFC 8628 for headless sessions, first-party client only (server/auth/device.ts). The verification page is the UI (`/device`),
+    // not the API endpoint of the same name below the base path, hence an absolute URL.
+    oauthDeviceAuthorization({
+      expiresIn: DEVICE_CODE_TTL,
+      interval: DEVICE_POLL_INTERVAL,
+      userCodeLength: USER_CODE_LENGTH,
+      verificationUri: new URL('/device', baseUrl).href,
+      onDeviceAuthRequest: assertDeviceClient,
     }),
   ] as const
 }
