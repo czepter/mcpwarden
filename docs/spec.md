@@ -26,6 +26,9 @@ Changes vs. v0.3 (based on `docs/plans/review.md`):
 Changes vs. v0.2: LLM-assisted routing is now a goal (no longer a non-goal); upstreams can be created via MCP itself, secrets and OAuth go through a link into the web UI (never through the chat); upstream OAuth is therefore P0.
 Changes vs. v0.1: remote hosting in Docker, gateway as an OAuth 2.1 provider (Better Auth) for end users, user-scoped data, meta-tool mode, security model for public reachability.
 
+> **Update 2026-11-08:** the former non-goals tags, device names, "Alle testen" (UI), mcpServers JSON import, REST upstream type, meta-tool mode as per-user setting, dark mode, account self-deletion and the e-mail notifications "new client" and "weekly summary" are implemented (migrations 0011, 0012). Statements below that exclude them are superseded.
+
+
 ## Problem statement
 
 Every coding tool (Claude Code, Cursor, Claude Desktop/Web, …) maintains its own list of MCP servers with its own auth (stdio env secrets, Bearer, OAuth). A new server or a rotated token means updating everywhere. Secrets are scattered in plaintext configs. Many active tools bloat the context of every client. Local stdio servers exist only on the respective machine, not on all devices.

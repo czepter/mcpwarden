@@ -14,7 +14,7 @@ import type { StatsWindow } from '#shared/api-types'
 import { Alert } from '~/components/ui/alert'
 import { Button } from '~/components/ui/button'
 import { Input } from '~/components/ui/input'
-import { Switch } from '~/components/ui/switch'
+import { Checkbox } from '~/components/ui/checkbox'
 
 definePageMeta({ middleware: 'admin' })
 const { t } = useI18n()
@@ -44,11 +44,35 @@ const removeEntry = (e: string) => put({ 'ssrf.allow': (data.value?.['ssrf.allow
 </script>
 
 <template>
-  <PageHeader :title="$t('admin.title')" />
+  <PageHeader :title="$t('admin.title')" :crumbs="[{ label: $t('admin.title') }]" :crumb="$t('common.adminTabs.instance')" :description="$t('common.adminTabs.hint')" data-testid="admin-hint" />
   <AdminTabs />
   <LoadingRows v-if="status === 'pending' && !data" />
   <ErrorState v-else-if="error" :error="error" @retry="refresh()" />
-  <div v-else-if="data" class="flex flex-col gap-4">
+  <div v-else-if="data" class="flex flex-col gap-8">
+    <section class="flex max-w-[720px] flex-col gap-3" aria-labelledby="h-instance">
+      <h2 id="h-instance" class="text-base font-semibold">{{ $t('admin.settings.instanceTitle') }}</h2>
+      <div class="flex flex-col rounded-lg border bg-card px-5 py-2">
+        <label class="flex min-h-16 cursor-pointer items-center justify-between gap-4 border-b border-muted py-2">
+          <span><span class="block font-medium">{{ $t('admin.settings.stdioTitle') }}</span><span class="block text-[13px] text-secondary-foreground">{{ $t('admin.settings.stdioDesc') }}</span></span>
+          <Checkbox id="sw-stdio" class="size-5 shrink-0" :model-value="data['stdio.enabled']" @update:model-value="(v) => put({ 'stdio.enabled': v === true })" />
+        </label>
+        <div class="py-3" aria-labelledby="h-ssrf">
+          <h3 id="h-ssrf" class="font-medium">{{ $t('admin.settings.ssrfTitle') }}</h3>
+          <p class="mb-3 text-[13px] text-secondary-foreground">{{ $t('admin.settings.ssrfDesc') }}</p>
+          <Alert v-for="w in warnings" :key="w" role="alert" class="mb-2 border-warn-border bg-warn-bg text-[13px] text-warn-fg">{{ $t('admin.settings.metadataWarning', { entry: w }) }}</Alert>
+          <ul v-if="data['ssrf.allow'].length" class="mb-3 divide-y rounded-sm border">
+            <li v-for="e in data['ssrf.allow']" :key="e" class="flex min-h-11 items-center justify-between px-3"><code class="mono text-xs">{{ e }}</code><Button variant="ghost" :aria-label="$t('admin.settings.removeExceptionAria', { entry: e })" @click="removeEntry(e)">{{ $t('admin.settings.remove') }}</Button></li>
+          </ul>
+          <p v-else class="mb-3 text-[13px]">{{ $t('admin.settings.noExceptions') }}</p>
+          <form class="flex gap-2" novalidate @submit.prevent="addEntry">
+            <div class="flex-1"><label for="ssrf-new" class="sr-only">{{ $t('admin.settings.newException') }}</label><Input id="ssrf-new" v-model="entry" class="mono" :placeholder="$t('admin.settings.placeholder')" :aria-invalid="!!entryError || undefined" aria-describedby="ssrf-err" /><p id="ssrf-err" role="alert" class="mt-1 text-sm text-destructive">{{ entryError }}</p></div>
+            <Button type="submit" variant="outline">{{ $t('admin.settings.addEntry') }}</Button>
+          </form>
+        </div>
+        <p class="border-t border-muted py-3 text-[13px] text-secondary-foreground">{{ $t('admin.settings.registrationNote') }}</p>
+      </div>
+    </section>
+
     <section class="flex flex-col gap-3" aria-labelledby="h-usage">
       <div class="flex flex-wrap items-center justify-between gap-2"><h2 id="h-usage" class="text-base font-semibold">{{ $t('admin.settings.usageTitle') }}</h2><TimeWindow v-model="win" /></div>
       <p class="text-[13px] text-muted-foreground">{{ $t('admin.settings.usageDesc') }}</p>
@@ -68,28 +92,5 @@ const removeEntry = (e: string) => put({ 'ssrf.allow': (data.value?.['ssrf.allow
         <p v-if="stats.data.value.statsDropped" role="status" class="text-[13px] text-warn-fg">{{ $t('admin.settings.usageDropped', { n: formatNumber(stats.data.value.statsDropped) }) }}</p>
       </template>
     </section>
-    <div class="flex max-w-[720px] flex-col gap-4">
-    <section class="rounded-lg border bg-card p-5" aria-labelledby="h-stdio">
-      <div class="flex items-start justify-between gap-4">
-        <div><h2 id="h-stdio" class="text-base font-semibold"><label for="sw-stdio">{{ $t('admin.settings.stdioTitle') }}</label></h2>
-          <p class="text-[13px] text-muted-foreground">{{ $t('admin.settings.stdioDesc') }}</p></div>
-        <Switch id="sw-stdio" :model-value="data['stdio.enabled']" @update:model-value="(v) => put({ 'stdio.enabled': v })" />
-      </div>
-    </section>
-    <section class="rounded-lg border bg-card p-5" aria-labelledby="h-ssrf">
-      <h2 id="h-ssrf" class="text-base font-semibold">{{ $t('admin.settings.ssrfTitle') }}</h2>
-      <p class="mb-3 text-[13px] text-muted-foreground">{{ $t('admin.settings.ssrfDesc') }}</p>
-      <Alert v-for="w in warnings" :key="w" role="alert" class="mb-2 border-warn-border bg-warn-bg text-[13px] text-warn-fg">{{ $t('admin.settings.metadataWarning', { entry: w }) }}</Alert>
-      <ul v-if="data['ssrf.allow'].length" class="mb-3 divide-y rounded-sm border">
-        <li v-for="e in data['ssrf.allow']" :key="e" class="flex min-h-11 items-center justify-between px-3"><code class="text-xs">{{ e }}</code><Button variant="ghost" :aria-label="$t('admin.settings.removeExceptionAria', { entry: e })" @click="removeEntry(e)">{{ $t('admin.settings.remove') }}</Button></li>
-      </ul>
-      <p v-else class="mb-3 text-[13px]">{{ $t('admin.settings.noExceptions') }}</p>
-      <form class="flex gap-2" novalidate @submit.prevent="addEntry">
-        <div class="flex-1"><label for="ssrf-new" class="sr-only">{{ $t('admin.settings.newException') }}</label><Input id="ssrf-new" v-model="entry" class="mono" :placeholder="$t('admin.settings.placeholder')" :aria-invalid="!!entryError || undefined" aria-describedby="ssrf-err" /><p id="ssrf-err" role="alert" class="mt-1 text-sm text-destructive">{{ entryError }}</p></div>
-        <Button type="submit">{{ $t('admin.settings.addEntry') }}</Button>
-      </form>
-    </section>
-    <p class="text-[13px] text-muted-foreground">{{ $t('admin.settings.registrationNote') }}</p>
-    </div>
   </div>
 </template>

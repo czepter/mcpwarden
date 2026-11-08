@@ -77,11 +77,11 @@ describe('all GET routes: strict contract schemas', () => {
 describe('Mail notifications: setting and invitation sending', () => {
   const patch = (path: string, body: unknown) => fetch(`${BASE}${path}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
   it('Default on; PATCH toggles and persists; response matches the contract', async () => {
-    expect(await (await get('/api/me/settings')).json()).toEqual({ notifyStatusMail: true })
+    expect(await (await get('/api/me/settings')).json()).toEqual({ notifyStatusMail: true, notifyNewClient: true, notifyWeekly: false, toolMode: 'direct', theme: 'system' })
     const r = await patch('/api/me/settings', { notifyStatusMail: false })
     expect(r.status).toBe(200)
-    expect(schemas.meSettings.parse(await r.json())).toEqual({ notifyStatusMail: false })
-    expect(await (await get('/api/me/settings')).json()).toEqual({ notifyStatusMail: false })
+    expect(schemas.meSettings.parse(await r.json())).toEqual({ notifyStatusMail: false, notifyNewClient: true, notifyWeekly: false, toolMode: 'direct', theme: 'system' })
+    expect(await (await get('/api/me/settings')).json()).toEqual({ notifyStatusMail: false, notifyNewClient: true, notifyWeekly: false, toolMode: 'direct', theme: 'system' })
   })
   it('PATCH validates like the backend: non-boolean and unknown fields are 422', async () => {
     const bad = await patch('/api/me/settings', { notifyStatusMail: 'no' })

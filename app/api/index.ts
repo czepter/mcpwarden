@@ -3,6 +3,7 @@ import type {
   AuditList, AuthSession, DeviceVerification, Capabilities, PublicConfig, MeSettings, ConnectionList, ConsentInfo, Dashboard, DcrMode, DcrPolicy, InviteInfo, InviteCreated,
   InviteList, LinkInfo, LinkTestResult, OAuthClientAdminList, PatCreateInput, PatCreated, PatList, SecretInput, SecretResult,
   AdminStats, HealthHistory, UpstreamStats, StatsSummary, StatsWindow, StdioDraft, UpstreamAuthProbe, UpstreamOAuthStart, UpstreamTestResult, UpstreamToolList, UpstreamDetail, UpstreamInput, UpstreamList, UpstreamPatch, UpstreamToolItem, AdminUser,
+  UpstreamImportInput, UpstreamImportResult, UpstreamTagList,
 } from '#shared/api-types'
 import { API_PATHS } from '#shared/api-types'
 import { ApiError, del, get, http, patch, post, put } from './http'
@@ -29,6 +30,7 @@ export const publicApi = { config: () => http<PublicConfig>('GET', API_PATHS.pub
 export const oauthApi = {
   consentInfo: (query: string) => get<ConsentInfo>(`/api/oauth/consent-info${query}`),
   // Better Auth oauth2.consent (verified against the real backend by tests/smoke and tests/integration/oauth); the server grants only the chosen scopes.
+  consentDevice: (deviceName: string | null, query: string) => post<unknown>('/api/oauth/consent-device', { deviceName, oauth_query: query.replace(/^\?/, '') }),
   consent: (accept: boolean, scope: string[], query: string) =>
     post<{ redirectURI?: string, url?: string }>('/api/auth/oauth2/consent', { accept, scope: scope.join(' '), oauth_query: query.replace(/^\?/, '') }),
 }
@@ -56,11 +58,15 @@ export const meApi = {
   capabilities: () => get<Capabilities>(API_PATHS.capabilities),
   settings: () => get<MeSettings>(API_PATHS.meSettings),
   patchSettings: (b: Partial<MeSettings>) => patch<MeSettings>(API_PATHS.meSettings, b),
+  /** Self-deletion; wrong password is a 403 (not 401), so the session handler does not fire. */
+  deleteAccount: (b: { password: string, confirmEmail: string }) => http<undefined>('DELETE', '/api/me', { body: b }).then(() => undefined),
   pats: () => get<PatList>(API_PATHS.pats),
   createPat: (b: PatCreateInput) => post<PatCreated>(API_PATHS.pats, b),
   revokePat: (id: string) => del(`${API_PATHS.pats}/${enc(id)}`),
+  renamePat: (id: string, deviceName: string | null) => patch<unknown>(`${API_PATHS.pats}/${enc(id)}`, { deviceName }),
   connections: () => get<ConnectionList>(API_PATHS.connections),
   revokeConnection: (clientId: string) => del(`${API_PATHS.connections}/${enc(clientId)}`),
+  renameConnection: (clientId: string, deviceName: string | null) => patch<unknown>(`${API_PATHS.connections}/${enc(clientId)}`, { deviceName }),
 }
 
 export const upstreamApi = {
@@ -72,6 +78,8 @@ export const upstreamApi = {
   patch: (id: string, b: UpstreamPatch) => patch<UpstreamDetail>(`${API_PATHS.upstreams}/${enc(id)}`, b),
   remove: (id: string) => del(`${API_PATHS.upstreams}/${enc(id)}`),
   putSecret: (id: string, b: SecretInput) => put<SecretResult>(`${API_PATHS.upstreams}/${enc(id)}/secret`, b),
+  tags: () => get<UpstreamTagList>(`${API_PATHS.upstreams}/tags`),
+  importJson: (b: UpstreamImportInput) => post<UpstreamImportResult>(`${API_PATHS.upstreams}/import`, b),
   probe: (url: string) => post<UpstreamAuthProbe>(`${API_PATHS.upstreams}/probe`, { url }),
   oauthStart: (id: string) => post<UpstreamOAuthStart>(`${API_PATHS.upstreams}/${enc(id)}/oauth/start`),
   oauthDisconnect: (id: string) => del(`${API_PATHS.upstreams}/${enc(id)}/oauth`),

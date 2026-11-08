@@ -36,10 +36,20 @@ export const oauthConnectionUse = pgTable('oauth_connection_use', {
   lastUsedAt: timestamp('last_used_at', { withTimezone: true }).notNull(),
 }, t => [primaryKey({ columns: [t.userId, t.clientId] })])
 
+/** Optional device label of an OAuth connection (user + client), e.g. derived from the user agent at consent. */
+export const oauthConnectionDevice = pgTable('oauth_connection_device', {
+  userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
+  clientId: text('client_id').notNull().references(() => oauthClient.clientId, { onDelete: 'cascade' }),
+  deviceName: text('device_name').notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, t => [primaryKey({ columns: [t.userId, t.clientId] })])
+
 export const personalAccessToken = pgTable('personal_access_token', {
   id: uuid('id').primaryKey().defaultRandom(),
   userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
   name: text('name').notNull(),
+  /** Optional device label entered at creation (max 64 characters). */
+  deviceName: text('device_name'),
   tokenHash: text('token_hash').notNull().unique(),
   prefix: text('prefix').notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),

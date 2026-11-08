@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { SidebarInset, SidebarProvider } from '~/components/ui/sidebar'
 import AppSidebar from '~/components/shell/AppSidebar.vue'
+import { meApi } from '~/api'
 
 // Mock banner only in the mock build: __API_MOCK__ is a compile-time constant, in the production build the branch is dropped together with the chunk.
 const MockBanner = __API_MOCK__ ? defineAsyncComponent(() => import('~/components/shell/MockBanner.vue')) : undefined
@@ -10,6 +11,10 @@ const MockBanner = __API_MOCK__ ? defineAsyncComponent(() => import('~/component
 // Without an own cookie the setting "collapsed by default" applies (Settings > Appearance).
 const state = useCookie('sidebar_state')
 const collapsedDefault = useCookie('sidebar_default_collapsed')
+// The server-side appearance is the source of truth (new device or browser): mirror it into cookie and class once per session.
+const { setTheme } = useTheme()
+const { data: myPrefs } = useApi('me-settings', meApi.settings)
+watch(() => myPrefs.value?.theme, (t) => { if (t) setTheme(t) })
 const defaultOpen = state.value == null ? String(collapsedDefault.value) !== 'true' : String(state.value) !== 'false'
 </script>
 

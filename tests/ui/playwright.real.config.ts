@@ -13,6 +13,7 @@ export default defineConfig({
   timeout: 60_000,
   workers: 1,
   use: {
+    locale: 'de-DE', // the UI defaults to English; the specs assert German (same as the mock config)
     baseURL: BASE,
     // PW_CHROMIUM_PATH: optional path to a preinstalled Chromium (e.g. in sandboxes without `playwright install`).
     launchOptions: process.env.PW_CHROMIUM_PATH ? { executablePath: process.env.PW_CHROMIUM_PATH, args: ['--no-sandbox'] } : {},

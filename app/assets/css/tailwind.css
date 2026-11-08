@@ -5,8 +5,9 @@
 
 @custom-variant dark (&:is(.dark *));
 
-/* Tokens: hex values of the drafts (docs/plans/frontend.md, section 7). Dark mode follows after phase 2. */
+/* Tokens: hex values of the drafts (docs/plans/frontend.md, section 7). The dark set below follows the same names (zinc ground, indigo accent). */
 :root {
+  color-scheme: light;
   --radius: 0.625rem;
   --background: #f4f4f5;
   --foreground: #18181b;
@@ -57,7 +58,58 @@
   --st-unknown-bg: #f4f4f5; --st-unknown-fg: #3f3f46; --st-unknown-dot: #71717a; --st-unknown-bar: #e4e4e7;
 }
 
-.dark { /* placeholder: values follow after phase 2 (decision 8) */ }
+.dark {
+  /* Dark set. Text pairs checked for WCAG AA (4.5:1): foreground/card #fafafa/#18181b, muted-foreground #a1a1aa on #18181b and #27272a,
+     primary #818cf8 as text on #18181b and as ground behind #18181b text, status fg on its own tint (>= 7:1), white on #b91c1c (nav badge, destructive). */
+  color-scheme: dark;
+  --background: #09090b;
+  --foreground: #fafafa;
+  --card: #18181b;
+  --card-foreground: #fafafa;
+  --popover: #18181b;
+  --popover-foreground: #fafafa;
+  --primary: #818cf8;
+  --primary-foreground: #18181b;
+  --primary-tint: #1e1b4b;
+  --secondary: #27272a;
+  --secondary-foreground: #d4d4d8;
+  --muted: #27272a;
+  --muted-foreground: #a1a1aa;
+  --accent: #27272a;
+  --accent-foreground: #fafafa;
+  --destructive: #f87171;
+  --destructive-soft: #b91c1c;
+  --destructive-border: #7f1d1d;
+  --border: #27272a;
+  --input: #3f3f46;
+  --input-strong: #71717a;
+  --ring: #818cf8;
+  --table-head: #1c1c1f;
+  --nav-badge: #b91c1c;
+  --chart-1: #60a5fa;
+  --chart-2: #fbbf24;
+  --chart-3: #a1a1aa;
+  --chart-4: #4ade80;
+  --chart-5: #f87171;
+  --sidebar: #18181b;
+  --sidebar-foreground: #d4d4d8;
+  --sidebar-primary: #818cf8;
+  --sidebar-primary-foreground: #18181b;
+  --sidebar-accent: #27272a;
+  --sidebar-accent-foreground: #fafafa;
+  --sidebar-border: #27272a;
+  --sidebar-ring: #818cf8;
+  --warn-bg: #451a03; --warn-fg: #fde68a; --warn-border: #92400e;
+  --ok-bg: #052e16; --ok-fg: #bbf7d0; --ok-border: #166534;
+  --err-bg: #450a0a; --err-fg: #fecaca; --err-border: #7f1d1d;
+  --avatar-fg: #e4e4e7;
+  --st-healthy-bg: #052e16; --st-healthy-fg: #86efac; --st-healthy-dot: #4ade80; --st-healthy-bar: #22c55e;
+  --st-degraded-bg: #451a03; --st-degraded-fg: #fcd34d; --st-degraded-dot: #fbbf24; --st-degraded-bar: #f59e0b;
+  --st-open-bg: #450a0a; --st-open-fg: #fca5a5; --st-open-dot: #f87171; --st-open-bar: #ef4444;
+  --st-auth_expired-bg: #172554; --st-auth_expired-fg: #93c5fd; --st-auth_expired-dot: #60a5fa; --st-auth_expired-bar: #3b82f6;
+  --st-disabled-bg: #27272a; --st-disabled-fg: #d4d4d8; --st-disabled-dot: #a1a1aa; --st-disabled-bar: #3f3f46;
+  --st-unknown-bg: #27272a; --st-unknown-fg: #d4d4d8; --st-unknown-dot: #a1a1aa; --st-unknown-bar: #3f3f46;
+}
 
 @theme inline {
   --color-background: var(--background);

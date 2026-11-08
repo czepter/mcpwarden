@@ -78,6 +78,20 @@
       "when": 1794081674311,
       "tag": "0010_device_code",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1794125426296,
+      "tag": "0011_features_tags_rest_prefs_devices",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1794125730803,
+      "tag": "0012_weekly_digest_marker",
+      "breakpoints": true
     }
   ]
 }

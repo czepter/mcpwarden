@@ -14,6 +14,17 @@
     "home": "Home",
     "openNavigation": "Open navigation",
     "sidebar": "Sidebar",
+    "device": {
+      "title": "Rename device: {name}",
+      "desc": "The name appears in the dashboard and clients. Leave empty to remove it.",
+      "label": "Device name",
+      "placeholder": "for example MacBook Pro",
+      "save": "Save",
+      "saved": "Device name saved.",
+      "failed": "The device name could not be saved.",
+      "edit": "Rename device: {name}"
+    },
+    "collapse": "Collapse",
     "collapseSidebar": "Collapse sidebar",
     "expandSidebar": "Expand sidebar",
     "mainNav": "Main navigation",
@@ -41,7 +52,7 @@
       "users": "Users",
       "oauth": "Clients (DCR)",
       "instance": "Instance",
-      "hint": "You only see metadata here. Users' contents and credentials are not visible to admins."
+      "hint": "You only see metadata here, never secrets or call contents of other users."
     },
     "pageError": {
       "notFoundTitle": "Page not found",
@@ -63,7 +74,11 @@
       "oneMinute": "1 min"
     },
     "timeWindow": {
-      "label": "Time window"
+      "label": "Time window",
+      "last5m": "Last 5 minutes",
+      "last1h": "Last hour",
+      "last24h": "Last 24 hours",
+      "last7d": "Last 7 days"
     },
     "oneTimeSecret": {
       "hint": "You only see this value now. It can't be retrieved afterwards."

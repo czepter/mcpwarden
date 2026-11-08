@@ -2,7 +2,7 @@
 import { publicApi } from '~/api'
 import SignUpForm from '~/components/access/SignUpForm.vue'
 
-definePageMeta({ layout: 'auth' })
+definePageMeta({ layout: 'auth', pageTransition: false })
 const { t } = useI18n()
 useHead({ title: () => t('auth.register.docTitle') })
 const { load } = useSessionUser()

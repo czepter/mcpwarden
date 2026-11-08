@@ -17,7 +17,7 @@ import type { StatsSummary } from '#shared/api-types'
 
 /** Name of the built-in statistics tool; it has no `__`, so it can never collide with `<slug>__<tool>`. */
 export const GET_STATS_TOOL = 'get_stats'
-const GET_STATS_DEF: ToolDef = {
+export const GET_STATS_DEF: ToolDef = {
   name: GET_STATS_TOOL,
   description: 'Statistics of your own tool calls through mcpwarden: number of calls, success rate, results per status and latency percentiles (p5/p50/p75/p95/p99, gateway overhead) per upstream. Metadata only, never contents.',
   inputSchema: {

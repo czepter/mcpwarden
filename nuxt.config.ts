@@ -37,7 +37,14 @@ export default defineNuxtConfig({
     },
   },
   shadcn: { prefix: '', componentDir: './app/components/ui' },
-  app: { head: { title: 'mcpwarden' }, pageTransition: { name: 'page', mode: 'out-in' } },
+  app: {
+    head: {
+      title: 'mcpwarden',
+      // Theme before the first paint (no flash): reads the cookie `mcpw_theme` (see composables/useTheme.ts); 'system' follows prefers-color-scheme.
+      script: [{ innerHTML: '(function(){try{var m=document.cookie.match(/(?:^|; )mcpw_theme=([^;]*)/);var t=m?decodeURIComponent(m[1]).replace(/"/g,\'\'):\'system\';var d=t===\'dark\'||(t!==\'light\'&&matchMedia(\'(prefers-color-scheme: dark)\').matches);document.documentElement.classList.toggle(\'dark\',d)}catch(e){}})()', tagPosition: 'head' }],
+    },
+    pageTransition: { name: 'page', mode: 'out-in' },
+  },
   // English is the default; German is the second locale. No URL prefix: the locale comes from a cookie, then the browser language.
   i18n: {
     defaultLocale: 'en',

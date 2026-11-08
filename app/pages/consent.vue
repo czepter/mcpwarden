@@ -11,7 +11,7 @@ import { Switch } from '~/components/ui/switch'
 import { FEATURES } from '~/lib/features'
 import { scopeLabel } from '~/lib/labels'
 
-definePageMeta({ layout: 'auth' })
+definePageMeta({ layout: 'auth-card' })
 const { t } = useI18n()
 useHead({ title: () => t('auth.consent.docTitle'), meta: [{ name: 'robots', content: 'noindex' }] })
 const route = useRoute()
@@ -37,10 +37,13 @@ const required = computed(() => info.value?.scopes.filter(s => s.required && s.n
 const unknown = computed(() => info.value && !info.value.client.allowlisted)
 const canAllow = computed(() => !unknown.value || confirmed.value)
 
+const deviceName = ref('')
+watch(info, (i) => { if (i && !deviceName.value) deviceName.value = i.suggestedDeviceName ?? '' }, { immediate: true })
 async function decide(accept: boolean) {
   busy.value = true; failure.value = ''
   try {
     const scopes = [...required.value.map(s => s.name), ...(adminScope.value && adminOn.value ? ['mcpwarden:admin'] : [])]
+    if (accept) await oauthApi.consentDevice(deviceName.value.trim() || null, query.value).catch(() => {}) // optional label: never blocks the grant
     const r = await oauthApi.consent(accept, scopes, query.value)
     const target = r.redirectURI ?? r.url
     if (target) window.location.assign(target)
@@ -54,9 +57,12 @@ async function decide(accept: boolean) {
     <LoadingRows v-else-if="status === 'pending' && !info" :rows="4" />
     <ErrorState v-else-if="error" :error="error" @retry="refresh()" />
     <div v-else-if="info" class="flex flex-col gap-5">
-      <div>
-        <h1 class="text-lg font-semibold">{{ $t('auth.consent.title') }}</h1>
-        <div class="text-[13px] text-muted-foreground">{{ $t('auth.consent.signedInAs', { email: user?.email }) }}</div>
+      <div class="flex items-center gap-3">
+        <div class="flex size-11 shrink-0 items-center justify-center rounded-md bg-primary text-lg font-bold text-primary-foreground" aria-hidden="true">m</div>
+        <div>
+          <h1 class="text-lg font-semibold">{{ $t('auth.consent.title') }}</h1>
+          <div class="text-[13px] text-muted-foreground">{{ $t('auth.consent.signedInAs', { email: user?.email }) }}</div>
+        </div>
       </div>
       <Alert v-if="unknown" role="alert" class="border-warn-border bg-warn-bg text-warn-fg">
         <div class="font-semibold">{{ $t('auth.consent.unknownClient') }}</div>
@@ -96,6 +102,11 @@ async function decide(accept: boolean) {
         </ul>
         <p class="text-xs text-muted-foreground">{{ $t('auth.consent.stayLoggedIn') }}</p>
       </section>
+      <div class="flex flex-col gap-1.5">
+        <label for="consent-device" class="text-sm font-medium">{{ $t('auth.consent.deviceLabel') }}</label>
+        <input id="consent-device" v-model="deviceName" type="text" maxlength="64" autocomplete="off" class="h-11 rounded-md border bg-card px-3 text-sm" data-testid="consent-device">
+        <p class="text-xs text-muted-foreground">{{ $t('auth.consent.deviceHint') }}</p>
+      </div>
       <label v-if="unknown" class="flex min-h-11 cursor-pointer items-start gap-3 text-[13px]">
         <Checkbox v-model="confirmed" class="mt-0.5 size-5" :aria-label="$t('auth.consent.confirmWarning')" />
         <span>{{ $t('auth.consent.knowClient') }}</span>

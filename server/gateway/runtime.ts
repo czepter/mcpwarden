@@ -81,6 +81,7 @@ async function create(): Promise<Runtime> {
     statsWrite: rows => repo.writeStats(rows),
     statsRead: q => repo.statsSummary(q),
     notifyChanged: notifyToolsChanged,
+    getToolMode: userId => repo.getToolMode(userId),
     log,
     statusSink: {
       onChange: async (id, userId, s, prev) => {

@@ -17,6 +17,10 @@ import { createDummyUpstream } from './dummy-upstream'
 import { createGateway } from './handler'
 import { bindStreamControl, notifyToolsChanged } from './notify'
 import { getRuntime } from '../gateway/runtime'
+import { getMailer } from '../mail'
+import { createNewClientNotifier } from '../mail/notify'
+import { oauthClient } from '../db/schema/auth'
+import { eq } from 'drizzle-orm'
 import type { ToolSource } from './upstream-port'
 
 type Gateway = ReturnType<typeof createGateway>
@@ -63,8 +67,19 @@ async function create(): Promise<Gateway> {
     }
   }
 
+  // "New client connected" mail: fires on the first use row of (user, client); opt-out and address come from the DB in the background.
+  const newClientMail = createNewClientNotifier({
+    mailer: getMailer(),
+    baseUrl: cfg.baseUrl,
+    lookup: async (userId, clientId) => {
+      const rt = await getRuntime()
+      const [owner, prefs, [client]] = await Promise.all([rt.repo.getUserLite(userId), rt.repo.getPrefs(userId), db.select({ name: oauthClient.name }).from(oauthClient).where(eq(oauthClient.clientId, clientId))])
+      if (!owner || owner.banned) return null
+      return { email: owner.email, notify: prefs.notifyNewClient, clientName: client?.name ?? null }
+    },
+  })
   const authenticate = createAccessGuard({
-    resource, resourceMetadataUrl: resourceMetadataUrl(cfg.baseUrl), verifyAccessToken, store: createDrizzleAccessStore(db),
+    resource, resourceMetadataUrl: resourceMetadataUrl(cfg.baseUrl), verifyAccessToken, store: createDrizzleAccessStore(db, { onFirstConnection: (u, c) => { newClientMail.notify(u, c) } }),
     onError: e => console.error('[mcpwarden] access check failed:', e instanceof Error ? e.message : 'unknown'),
   })
   const gateway: Gateway = createGateway({

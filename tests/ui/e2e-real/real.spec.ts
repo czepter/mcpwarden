@@ -108,7 +108,7 @@ test('Upstream list: empty; create upstream via the UI (SSRF exception by the ad
   await page.goto('/upstreams')
   const row = page.getByRole('row').filter({ hasText: 'Fake MCP' })
   await expect(row).toBeVisible()
-  await expect(row.getByText('HTTP')).toBeVisible()
+  await expect(row.getByText('http', { exact: true })).toBeVisible()
   await axe(page)
   await page.getByRole('link', { name: /Fake MCP/ }).first().click()
   await expect(page.getByRole('heading', { name: 'Fake MCP', level: 1 })).toBeVisible()

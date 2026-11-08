@@ -11,11 +11,11 @@ export const buttonVariants = cva(
         default:
           "bg-primary text-primary-foreground hover:bg-primary/90",
         destructive:
-          "bg-destructive-soft text-white hover:bg-destructive/90 focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40 dark:bg-destructive/60",
+          "bg-destructive-soft text-white hover:bg-destructive-soft/90 focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40",
         outline:
           "border bg-card hover:bg-accent hover:text-accent-foreground",
         "destructive-outline":
-          "border border-destructive-border bg-card text-destructive hover:bg-red-50",
+          "border border-destructive-border bg-card text-destructive hover:bg-err-bg",
         secondary:
           "bg-secondary text-secondary-foreground hover:bg-secondary/80",
         ghost:

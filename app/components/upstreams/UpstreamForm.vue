@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import LoadingButton from '~/components/common/LoadingButton.vue'
-import type { Capabilities, UpstreamTestResult as TestResultT, UpstreamDetail } from '#shared/api-types'
+import type { Capabilities, RestToolInput, UpstreamTestResult as TestResultT, UpstreamDetail } from '#shared/api-types'
 import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { upstreamApi } from '~/api'
 import FormRow from '~/components/common/FormRow.vue'
@@ -14,9 +14,12 @@ import { Plus, X } from '@lucide/vue'
 import { stdioReasonLabel } from '~/lib/labels'
 import { useZodForm } from '~/lib/useZodForm'
 import { upstreamSchema } from '~/lib/zod-schemas'
+import ImportDialog from './ImportDialog.vue'
+import RestToolsEditor from './RestToolsEditor.vue'
 import SlugField from './SlugField.vue'
+import TagsInput from './TagsInput.vue'
 
-const props = defineProps<{ caps: Capabilities, initial?: UpstreamDetail }>()
+const props = defineProps<{ caps: Capabilities, initial?: UpstreamDetail, heading?: string }>()
 const emit = defineEmits<{ saved: [u: UpstreamDetail, test: TestResultT | null] }>()
 const edit = computed(() => !!props.initial)
 const d = props.caps.defaults
@@ -33,6 +36,13 @@ const KEYS = ['type', 'name', 'slug', 'url', 'transport', 'authType', 'authHeade
 const fv = reactive(Object.fromEntries(KEYS.map(k => [k, form.defineField(k)[0]]))) as unknown as Record<(typeof KEYS)[number], any>
 const err = (k: string) => (form.errors.value as Record<string, string | undefined>)[k]
 const advanced = ref(false)
+// Tags (free text, max 10) and import of an mcpServers JSON as an alternative to the form
+const tagList = ref<string[]>([...(i?.tags ?? [])])
+const { data: tagOptions } = useAsyncData('upstream-tags', () => upstreamApi.tags(), { server: false, lazy: true })
+const importOpen = ref(false)
+// REST: the tool definitions edited as a whole list (sent with create / patch)
+const restList = ref<RestToolInput[]>((i?.restTools ?? []).map(t => ({ name: t.name, description: t.description, method: t.method, urlTemplate: t.urlTemplate, inputSchema: t.inputSchema, headers: t.headers, bodyTemplate: t.bodyTemplate, enabled: t.enabled })))
+const restError = ref('')
 // stdio: arguments and environment variables as editable lists (values go to the encrypted secret store, never back to the browser)
 const argList = ref<string[]>([...(i?.args ?? [])])
 const envList = ref<Array<{ name: string, value: string }>>((i?.secretNames ?? []).map(name => ({ name, value: '' })))
@@ -76,9 +86,10 @@ const onSubmit = submit(async (v) => {
   if (v.type === 'stdio' && envNameError.value) return
   let test: TestResultT | null = null
   const body = {
-    name: v.name, ratePerMin: v.ratePerMin, maxConcurrent: v.maxConcurrent,
+    name: v.name, tags: tagList.value, ratePerMin: v.ratePerMin, maxConcurrent: v.maxConcurrent,
     timeouts: { connectMs: v.connectS * 1000, listMs: v.listS * 1000, callMs: v.callS * 1000 },
     ...(v.type === 'http' ? { url: v.url.trim(), transport: v.transport, authType: v.authType, authHeaderName: v.authType === 'header' ? v.authHeaderName : undefined } : {}),
+    ...(v.type === 'rest' ? { ...(v.url.trim() ? { url: v.url.trim() } : {}), authType: v.authType, authHeaderName: v.authType === 'header' ? v.authHeaderName : undefined, restTools: restList.value } : {}),
     ...(v.type === 'stdio' ? { command: v.command.trim(), args: argList.value.map(a => a.trim()).filter(Boolean), cwd: v.cwd || undefined, ...(envRows().length || i?.authType === 'env' ? { authType: 'env' as const } : {}) } : {}),
   }
   let u: UpstreamDetail
@@ -94,40 +105,50 @@ const onSubmit = submit(async (v) => {
 </script>
 
 <template>
-  <form class="flex max-w-[600px] flex-col gap-5 rounded-lg border bg-card p-5" novalidate @submit.prevent="onSubmit">
+  <form class="flex w-full max-w-[600px] flex-col gap-[22px] self-center rounded-lg border bg-card p-7" novalidate @submit.prevent="onSubmit">
+    <div v-if="heading" class="flex flex-col gap-0.5">
+      <NuxtLink to="/upstreams" class="text-[13px] text-secondary-foreground no-underline hover:underline">‹ {{ $t('upstreams.list.title') }}</NuxtLink>
+      <h1 class="mt-1 text-xl font-semibold tracking-tight">{{ heading }}</h1>
+    </div>
     <Alert v-if="formError" variant="destructive" role="alert"><AlertDescription>{{ formError }}</AlertDescription></Alert>
 
-    <fieldset v-if="!edit && stdioAvailable" class="flex flex-col gap-2">
+    <fieldset v-if="!edit" class="flex flex-col gap-2">
       <legend class="mb-1 text-sm font-medium">{{ $t('upstreams.form.type') }}</legend>
-      <RadioGroup v-model="fv.type" class="grid grid-cols-2 gap-2" :aria-label="$t('upstreams.form.type')">
+      <RadioGroup v-model="fv.type" class="grid gap-2" :class="stdioAvailable ? 'grid-cols-3' : 'grid-cols-2'" :aria-label="$t('upstreams.form.type')">
         <label class="flex min-h-14 cursor-pointer items-start gap-2 rounded-sm border px-3 py-2" :class="fv.type === 'http' ? 'border-primary bg-primary-tint' : ''"><RadioGroupItem value="http" class="mt-0.5" /><span class="flex flex-col"><span class="font-semibold">HTTP</span><span class="text-xs text-secondary-foreground">Streamable HTTP, SSE</span></span></label>
-        <label class="flex min-h-14 items-start gap-2 rounded-sm border px-3 py-2" :class="[fv.type === 'stdio' ? 'border-primary bg-primary-tint' : '', stdioBlocked ? 'cursor-not-allowed opacity-70' : 'cursor-pointer']">
-          <RadioGroupItem value="stdio" :disabled="stdioBlocked" class="mt-0.5" /><span class="flex flex-col"><span class="font-semibold">{{ $t('upstreams.form.typeCommand') }}</span><span class="text-xs text-secondary-foreground">{{ $t('upstreams.form.stdioHint') }}</span></span>
+        <label v-if="stdioAvailable" class="flex min-h-14 items-start gap-2 rounded-sm border px-3 py-2" :class="[fv.type === 'stdio' ? 'border-primary bg-primary-tint' : '', stdioBlocked ? 'cursor-not-allowed opacity-70' : 'cursor-pointer']">
+          <RadioGroupItem value="stdio" :disabled="stdioBlocked" class="mt-0.5" /><span class="flex flex-col"><span class="font-semibold">stdio</span><span class="text-xs text-secondary-foreground">{{ $t('upstreams.form.stdioHint') }}</span></span>
         </label>
+        <label class="flex min-h-14 cursor-pointer items-start gap-2 rounded-sm border px-3 py-2" :class="fv.type === 'rest' ? 'border-primary bg-primary-tint' : ''"><RadioGroupItem value="rest" class="mt-0.5" data-testid="type-rest" /><span class="flex flex-col"><span class="font-semibold">{{ $t('upstreams.rest.tile') }}</span><span class="text-xs text-secondary-foreground">{{ $t('upstreams.rest.tileHint') }}</span></span></label>
       </RadioGroup>
-      <p v-if="stdioBlocked" class="text-[13px] text-muted-foreground" data-testid="stdio-reason">{{ $t('upstreams.form.stdioBlocked', { reason: stdioReasonLabel(caps.stdio.reason ?? '') }) }}</p>
+      <p v-if="stdioBlocked && stdioAvailable" class="text-[13px] text-muted-foreground" data-testid="stdio-reason">{{ $t('upstreams.form.stdioBlocked', { reason: stdioReasonLabel(caps.stdio.reason ?? '') }) }}</p>
     </fieldset>
 
     <FormRow id="u-name" :label="$t('upstreams.form.name')" :error="err('name')"><template #default="{ id, invalid, describedby }"><Input :id="id" v-model="fv.name" :aria-invalid="invalid || undefined" :aria-describedby="describedby" /></template></FormRow>
     <FormRow id="u-slug" :label="$t('upstreams.form.slug')" :description="$t('upstreams.form.slugDesc')" :error="err('slug')">
       <template #default="{ id, invalid, describedby }"><SlugField :id="id" v-model="fv.slug" :invalid="invalid" :describedby="describedby" :disabled="edit" /></template>
     </FormRow>
+    <FormRow id="u-tags" :label="$t('upstreams.form.tags')" :description="$t('upstreams.form.tagsDesc')" optional>
+      <template #default="{ id }"><TagsInput :id="id" v-model="tagList" :suggestions="tagOptions?.items ?? []" /></template>
+    </FormRow>
 
-    <div v-if="fv.type === 'http'" class="flex flex-col gap-5">
-      <FormRow id="u-url" :label="$t('upstreams.form.url')" :error="err('url')"><template #default="s"><Input :id="s.id" v-model="fv.url" class="mono" placeholder="mcp.example.com/mcp" :aria-invalid="s.invalid || undefined" :aria-describedby="s.describedby" /></template></FormRow>
+    <div v-if="fv.type === 'http' || fv.type === 'rest'" class="flex flex-col gap-5">
+      <FormRow id="u-url" :label="fv.type === 'rest' ? $t('upstreams.rest.baseUrl') : $t('upstreams.form.url')" :description="fv.type === 'rest' ? $t('upstreams.rest.baseUrlDesc', { sample: '/items/{id}' }) : undefined" :optional="fv.type === 'rest'" :error="err('url')"><template #default="s"><Input :id="s.id" v-model="fv.url" class="mono" placeholder="mcp.example.com/mcp" :aria-invalid="s.invalid || undefined" :aria-describedby="s.describedby" /></template></FormRow>
       <fieldset class="flex flex-col gap-2">
         <legend class="mb-1 text-sm font-medium">{{ $t('upstreams.form.auth') }}</legend>
         <RadioGroup v-model="fv.authType" class="grid grid-cols-2 gap-2 sm:grid-cols-4" :aria-label="$t('upstreams.form.auth')">
-          <label v-for="[v, l] in [['none', $t('upstreams.form.authNone')], ['bearer', 'Bearer'], ['header', 'Header'], ['oauth', 'OAuth']]" :key="v" class="flex min-h-11 items-center gap-2 rounded-sm border px-3 py-2" :class="[fv.authType === v ? 'border-primary bg-primary-tint' : '', v === 'oauth' && oauthUnavailable ? 'cursor-not-allowed opacity-60' : 'cursor-pointer']"><RadioGroupItem :value="v" :disabled="v === 'oauth' && oauthUnavailable" />{{ l }}</label>
+          <label v-for="[v, l] in ([['none', $t('upstreams.form.authNone')], ['bearer', 'Bearer'], ['header', 'Header'], ['oauth', 'OAuth']] as const).filter(o => fv.type === 'http' || o[0] !== 'oauth')" :key="v" class="flex min-h-11 items-center gap-2 rounded-sm border px-3 py-2" :class="[fv.authType === v ? 'border-primary bg-primary-tint' : '', v === 'oauth' && oauthUnavailable ? 'cursor-not-allowed opacity-60' : 'cursor-pointer']"><RadioGroupItem :value="v" :disabled="v === 'oauth' && oauthUnavailable" />{{ l }}</label>
         </RadioGroup>
-        <p v-if="probe !== 'idle'" class="text-[13px] text-muted-foreground" role="status" data-testid="oauth-probe">{{ $t(`upstreams.form.probe.${probe}`) }}</p>
+        <p v-if="fv.type === 'http' && probe !== 'idle'" class="text-[13px] text-muted-foreground" role="status" data-testid="oauth-probe">{{ $t(`upstreams.form.probe.${probe}`) }}</p>
       </fieldset>
       <FormRow v-if="fv.authType === 'header'" id="u-hname" :label="$t('upstreams.form.headerName')" :error="err('authHeaderName')"><template #default="{ id, invalid, describedby }"><Input :id="id" v-model="fv.authHeaderName" class="mono" placeholder="X-Api-Key" :aria-invalid="invalid || undefined" :aria-describedby="describedby" /></template></FormRow>
-      <p v-if="fv.authType === 'oauth'" class="text-[13px] text-muted-foreground" data-testid="oauth-hint">{{ edit && initial?.authType === 'oauth' ? $t('upstreams.form.oauthHintEdit') : $t('upstreams.form.oauthHint') }}</p>
+      <p v-if="fv.authType === 'oauth'" class="rounded-sm bg-muted px-3 py-2.5 text-[13px] text-secondary-foreground" data-testid="oauth-hint">{{ edit && initial?.authType === 'oauth' ? $t('upstreams.form.oauthHintEdit') : $t('upstreams.form.oauthHint') }}</p>
       <FormRow v-if="fv.authType === 'bearer' || fv.authType === 'header'" id="u-secret" :label="edit ? $t('upstreams.form.secretReplace') : $t('upstreams.form.secret')" :description="initial?.hasSecret ? $t('upstreams.form.secretSet') : $t('upstreams.form.secretUnset')" :optional="edit">
         <template #default="{ id, invalid, describedby }"><SecretField :id="id" v-model="fv.secret" :invalid="invalid" :describedby="describedby" /></template>
       </FormRow>
     </div>
+
+    <RestToolsEditor v-if="fv.type === 'rest'" v-model="restList" :slug="fv.slug" :errors="restError" />
 
     <div v-if="fv.type === 'stdio'" class="flex flex-col gap-5">
       <FormRow id="u-cmd" :label="$t('upstreams.form.command')" :error="err('command')"><template #default="{ id, invalid, describedby }"><Input :id="id" v-model="fv.command" class="mono" placeholder="npx" :aria-invalid="invalid || undefined" :aria-describedby="describedby" /></template></FormRow>
@@ -153,9 +174,9 @@ const onSubmit = submit(async (v) => {
       <FormRow id="u-cwd" :label="$t('upstreams.form.cwd')" :description="$t('upstreams.form.cwdDesc')" :error="err('cwd')" optional><template #default="{ id, invalid, describedby }"><Input :id="id" v-model="fv.cwd" class="mono" :aria-invalid="invalid || undefined" :aria-describedby="describedby" /></template></FormRow>
     </div>
 
-    <Collapsible v-model:open="advanced">
-      <CollapsibleTrigger as-child><Button type="button" variant="ghost" class="px-0">{{ $t('upstreams.form.advanced') }} {{ advanced ? '▴' : '▾' }}</Button></CollapsibleTrigger>
-      <CollapsibleContent class="mt-2 grid grid-cols-2 gap-3">
+    <Collapsible v-model:open="advanced" class="border-t pt-3">
+      <CollapsibleTrigger as-child><Button type="button" variant="ghost" class="px-0 font-medium">{{ $t('upstreams.form.advanced') }} {{ advanced ? '▴' : '▾' }}</Button></CollapsibleTrigger>
+      <CollapsibleContent class="mt-2 grid grid-cols-[repeat(auto-fit,minmax(150px,1fr))] gap-3">
         <FormRow id="u-rate" :label="$t('upstreams.form.rate')" :error="err('ratePerMin')"><template #default="{ id, invalid, describedby }"><Input :id="id" v-model="fv.ratePerMin" type="number" min="1" :aria-invalid="invalid || undefined" :aria-describedby="describedby" /></template></FormRow>
         <FormRow id="u-par" :label="$t('upstreams.form.parallel')" :error="err('maxConcurrent')"><template #default="{ id, invalid, describedby }"><Input :id="id" v-model="fv.maxConcurrent" type="number" min="1" :aria-invalid="invalid || undefined" :aria-describedby="describedby" /></template></FormRow>
         <FormRow id="u-tc" :label="$t('upstreams.form.tConnect')" :error="err('connectS')"><template #default="{ id, invalid, describedby }"><Input :id="id" v-model="fv.connectS" type="number" min="1" :aria-invalid="invalid || undefined" :aria-describedby="describedby" /></template></FormRow>
@@ -164,9 +185,13 @@ const onSubmit = submit(async (v) => {
       </CollapsibleContent>
     </Collapsible>
 
-    <div class="flex flex-wrap justify-end gap-2">
-      <Button as-child variant="outline"><NuxtLink :to="edit ? `/upstreams/${initial!.id}` : '/upstreams'">{{ $t('upstreams.form.cancel') }}</NuxtLink></Button>
-      <LoadingButton :busy="busy">{{ edit ? $t('upstreams.form.save') : $t('upstreams.form.create') }}</LoadingButton>
+    <div class="flex flex-wrap items-center gap-2" :class="edit ? 'justify-end' : 'justify-between'">
+      <button v-if="!edit" type="button" class="min-h-11 text-[13px] font-medium text-primary hover:underline" data-testid="import-link" @click="importOpen = true">{{ $t('upstreams.form.importInstead') }}</button>
+      <div class="flex flex-wrap items-center gap-2">
+        <Button as-child variant="outline"><NuxtLink :to="edit ? `/upstreams/${initial!.id}` : '/upstreams'">{{ $t('upstreams.form.cancel') }}</NuxtLink></Button>
+        <LoadingButton :busy="busy">{{ edit ? $t('upstreams.form.save') : $t('upstreams.form.create') }}</LoadingButton>
+      </div>
     </div>
+    <ImportDialog v-if="!edit" v-model:open="importOpen" @imported="navigateTo('/upstreams')" />
   </form>
 </template>

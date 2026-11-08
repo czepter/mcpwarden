@@ -3,7 +3,7 @@ import { and, count, eq, isNull } from 'drizzle-orm'
 import type { ConnectionSummary, PatList, PatSummary } from '../../shared/api-types'
 import type { Db } from '../db'
 import { oauthAccessToken, oauthClient, oauthConsent, oauthRefreshToken } from '../db/schema/auth'
-import { oauthConnectionUse, personalAccessToken } from '../db/schema/mcp'
+import { oauthConnectionDevice, oauthConnectionUse, personalAccessToken } from '../db/schema/mcp'
 import { isActive } from './client-meta'
 import { isAllowlisted, redirectHost, sanitizeClientName } from './dcr-policy'
 import { listAllowlist, UUID_RE } from './dcr-store'
@@ -13,6 +13,7 @@ const toSummary = (r: typeof personalAccessToken.$inferSelect): PatSummary => ({
   id: r.id,
   name: r.name,
   prefix: r.prefix,
+  deviceName: r.deviceName ?? null,
   createdAt: r.createdAt.toISOString(),
   lastUsedAt: r.lastUsedAt?.toISOString() ?? null,
   revokedAt: r.revokedAt?.toISOString() ?? null,
@@ -26,11 +27,11 @@ export async function listPats(db: Db, userId: string): Promise<PatList> {
 }
 
 /** `null` when the limit is reached. The plaintext leaves this function only in the return value. */
-export async function createPat(db: Db, userId: string, name: string, opts: { expiresInDays?: number | null, upstreamIds?: string[] | null } = {}, now = new Date()): Promise<(PatSummary & { token: string }) | null> {
+export async function createPat(db: Db, userId: string, name: string, opts: { expiresInDays?: number | null, upstreamIds?: string[] | null, deviceName?: string | null } = {}, now = new Date()): Promise<(PatSummary & { token: string }) | null> {
   const [{ n } = { n: 0 }] = await db.select({ n: count() }).from(personalAccessToken).where(and(eq(personalAccessToken.userId, userId), isNull(personalAccessToken.revokedAt)))
   if (n >= PAT_LIMIT) return null
   const g = generatePat()
-  const [row] = await db.insert(personalAccessToken).values({ userId, name, tokenHash: g.hash, prefix: g.prefix, expiresAt: opts.expiresInDays ? new Date(now.getTime() + opts.expiresInDays * 86_400_000) : null, upstreamIds: opts.upstreamIds ?? null }).returning()
+  const [row] = await db.insert(personalAccessToken).values({ userId, name, tokenHash: g.hash, prefix: g.prefix, expiresAt: opts.expiresInDays ? new Date(now.getTime() + opts.expiresInDays * 86_400_000) : null, upstreamIds: opts.upstreamIds ?? null, deviceName: opts.deviceName ?? null }).returning()
   return { ...toSummary(row!), token: g.token }
 }
 
@@ -54,14 +55,17 @@ export async function revokeOAuthGrantsOfUser(db: Db, userId: string): Promise<v
   await db.delete(oauthAccessToken).where(eq(oauthAccessToken.userId, userId))
   await db.delete(oauthRefreshToken).where(eq(oauthRefreshToken.userId, userId))
   await db.delete(oauthConnectionUse).where(eq(oauthConnectionUse.userId, userId))
+  await db.delete(oauthConnectionDevice).where(eq(oauthConnectionDevice.userId, userId))
 }
 
 export async function listConnections(db: Db, userId: string, now: Date): Promise<ConnectionSummary[]> {
-  const [consents, uses, allowlist] = await Promise.all([
+  const [consents, uses, allowlist, devices] = await Promise.all([
     db.select({ consent: oauthConsent, client: oauthClient }).from(oauthConsent).innerJoin(oauthClient, eq(oauthClient.clientId, oauthConsent.clientId)).where(eq(oauthConsent.userId, userId)),
     db.select().from(oauthConnectionUse).where(eq(oauthConnectionUse.userId, userId)),
     listAllowlist(db),
+    db.select().from(oauthConnectionDevice).where(eq(oauthConnectionDevice.userId, userId)),
   ])
+  const deviceBy = new Map(devices.map(d => [d.clientId, d.deviceName]))
   const useBy = new Map(uses.map(u => [u.clientId, u.lastUsedAt]))
   return consents
     .map(({ consent, client }) => {
@@ -71,6 +75,7 @@ export async function listConnections(db: Db, userId: string, now: Date): Promis
         clientId: client.clientId,
         name,
         scopes: consent.scopes,
+        deviceName: deviceBy.get(client.clientId) ?? null,
         redirectHost: redirectHost(client.redirectUris[0] ?? ''),
         allowlisted: isAllowlisted(allowlist, name, client.redirectUris),
         grantedAt: consent.createdAt.toISOString(),
@@ -88,5 +93,6 @@ export async function revokeConnection(db: Db, userId: string, clientId: string)
   await db.delete(oauthAccessToken).where(and(eq(oauthAccessToken.userId, userId), eq(oauthAccessToken.clientId, clientId)))
   await db.delete(oauthRefreshToken).where(and(eq(oauthRefreshToken.userId, userId), eq(oauthRefreshToken.clientId, clientId)))
   await db.delete(oauthConnectionUse).where(and(eq(oauthConnectionUse.userId, userId), eq(oauthConnectionUse.clientId, clientId)))
+  await db.delete(oauthConnectionDevice).where(and(eq(oauthConnectionDevice.userId, userId), eq(oauthConnectionDevice.clientId, clientId)))
   return true
 }

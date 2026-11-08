@@ -1,5 +1,5 @@
 <script setup lang="ts">
-defineProps<{ label: string, value: string, unit?: string, note?: string, dot?: string, share?: number }>()
+defineProps<{ label: string, value: string, unit?: string, note?: string, noteClass?: string, dot?: string, share?: number, tone?: 'ok' | 'warn' }>()
 </script>
 
 <template>
@@ -15,6 +15,6 @@ defineProps<{ label: string, value: string, unit?: string, note?: string, dot?: 
     <div v-if="share !== undefined" class="h-1.5 rounded-sm bg-muted" aria-hidden="true">
       <div class="h-1.5 rounded-sm" :style="{ width: `${share * 100}%`, background: dot }" />
     </div>
-    <div v-if="note" class="text-xs text-muted-foreground">{{ note }}</div>
+    <div v-if="note" class="text-xs" :class="noteClass ?? 'text-muted-foreground'">{{ note }}</div>
   </div>
 </template>

@@ -6,15 +6,15 @@
       "modes": {
         "off": {
           "label": "Aus",
-          "desc": "Neue Clients können sich nicht selbst registrieren."
+          "desc": "Keine neuen Clients. Nur bereits registrierte verbinden sich."
         },
         "allowlist": {
           "label": "Nur Allowlist",
-          "desc": "Nur Clients, die zur Allowlist passen, dürfen sich registrieren."
+          "desc": "Nicht gelistete Registrierungen werden abgelehnt."
         },
         "open": {
           "label": "Offen mit Warnung",
-          "desc": "Jeder Client darf sich registrieren; unbekannte werden beim Consent mit Warnung angezeigt."
+          "desc": "Unbekannte Clients zeigen im Consent-Screen eine Warnung. Standard."
         }
       },
       "modeSaved": "Modus gespeichert.",
@@ -22,8 +22,12 @@
       "removeFailed": "Entfernen fehlgeschlagen.",
       "revoked": "Client widerrufen.",
       "revokeFailed": "Widerrufen fehlgeschlagen.",
-      "dcrTitle": "Dynamic Client Registration",
-      "dcrNote": "Die Allowlist ist Komfort und Warnlogik, kein Sicherheitsmerkmal.",
+      "dcrTitle": "Client-Registrierung (DCR)",
+      "registeredNote": "Nie genutzte Registrierungen verfallen nach 30 Tagen.",
+      "redirectShort": "Erlaubte Redirect-Muster",
+      "clientCol": "Client",
+      "actionCol": "Aktion",
+      "dcrNote": "Wer sich ohne vorab geteilte Client-ID verbinden darf.",
       "modeAria": "Registrierungsmodus",
       "openWarning": "Im offenen Modus kann sich jeder Client registrieren. Prüfe unbekannte Clients beim Consent genau.",
       "allowlist": "Allowlist",
@@ -48,7 +52,7 @@
       "never": "nie",
       "inAllowlist": "In Allowlist",
       "notInAllowlist": "Nicht in Allowlist",
-      "expiresIn": "in {n} Tagen | in {n} Tagen",
+      "expiresIn": "verfällt in {n} Tagen | verfällt in {n} Tagen",
       "revokeAria": "{name} widerrufen",
       "revoke": "Widerrufen",
       "entryDialogTitle": "Allowlist-Eintrag",
@@ -60,11 +64,12 @@
     },
     "settings": {
       "pageTitle": "Admin: Instanz · mcpwarden",
+      "instanceTitle": "Instanz",
       "saved": "Gespeichert.",
       "saveFailed": "Speichern fehlgeschlagen.",
       "entryRequired": "Bitte gib einen CIDR-Bereich oder Hostnamen ein.",
-      "stdioTitle": "stdio-Upstreams erlauben",
-      "stdioDesc": "stdio führt Code auf dem Host aus. Zusätzlich muss jeder Nutzer einzeln freigegeben werden.",
+      "stdioTitle": "stdio-Upstreams global erlauben",
+      "stdioDesc": "Führt Code auf dem Host aus. Zusätzlich je Nutzer freizugeben.",
       "ssrfTitle": "SSRF-Ausnahmen",
       "ssrfDesc": "Ziele (CIDR oder Hostname), die trotz SSRF-Schutz erreichbar sind.",
       "metadataWarning": "{entry} deckt Metadaten-Adressen ab (169.254.169.254). Das kann Cloud-Zugangsdaten offenlegen.",
@@ -88,6 +93,11 @@
     },
     "users": {
       "pageTitle": "Admin: Nutzer · mcpwarden",
+      "heading": "Nutzer und Einladungen",
+      "headingNote": "Registrierung nur per Einladung oder Allowlist.",
+      "stdioCol": "stdio",
+      "stdioAllowedLabel": "erlaubt",
+      "actionCol": "Aktion",
       "inviteMailed": "Einladung per E-Mail versendet. Der Link bleibt hier einmalig sichtbar.",
       "revokeFailed": "Widerrufen fehlgeschlagen.",
       "banned": "Nutzer gesperrt.",
@@ -103,7 +113,7 @@
         "stdioIdle": "stdio-Leerlauf (min)"
       },
       "limitsSaved": "Limits gespeichert.",
-      "inviteCreated": "Einladungslink erzeugt (7 Tage gültig)",
+      "inviteCreated": "Einladung bereit, einmalig, 7 Tage gültig:",
       "users": "Nutzer",
       "col": {
         "user": "Nutzer",

@@ -42,7 +42,7 @@ export const allowlistSchema = z.object({
 })
 
 export const upstreamSchema = z.object({
-  type: z.enum(['http', 'stdio']),
+  type: z.enum(['http', 'stdio', 'rest']),
   name: z.string().trim().min(1, { error: () => t('common.validation.displayNameEmpty') }),
   slug: z.string().regex(SLUG_RE, { error: () => t('common.validation.slug') }),
   url: z.string(), transport: z.enum(['auto', 'streamable', 'sse']),
@@ -54,6 +54,11 @@ export const upstreamSchema = z.object({
   const add = (path: string, message: string) => ctx.addIssue({ code: 'custom', path: [path], message })
   if (v.type === 'http') {
     if (!/^https?:\/\/[^/@\s]+(\/\S*)?$/.test(v.url.trim())) add('url', t('common.validation.url'))
+    if (v.authType === 'header' && !HEADER_RE.test(v.authHeaderName)) add('authHeaderName', t('common.validation.headerName'))
+  }
+  if (v.type === 'rest') {
+    // The base URL is optional (tools may carry absolute URLs); when given it must be a valid http(s) address.
+    if (v.url.trim() && !/^https?:\/\/[^/@\s]+(\/\S*)?$/.test(v.url.trim())) add('url', t('common.validation.url'))
     if (v.authType === 'header' && !HEADER_RE.test(v.authHeaderName)) add('authHeaderName', t('common.validation.headerName'))
   }
   if (v.type === 'stdio') {

@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ChevronsUpDown, Languages, LogOut, PanelLeft, Settings } from '@lucide/vue'
-import { navFor, isActive } from '~/lib/nav'
+import { Languages, LogOut, PanelLeft, Settings, SlidersHorizontal } from '@lucide/vue'
+import { NAV_SETTINGS, navFor, isActive } from '~/lib/nav'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuSeparator, DropdownMenuTrigger } from '~/components/ui/dropdown-menu'
 import { Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupLabel, SidebarHeader, SidebarMenu, SidebarMenuBadge, SidebarMenuButton, SidebarMenuItem, SidebarSeparator, useSidebar } from '~/components/ui/sidebar'
 
@@ -24,12 +24,6 @@ const initials = computed(() => (user.value?.name ?? '?').split(/\s+/).map(s => 
       <div class="flex min-h-12 items-center gap-2.5 px-1.5 group-data-[collapsible=icon]:flex-col group-data-[collapsible=icon]:px-0 group-data-[collapsible=icon]:py-1">
         <div class="flex size-9 shrink-0 items-center justify-center rounded-md bg-primary text-base font-bold text-primary-foreground" aria-hidden="true">m</div>
         <span class="flex-1 text-[15px] font-bold tracking-tight group-data-[collapsible=icon]:hidden">mcpwarden</span>
-        <button
-          v-if="!isMobile" type="button" class="flex size-8 shrink-0 items-center justify-center rounded-sm text-secondary-foreground hover:bg-sidebar-accent"
-          :aria-label="state === 'collapsed' ? $t('common.expandSidebar') : $t('common.collapseSidebar')" :title="state === 'collapsed' ? $t('common.expandSidebar') : $t('common.collapseSidebar')" data-testid="collapse" @click="toggleSidebar"
-        >
-          <PanelLeft class="size-5" aria-hidden="true" />
-        </button>
       </div>
     </SidebarHeader>
     <SidebarContent>
@@ -56,6 +50,16 @@ const initials = computed(() => (user.value?.name ?? '?').split(/\s+/).map(s => 
       </nav>
     </SidebarContent>
     <SidebarFooter>
+      <SidebarMenu>
+        <SidebarMenuItem>
+          <SidebarMenuButton as-child :is-active="isActive(NAV_SETTINGS, route.path)" :tooltip="$t('common.nav.settings')" class="data-[active=true]:bg-primary data-[active=true]:text-primary-foreground">
+            <NuxtLink :to="NAV_SETTINGS.to" :aria-current="isActive(NAV_SETTINGS, route.path) ? 'page' : undefined">
+              <SlidersHorizontal aria-hidden="true" />
+              <span class="group-data-[collapsible=icon]:hidden">{{ $t('common.nav.settings') }}</span>
+            </NuxtLink>
+          </SidebarMenuButton>
+        </SidebarMenuItem>
+      </SidebarMenu>
       <DropdownMenu>
         <DropdownMenuTrigger as-child>
           <button type="button" class="flex min-h-[52px] w-full items-center gap-2.5 rounded-sm px-1.5 text-left hover:bg-sidebar-accent group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0" :aria-label="$t('common.userMenu')" data-testid="user-menu">
@@ -64,7 +68,6 @@ const initials = computed(() => (user.value?.name ?? '?').split(/\s+/).map(s => 
               <span class="block text-[13px] font-semibold">{{ user?.name }}</span>
               <span class="block truncate text-xs text-muted-foreground">{{ user?.email }}</span>
             </span>
-            <ChevronsUpDown class="size-4 group-data-[collapsible=icon]:hidden" aria-hidden="true" />
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent side="top" align="start" class="w-56">
@@ -78,6 +81,13 @@ const initials = computed(() => (user.value?.name ?? '?').split(/\s+/).map(s => 
           <DropdownMenuItem data-testid="logout" @select="logout"><LogOut class="size-4" aria-hidden="true" />{{ $t('common.logout') }}</DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
+      <button
+        v-if="!isMobile" type="button" class="flex min-h-11 w-full items-center gap-2.5 rounded-sm px-2.5 text-sm font-medium text-secondary-foreground hover:bg-sidebar-accent group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0"
+        :aria-label="state === 'collapsed' ? $t('common.expandSidebar') : $t('common.collapseSidebar')" :title="state === 'collapsed' ? $t('common.expandSidebar') : $t('common.collapseSidebar')" data-testid="collapse" @click="toggleSidebar"
+      >
+        <PanelLeft class="size-5 shrink-0" aria-hidden="true" />
+        <span class="group-data-[collapsible=icon]:hidden">{{ $t('common.collapse') }}</span>
+      </button>
     </SidebarFooter>
   </Sidebar>
 </template>

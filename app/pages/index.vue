@@ -13,12 +13,11 @@ import LineChart from '~/components/common/LineChart.vue'
 import TimeWindow from '~/components/common/TimeWindow.vue'
 import LoadingRows from '~/components/common/LoadingRows.vue'
 import RelativeTime from '~/components/common/RelativeTime.vue'
-import StatusBadge from '~/components/common/StatusBadge.vue'
-import StatusDot from '~/components/common/StatusDot.vue'
 import PageHeader from '~/components/shell/PageHeader.vue'
 import { Badge } from '~/components/ui/badge'
 import { Button } from '~/components/ui/button'
-import { formatNumber, formatPercent } from '~/lib/format'
+import { formatNumber } from '~/lib/format'
+import { healthLabel, setupLabel } from '~/lib/labels'
 
 const { t } = useI18n()
 useHead({ title: () => `${t('dashboard.title')} · mcpwarden` })
@@ -45,30 +44,34 @@ async function doRevoke() {
   revoke.value = null
 }
 const k = computed(() => data.value?.kpis)
+const attentionColor = (a: { status: string, setup: string }) => (a.status === 'degraded' && a.setup === 'ready' ? 'var(--st-degraded-fg)' : 'var(--st-open-fg)')
 </script>
 
 <template>
-  <PageHeader :title="$t('dashboard.title')"><TimeWindow v-model="win" /><AutoRefresh v-model="rate" /></PageHeader>
+  <PageHeader :title="$t('dashboard.title')"><TimeWindow v-model="win" variant="menu" /><AutoRefresh v-model="rate" /></PageHeader>
   <p v-if="adminHint" role="status" class="rounded-sm border border-warn-border bg-warn-bg px-3 py-2 text-[13px] text-warn-fg">{{ $t('dashboard.adminOnly') }}</p>
   <LoadingRows v-if="status === 'pending' && !data" />
   <ErrorState v-else-if="error" :error="error" @retry="refresh()" />
   <template v-else-if="data">
     <section v-if="k" :aria-label="$t('dashboard.kpis')" class="grid grid-cols-[repeat(auto-fit,minmax(min(200px,100%),1fr))] gap-3">
-      <KpiCard :label="$t('dashboard.kpiClientsActive')" :value="$t('dashboard.kpiClientsValue', { active: k.clientsActive, total: k.clientsTotal })" :note="$t('dashboard.kpiClientsNote')" />
-      <KpiCard :label="$t('dashboard.kpiCallsPerMin')" :value="formatNumber(k.callsPerMin, 1)" />
-      <KpiCard :label="$t('dashboard.kpiSuccessRate')" :value="formatPercent(k.successRate)" :note="winNote" />
-      <KpiCard :label="$t('dashboard.kpiOverhead')" :value="formatNumber(k.overheadP95Ms)" unit="ms" :note="$t('dashboard.kpiOverheadNote')" />
+      <KpiCard :label="$t('dashboard.kpiClientsActive')" :value="String(k.clientsActive)" :unit="$t('dashboard.kpiClientsOf', { total: k.clientsTotal })" :note="$t('dashboard.kpiClientsNote')" />
+      <KpiCard :label="$t('dashboard.kpiCallsPerMin')" :value="formatNumber(k.callsPerMin, 1)" :unit="$t('dashboard.perMin')" :note="$t('dashboard.kpiCallsNote')" />
+      <KpiCard :label="$t('dashboard.kpiSuccessRate')" :value="formatNumber(k.successRate * 100, 1)" unit="%" :note="winNote" note-class="text-st-healthy-fg" />
+      <KpiCard :label="$t('dashboard.kpiOverhead')" :value="formatNumber(k.overheadP95Ms)" unit="ms" :note="$t('dashboard.kpiOverheadNote')" note-class="text-st-healthy-fg" />
     </section>
 
     <!-- Desktop: clients table left, attention card and chart right (draft); mobile: attention, table, chart. -->
-    <div :class="data.clients.length ? 'grid items-start gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(280px,1fr)]' : 'contents'">
+    <div :class="data.clients.length ? 'grid items-start gap-4 lg:grid-cols-[minmax(0,3fr)_minmax(280px,1fr)]' : 'contents'">
     <DataSection v-if="data.attention.length" :title="$t('dashboard.attention')" :class="data.clients.length && 'lg:col-start-2 lg:row-start-1'">
-      <ul class="divide-y">
-        <li v-for="a in data.attention" :key="a.upstreamId" class="flex flex-wrap items-center justify-between gap-3 px-5 py-3">
-          <div class="flex items-center gap-3"><StatusBadge :status="a.status" :setup="a.setup" /><NuxtLink :to="`/upstreams/${a.upstreamId}`" class="font-semibold hover:underline">{{ a.name }}</NuxtLink><span class="text-[13px] text-secondary-foreground">{{ a.statusReason }}</span></div>
-          <Button v-if="a.setup === 'awaiting_auth'" as-child variant="outline"><NuxtLink :to="`/upstreams/${a.upstreamId}?tab=auth`">{{ $t('dashboard.enterCredentials') }}</NuxtLink></Button>
-          <Button v-else-if="a.setup === 'awaiting_approval'" as-child variant="outline"><NuxtLink :to="`/upstreams/${a.upstreamId}/approve`">{{ $t('dashboard.reviewDraft') }}</NuxtLink></Button>
-          <Button v-else-if="a.status === 'auth_expired'" as-child variant="outline"><NuxtLink :to="`/upstreams/${a.upstreamId}?tab=auth`">{{ $t('dashboard.reconnect') }}</NuxtLink></Button>
+      <ul class="flex flex-col px-5 pb-4">
+        <li v-for="a in data.attention" :key="a.upstreamId" class="border-t border-muted first:border-t-0">
+          <NuxtLink :to="`/upstreams/${a.upstreamId}`" class="flex min-h-11 flex-col justify-center gap-0.5 py-1.5 no-underline">
+            <span class="flex flex-wrap items-center gap-2 font-semibold"><span class="size-2 rounded-full" :style="{ background: attentionColor(a) }" aria-hidden="true" />{{ a.name }}<span class="text-[13px] font-medium" data-testid="status-badge" :style="{ color: attentionColor(a) }">{{ a.setup !== 'ready' ? setupLabel(a.setup) : healthLabel(a.status) }}</span></span>
+            <span class="text-[13px] text-secondary-foreground">{{ a.statusReason }}</span>
+          </NuxtLink>
+          <NuxtLink v-if="a.setup === 'awaiting_auth'" :to="`/upstreams/${a.upstreamId}?tab=auth`" class="mb-2 inline-block text-[13px] font-medium text-primary underline">{{ $t('dashboard.enterCredentials') }}</NuxtLink>
+          <NuxtLink v-else-if="a.setup === 'awaiting_approval'" :to="`/upstreams/${a.upstreamId}/approve`" class="mb-2 inline-block text-[13px] font-medium text-primary underline">{{ $t('dashboard.reviewDraft') }}</NuxtLink>
+          <NuxtLink v-else-if="a.status === 'auth_expired'" :to="`/upstreams/${a.upstreamId}?tab=auth`" class="mb-2 inline-block text-[13px] font-medium text-primary underline">{{ $t('dashboard.reconnect') }}</NuxtLink>
         </li>
       </ul>
     </DataSection>
@@ -93,15 +96,14 @@ const k = computed(() => data.value?.kpis)
       <template #actions><NuxtLink to="/settings/connections" class="text-[13px] text-primary underline">{{ $t('dashboard.allClientsAndTokens') }}</NuxtLink></template>
       <table class="w-full text-sm">
         <caption class="sr-only">{{ $t('dashboard.connectedClients') }}</caption>
-        <thead class="bg-table-head text-xs text-muted-foreground"><tr class="border-y"><th scope="col" class="px-5 py-2.5 text-left font-medium">{{ $t('dashboard.colClient') }}</th><th scope="col" class="px-3 text-left font-medium">{{ $t('dashboard.colSignIn') }}</th><th scope="col" class="px-3 text-left font-medium">{{ $t('dashboard.colStatus') }}</th><th scope="col" class="px-3 text-left font-medium">{{ $t('dashboard.colLastActive') }}</th><th scope="col" class="px-3 text-right font-medium">{{ $t('dashboard.colCallsPerMin') }}</th><th scope="col" class="px-3 text-right font-medium">{{ $t('dashboard.colTools') }}</th><th scope="col" class="px-5"><span class="sr-only">{{ $t('dashboard.colActions') }}</span></th></tr></thead>
+        <thead class="bg-table-head text-xs text-muted-foreground"><tr class="border-y"><th scope="col" class="px-5 py-2.5 text-left font-medium">{{ $t('dashboard.colClient') }}</th><th scope="col" class="px-3 text-left font-medium">{{ $t('dashboard.colSignIn') }}</th><th scope="col" class="px-3 text-left font-medium">{{ $t('dashboard.colStatus') }}</th><th scope="col" class="px-3 text-left font-medium">{{ $t('dashboard.colCalls') }}</th><th scope="col" class="px-3 text-left font-medium">{{ $t('dashboard.colTools') }}</th><th scope="col" class="px-5 text-right font-medium">{{ $t('dashboard.colAction') }}</th></tr></thead>
         <tbody>
           <tr v-for="c in data.clients" :key="`${c.kind}-${c.id}`" class="border-b border-muted">
-            <td class="px-5 py-2 font-medium">{{ c.name }}<Badge v-if="c.allowlisted === false" variant="outline" class="ml-2">{{ $t('dashboard.notAllowlisted') }}</Badge></td>
-            <td class="px-3">{{ c.kind === 'oauth' ? 'OAuth' : $t('dashboard.kindToken') }}</td>
-            <td class="px-3"><StatusDot :active="c.active" /></td>
-            <td class="px-3"><RelativeTime :value="c.lastActiveAt" :empty="$t('dashboard.never')" /></td>
-            <td class="tnum px-3 text-right">{{ formatNumber(c.callsPerMin) }}</td>
-            <td class="tnum px-3 text-right">{{ c.contextTokensEstimate == null ? '–' : $t('dashboard.contextTokens', { n: formatNumber(c.contextTokensEstimate) }) }}</td>
+            <td class="px-5 py-2"><div class="flex flex-wrap items-center gap-2"><span class="font-semibold">{{ c.name }}</span><Badge v-if="c.allowlisted === false" class="border-transparent bg-warn-bg text-warn-fg">{{ $t('dashboard.notAllowlisted') }}</Badge></div><div class="text-xs text-muted-foreground">{{ c.deviceName ? $t('dashboard.subDevice', { device: c.deviceName, kind: c.kind === 'oauth' ? $t('dashboard.subOauth') : $t('dashboard.subToken') }) : (c.kind === 'oauth' ? $t('dashboard.subOauth') : $t('dashboard.subToken')) }}</div></td>
+            <td class="px-3 text-secondary-foreground">{{ c.kind === 'oauth' ? 'OAuth' : $t('dashboard.kindToken') }}</td>
+            <td class="px-3"><div class="flex items-center gap-2 font-medium" :class="c.active ? 'text-st-healthy-fg' : 'text-secondary-foreground'"><span class="size-2 rounded-full" :class="c.active ? 'bg-st-healthy-bar' : 'bg-st-disabled-dot'" aria-hidden="true" />{{ c.active ? $t('dashboard.online') : $t('dashboard.inactive') }}</div><div class="text-xs text-muted-foreground"><RelativeTime :value="c.lastActiveAt" :empty="$t('dashboard.noCall')" /></div></td>
+            <td class="tnum px-3">{{ $t('dashboard.callsPerMinCell', { n: formatNumber(c.callsPerMin, c.callsPerMin < 10 && c.callsPerMin % 1 ? 1 : 0) }) }}</td>
+            <td class="tnum px-3 text-secondary-foreground">{{ c.contextTokensEstimate == null ? '–' : $t(c.toolMode === 'meta' ? 'dashboard.contextTokensMeta' : 'dashboard.contextTokens', { n: formatNumber(c.contextTokensEstimate) }) }}</td>
             <td class="px-5 text-right"><Button variant="destructive-outline" :aria-label="$t('dashboard.revokeLabel', { name: c.name })" @click="revoke = c">{{ $t('dashboard.revoke') }}</Button></td>
           </tr>
         </tbody>

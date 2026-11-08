@@ -6,15 +6,15 @@
       "modes": {
         "off": {
           "label": "Off",
-          "desc": "New clients cannot register themselves."
+          "desc": "No new clients. Only already registered ones connect."
         },
         "allowlist": {
           "label": "Allowlist only",
-          "desc": "Only clients matching the allowlist may register."
+          "desc": "Registrations not on the list are rejected."
         },
         "open": {
           "label": "Open with warning",
-          "desc": "Any client may register; unknown ones are shown with a warning at consent."
+          "desc": "Unknown clients show a warning on the consent screen. Default."
         }
       },
       "modeSaved": "Mode saved.",
@@ -22,8 +22,12 @@
       "removeFailed": "Removing failed.",
       "revoked": "Client revoked.",
       "revokeFailed": "Revoking failed.",
-      "dcrTitle": "Dynamic Client Registration",
-      "dcrNote": "The allowlist is a convenience and warning mechanism, not a security feature.",
+      "dcrTitle": "Client registration (DCR)",
+      "registeredNote": "Registrations that were never used expire after 30 days.",
+      "redirectShort": "Allowed redirect patterns",
+      "clientCol": "Client",
+      "actionCol": "Action",
+      "dcrNote": "Who may connect without a pre-shared client ID.",
       "modeAria": "Registration mode",
       "openWarning": "In open mode, any client can register. Check unknown clients carefully at consent.",
       "allowlist": "Allowlist",
@@ -48,7 +52,7 @@
       "never": "never",
       "inAllowlist": "In allowlist",
       "notInAllowlist": "Not in allowlist",
-      "expiresIn": "in {n} day | in {n} days",
+      "expiresIn": "expires in {n} day | expires in {n} days",
       "revokeAria": "Revoke {name}",
       "revoke": "Revoke",
       "entryDialogTitle": "Allowlist entry",
@@ -60,11 +64,12 @@
     },
     "settings": {
       "pageTitle": "Admin: Instance · mcpwarden",
+      "instanceTitle": "Instance",
       "saved": "Saved.",
       "saveFailed": "Saving failed.",
       "entryRequired": "Please enter a CIDR range or hostname.",
-      "stdioTitle": "Allow stdio upstreams",
-      "stdioDesc": "stdio runs code on the host. Each user must additionally be approved individually.",
+      "stdioTitle": "Allow stdio upstreams globally",
+      "stdioDesc": "Runs code on the host. Must additionally be approved per user.",
       "ssrfTitle": "SSRF exceptions",
       "ssrfDesc": "Targets (CIDR or hostname) that remain reachable despite SSRF protection.",
       "metadataWarning": "{entry} covers metadata addresses (169.254.169.254). This can expose cloud credentials.",
@@ -88,6 +93,11 @@
     },
     "users": {
       "pageTitle": "Admin: Users · mcpwarden",
+      "heading": "Users and invitations",
+      "headingNote": "Registration by invitation or allowlist only.",
+      "stdioCol": "stdio",
+      "stdioAllowedLabel": "allowed",
+      "actionCol": "Action",
       "inviteMailed": "Invitation sent by email. The link remains visible here only once.",
       "revokeFailed": "Revoking failed.",
       "banned": "User banned.",
@@ -103,7 +113,7 @@
         "stdioIdle": "stdio idle time (min)"
       },
       "limitsSaved": "Limits saved.",
-      "inviteCreated": "Invitation link created (valid for 7 days)",
+      "inviteCreated": "Invitation ready, single use, valid for 7 days:",
       "users": "Users",
       "col": {
         "user": "User",

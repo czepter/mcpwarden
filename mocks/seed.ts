@@ -1,5 +1,5 @@
 import type {
-  AdminUser, AllowlistEntry, AuditItem, ConnectionSummary, InviteSummary, OAuthClientAdmin, PatSummary, UpstreamDetail, UpstreamToolItem, UserLimits,
+  AdminUser, AllowlistEntry, AuditItem, ConnectionSummary, InviteSummary, OAuthClientAdmin, PatSummary, RestTool, UpstreamDetail, UpstreamToolItem, UserLimits,
 } from '#shared/api-types'
 
 const ago = (min: number) => new Date(Date.now() - min * 60_000).toISOString()
@@ -8,23 +8,38 @@ const ahead = (min: number) => new Date(Date.now() + min * 60_000).toISOString()
 export const DEFAULT_LIMITS: UserLimits = { maxUpstreams: 50, callsPerMin: 120, maxConnections: 20, stdioMaxProcs: 5, stdioIdleMin: 10 }
 
 const bars = (s: string) => s.split('').map(c => ({ g: 'ok', y: 'warn', r: 'err', n: 'none' } as const)[c as 'g'])
-const SRC: Array<[string, string, string, 'http' | 'stdio', UpstreamDetail['status'], number, number, string | null, string, number | null]> = [
+const SRC: Array<[string, string, string, 'http' | 'stdio' | 'rest', UpstreamDetail['status'], number, number, string | null, string, number | null]> = [
   ['github', 'GitHub', 'api.githubcopilot.com/mcp', 'http', 'healthy', 38, 42, null, 'gggggggggggggggggggggggg', 212],
   ['sentry', 'Sentry', 'mcp.sentry.dev/mcp', 'http', 'auth_expired', 14, 14, 'Refresh-Token abgelehnt. Neuer Link nötig.', 'ggggggggggggggggggnnnrrr', null],
   ['filesystem', 'Filesystem', 'npx @modelcontextprotocol/server-filesystem', 'stdio', 'healthy', 11, 11, null, 'gggggggggggggggggggggggg', 38],
   ['linear', 'Linear', 'mcp.linear.app/mcp', 'http', 'degraded', 24, 31, 'Mehrere Fehler in Folge, Verbindung eingeschränkt.', 'ggggggggggggyggyyggyyyyy', 1240],
   ['postgres-prod', 'Postgres (prod)', 'uvx mcp-server-postgres', 'stdio', 'open', 6, 6, 'Breaker offen, nächster Versuch gleich.', 'ggggggggggggggggrrrrrrrr', null],
-  ['local', 'Lokale Tools', 'tools.internal.example/mcp', 'http', 'healthy', 3, 3, null, 'ggggggggggggggggggggggng', 96],
+  ['local', 'Lokale Tools', 'tools.internal.example/api', 'rest', 'healthy', 3, 3, null, 'ggggggggggggggggggggggng', 96],
   ['notion', 'Notion', 'mcp.notion.com/mcp', 'http', 'disabled', 0, 18, 'Vom Nutzer deaktiviert.', 'nnnnnnnnnnnnnnnnnnnnnnnn', null],
 ]
+
+/** The three REST tools of the 'local' upstream (mockup: '3 REST-Tools'); names match the generated tool list. */
+export function seedRestTools(slug: string): RestTool[] {
+  const at = ago(60 * 24 * 3)
+  const mk = (name: string, method: RestTool['method'], urlTemplate: string, description: string, props: Record<string, unknown>, required: string[]): RestTool => ({
+    id: `rt_${slug}_${name}`, name, description, method, urlTemplate, headers: {}, bodyTemplate: null, enabled: true, createdAt: at, updatedAt: at,
+    inputSchema: { type: 'object', properties: props, ...(required.length ? { required } : {}) },
+  })
+  return [
+    mk('list_issues', 'GET', '/issues?state={state}', 'Issues nach Status auflisten.', { state: { type: 'string', enum: ['open', 'closed'], description: 'Status' } }, []),
+    mk('get_issue', 'GET', '/issues/{id}', 'Ein Issue abrufen.', { id: { type: 'string', description: 'Issue-ID' } }, ['id']),
+    mk('create_issue', 'POST', '/issues', 'Neues Issue anlegen.', { title: { type: 'string', description: 'Titel' }, body: { type: 'string', description: 'Beschreibung' } }, ['title']),
+  ]
+}
 
 export function seedUpstreams(): UpstreamDetail[] {
   return SRC.map(([slug, name, sub, type, status, en, total, reason, b, p95], i) => ({
     id: `up_${i + 1}`, slug, name, description: null, type,
-    url: type === 'http' ? `https://${sub}` : null, command: type === 'stdio' ? sub : null,
+    url: type === 'stdio' ? null : `https://${sub}`, command: type === 'stdio' ? sub : null,
+    ...(type === 'rest' ? { restTools: seedRestTools(slug) } : {}),
     enabled: status !== 'disabled', status, statusReason: reason, statusChangedAt: ago(30 + i), lastError: status === 'healthy' ? null : reason, lastOkAt: ago(5),
     setup: 'ready', toolsEnabled: en, toolsTotal: total, nextRetryAt: status === 'open' ? ahead(1) : null, rateLimitHits5m: status === 'degraded' ? 3 : 0,
-    hasSecret: slug === 'github' || slug === 'sentry', p95Ms: p95, recent: bars(b),
+    tags: slug === 'github' ? ['code', 'prod'] : slug === 'sentry' ? ['monitoring', 'prod'] : slug === 'postgres-prod' ? ['prod'] : slug === 'linear' ? ['planung'] : [], hasSecret: slug === 'github' || slug === 'sentry', p95Ms: p95, recent: bars(b),
     transport: 'auto', authType: slug === 'github' ? 'bearer' : slug === 'sentry' ? 'header' : 'none', authHeaderName: slug === 'sentry' ? 'X-Api-Key' : null,
     ratePerMin: 60, maxConcurrent: 5, timeouts: { connectMs: 10_000, listMs: 15_000, callMs: 60_000 },
     args: [], cwd: null, env: {}, secretNames: [], version: 1, createdAt: ago(60 * 24 * 10), updatedAt: ago(60),
@@ -57,15 +72,15 @@ export const SEED_INVITE_TOKENS: Record<string, string> = {
 }
 
 export const seedPats = (): PatSummary[] => [
-  { id: 'pat_1', name: 'nas-cron', prefix: 'mcpw_pat_9f3c', createdAt: ago(60 * 24 * 30), lastUsedAt: ago(2), revokedAt: null, expiresAt: null, upstreamIds: null },
-  { id: 'pat_2', name: 'Laptop CLI', prefix: 'mcpw_pat_a1b2', createdAt: ago(60 * 24 * 12), lastUsedAt: ago(60 * 5), revokedAt: null, expiresAt: null, upstreamIds: null },
+  { id: 'pat_1', name: 'nas-cron', deviceName: 'NAS', prefix: 'mcpw_pat_9f3c', createdAt: ago(60 * 24 * 30), lastUsedAt: ago(2), revokedAt: null, expiresAt: null, upstreamIds: null },
+  { id: 'pat_2', name: 'Laptop CLI', deviceName: 'MacBook Pro', prefix: 'mcpw_pat_a1b2', createdAt: ago(60 * 24 * 12), lastUsedAt: ago(60 * 5), revokedAt: null, expiresAt: null, upstreamIds: null },
   { id: 'pat_3', name: 'Alt', prefix: 'mcpw_pat_77de', createdAt: ago(60 * 24 * 90), lastUsedAt: null, revokedAt: ago(60 * 24 * 60), expiresAt: null, upstreamIds: null },
 ]
 
 export const seedConnections = (): ConnectionSummary[] => [
-  { clientId: 'claude-code', name: 'Claude Code', scopes: ['mcp:tools'], redirectHost: 'localhost', allowlisted: true, grantedAt: ago(60 * 24 * 14), lastUsedAt: ago(1), active: true },
-  { clientId: 'cursor', name: 'Cursor', scopes: ['mcp:tools'], redirectHost: 'anysphere.cursor-retrieval', allowlisted: true, grantedAt: ago(60 * 24 * 9), lastUsedAt: ago(3), active: true },
-  { clientId: 'claude-web', name: 'Claude', scopes: ['mcp:tools', 'mcpwarden:admin'], redirectHost: 'claude.ai', allowlisted: true, grantedAt: ago(60 * 24 * 7), lastUsedAt: ago(40), active: false },
+  { clientId: 'claude-code', deviceName: 'MacBook Pro', name: 'Claude Code', scopes: ['mcp:tools'], redirectHost: 'localhost', allowlisted: true, grantedAt: ago(60 * 24 * 14), lastUsedAt: ago(1), active: true },
+  { clientId: 'cursor', deviceName: 'MacBook Pro', name: 'Cursor', scopes: ['mcp:tools'], redirectHost: 'anysphere.cursor-retrieval', allowlisted: true, grantedAt: ago(60 * 24 * 9), lastUsedAt: ago(3), active: true },
+  { clientId: 'claude-web', deviceName: 'Browser', name: 'Claude', scopes: ['mcp:tools', 'mcpwarden:admin'], redirectHost: 'claude.ai', allowlisted: true, grantedAt: ago(60 * 24 * 7), lastUsedAt: ago(40), active: false },
   { clientId: 'zed', name: 'Zed', scopes: ['mcp:tools'], redirectHost: 'zed', allowlisted: true, grantedAt: ago(60 * 24 * 3), lastUsedAt: ago(70), active: false },
   { clientId: 'agent-x', name: 'agent.example.org', scopes: ['mcp:tools'], redirectHost: 'agent.example.org', allowlisted: false, grantedAt: ago(60 * 24), lastUsedAt: ago(2), active: true },
   { clientId: 'old', name: 'Alter Client', scopes: ['mcp:tools'], redirectHost: 'localhost', allowlisted: false, grantedAt: ago(60 * 24 * 40), lastUsedAt: null, active: false },

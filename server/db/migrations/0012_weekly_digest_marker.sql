@@ -1,0 +1,1 @@
+ALTER TABLE "user_preference" ADD COLUMN "weekly_last_sent_at" timestamp with time zone;

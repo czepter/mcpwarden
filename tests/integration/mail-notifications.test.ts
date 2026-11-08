@@ -123,14 +123,14 @@ describe('Mail notifications with SMTP', () => {
 
   describe('Statusbenachrichtigung', () => {
     it('Default is on; PATCH is validated and affects only the own user', async () => {
-      expect((await a.request('/api/me/settings')).json satisfies MeSettings).toEqual({ notifyStatusMail: true })
+      expect((await a.request('/api/me/settings')).json satisfies MeSettings).toEqual({ notifyStatusMail: true, notifyNewClient: true, notifyWeekly: false, toolMode: 'direct', theme: 'system' })
       expect((await a.request('/api/me/settings', { method: 'PATCH', body: { notifyStatusMail: 'no' } })).status).toBe(422)
       expect((await a.request('/api/me/settings', { method: 'PATCH', body: { role: 'admin' } })).status).toBe(422)
       expect((await api(srv.url).request('/api/me/settings')).status).toBe(401)
       const off = await a.request('/api/me/settings', { method: 'PATCH', body: { notifyStatusMail: false } })
-      expect(off.json).toEqual({ notifyStatusMail: false })
-      expect((await b.request('/api/me/settings')).json).toEqual({ notifyStatusMail: true })
-      expect((await a.request('/api/me/settings', { method: 'PATCH', body: { notifyStatusMail: true } })).json).toEqual({ notifyStatusMail: true })
+      expect(off.json).toMatchObject({ notifyStatusMail: false })
+      expect((await b.request('/api/me/settings')).json).toEqual({ notifyStatusMail: true, notifyNewClient: true, notifyWeekly: false, toolMode: 'direct', theme: 'system' })
+      expect((await a.request('/api/me/settings', { method: 'PATCH', body: { notifyStatusMail: true } })).json).toEqual({ notifyStatusMail: true, notifyNewClient: true, notifyWeekly: false, toolMode: 'direct', theme: 'system' })
     })
 
     it('Opt-out: no status mail to Anna as long as she has opted out', async () => {
@@ -237,7 +237,7 @@ describe('without SMTP_URL', () => {
     expect((ok.json as InviteCreated).mailQueued).toBe(false)
   })
   it('the setting is readable and writable (without effect)', async () => {
-    expect((await admin.request('/api/me/settings')).json).toEqual({ notifyStatusMail: true })
-    expect((await admin.request('/api/me/settings', { method: 'PATCH', body: { notifyStatusMail: false } })).json).toEqual({ notifyStatusMail: false })
+    expect((await admin.request('/api/me/settings')).json).toEqual({ notifyStatusMail: true, notifyNewClient: true, notifyWeekly: false, toolMode: 'direct', theme: 'system' })
+    expect((await admin.request('/api/me/settings', { method: 'PATCH', body: { notifyStatusMail: false } })).json).toMatchObject({ notifyStatusMail: false })
   })
 })

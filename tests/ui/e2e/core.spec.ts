@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { axe, login, prep } from './helpers'
+import { axe, holdConfirm, login, prep } from './helpers'
 
 test('Login, navigation, collapsing persists after reload, Ctrl+B', async ({ page }) => {
   await login(page)
@@ -96,7 +96,7 @@ test('Create upstream in under 2 minutes, test, tool switch, slug collision, del
   expect(Date.now() - t0).toBeLessThan(120_000)
   await page.getByRole('link', { name: 'Zum Upstream' }).click()
   await page.getByRole('tab', { name: 'Tools' }).click()
-  const sw = page.getByRole('switch').first()
+  const sw = page.getByRole('checkbox', { name: /^Tool .* aktiv$/ }).first()
   await expect(sw).toBeChecked()
   await sw.click()
   await expect(sw).not.toBeChecked()
@@ -110,7 +110,7 @@ test('Create upstream in under 2 minutes, test, tool switch, slug collision, del
   await expect(page.getByRole('row', { name: /Demo/ })).toBeVisible()
   await page.getByRole('link', { name: 'Demo mcp.demo.example/mcp' }).click()
   await page.getByRole('button', { name: 'Löschen' }).click()
-  await page.getByRole('alertdialog').getByRole('button', { name: 'Löschen' }).click()
+  await holdConfirm(page, page.getByRole('alertdialog').getByRole('button', { name: 'Löschen' }))
   await expect(page).toHaveURL(/\/upstreams$/)
 })
 
@@ -129,7 +129,7 @@ test('Tokens: plaintext once, nowhere afterwards (canary)', async ({ page }) => 
   await login(page)
   await page.goto('/settings/tokens')
   await page.getByRole('button', { name: '+ Token erzeugen' }).click()
-  await page.getByLabel('Name').fill('canary')
+  await page.getByLabel('Name', { exact: true }).fill('canary')
   await page.getByRole('button', { name: 'Erzeugen' }).click()
   const token = await page.getByTestId('one-time-value').innerText()
   expect(token).toMatch(/^mcpw_pat_/)
@@ -144,7 +144,7 @@ test('Tokens: plaintext once, nowhere afterwards (canary)', async ({ page }) => 
   expect(stores).not.toContain(token)
   await page.goto('/settings/tokens')
   await page.getByRole('button', { name: 'Token canary widerrufen' }).click()
-  await page.getByRole('alertdialog').getByRole('button', { name: 'Widerrufen' }).click()
+  await holdConfirm(page, page.getByRole('alertdialog').getByRole('button', { name: 'Widerrufen' }))
   await expect(page.getByText('Token widerrufen.')).toBeVisible()
 })
 
@@ -195,7 +195,7 @@ test('Admin: create invitation (one-time link), ban user, allowlist entry, insta
   await page.getByRole('dialog').getByRole('button', { name: 'Erzeugen' }).click()
   await expect(page.getByTestId('one-time-value')).toContainText('/invite/')
   await page.getByRole('button', { name: 'Mara sperren' }).click()
-  await page.getByRole('alertdialog').getByRole('button', { name: 'Sperren' }).click()
+  await holdConfirm(page, page.getByRole('alertdialog').getByRole('button', { name: 'Sperren' }))
   await expect(page.getByText('Gesperrt', { exact: true })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Christian sperren' })).toBeDisabled()
   await page.goto('/admin/oauth')
@@ -244,7 +244,8 @@ test('Dashboard empty, error, 403 and nothing-to-do', async ({ page }) => {
 
 test('Dropped features are reachable nowhere (F12)', async ({ page }) => {
   await login(page)
-  const banned = [/Tags/, /Alle testen/, /Konto löschen/, /E-Mail ändern/, /Dunkel/, /Gerät/]
+  // Mockup update: "Alle testen" (upstream toolbar), "Konto löschen" and the theme choice (Darstellung) are part of the mockup now.
+  const banned = [/E-Mail ändern/]
   for (const p of ['/', '/upstreams', '/settings', '/settings/connections', '/admin/settings', '/upstreams/up_1']) {
     await page.goto(p)
     await page.waitForLoadState('networkidle')
@@ -254,9 +255,7 @@ test('Dropped features are reachable nowhere (F12)', async ({ page }) => {
     if (p !== '/settings') expect(text, `${p} Benachrichtigung`).not.toMatch(/Benachrichtigung/)
   }
   await page.goto('/settings')
-  await expect(page.getByRole('radio')).toHaveCount(0)
-  const settings = await page.locator('main, body').first().innerText()
-  expect(settings).not.toMatch(/Farbschema|Dunkel|\bHell\b|\bSystem\b/)
+  await expect(page.getByRole('radio')).toHaveCount(3) // theme choice from the mockup (Hell/Dunkel are disabled until supported)
 })
 
 test('Admin: send invitation by email only with an active mailer and an entered address', async ({ page }) => {

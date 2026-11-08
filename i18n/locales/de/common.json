@@ -14,6 +14,17 @@
     "home": "Home",
     "openNavigation": "Navigation öffnen",
     "sidebar": "Seitenleiste",
+    "device": {
+      "title": "Gerätenamen ändern: {name}",
+      "desc": "Der Name erscheint in Dashboard und Clients. Leer lassen entfernt ihn.",
+      "label": "Gerätename",
+      "placeholder": "zum Beispiel MacBook Pro",
+      "save": "Speichern",
+      "saved": "Gerätename gespeichert.",
+      "failed": "Gerätename konnte nicht gespeichert werden.",
+      "edit": "Gerätenamen ändern: {name}"
+    },
+    "collapse": "Einklappen",
     "collapseSidebar": "Seitenleiste einklappen",
     "expandSidebar": "Seitenleiste ausklappen",
     "mainNav": "Hauptnavigation",
@@ -41,7 +52,7 @@
       "users": "Nutzer",
       "oauth": "Clients (DCR)",
       "instance": "Instanz",
-      "hint": "Du siehst hier nur Metadaten. Inhalte und Zugangsdaten der Nutzer sind für Admins nicht einsehbar."
+      "hint": "Du siehst hier nur Metadaten, nie Secrets oder Aufrufinhalte anderer Nutzer."
     },
     "pageError": {
       "notFoundTitle": "Seite nicht gefunden",
@@ -63,7 +74,11 @@
       "oneMinute": "1 min"
     },
     "timeWindow": {
-      "label": "Zeitfenster"
+      "label": "Zeitfenster",
+      "last5m": "Letzte 5 Minuten",
+      "last1h": "Letzte Stunde",
+      "last24h": "Letzte 24 Stunden",
+      "last7d": "Letzte 7 Tage"
     },
     "oneTimeSecret": {
       "hint": "Du siehst diesen Wert nur jetzt. Danach ist er nicht mehr abrufbar."
@@ -92,8 +107,8 @@
       "user": "Nutzer"
     },
     "health": {
-      "healthy": "In Ordnung",
-      "degraded": "Eingeschränkt",
+      "healthy": "Healthy",
+      "degraded": "Degraded",
       "open": "Breaker offen",
       "auth_expired": "Auth abgelaufen",
       "disabled": "Deaktiviert",

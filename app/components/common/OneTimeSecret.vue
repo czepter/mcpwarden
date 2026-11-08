@@ -13,7 +13,7 @@ onBeforeUnmount(() => emit('close'))
   <div role="status" class="flex flex-col gap-2 rounded-lg border border-ok-border bg-ok-bg px-4 py-3 text-ok-fg" data-testid="one-time-secret">
     <div class="font-semibold">{{ title }}</div>
     <div class="flex flex-wrap items-center gap-2">
-      <code class="rounded-sm bg-white/70 px-2 py-1 text-[13px] select-all" data-testid="one-time-value">{{ value }}</code>
+      <code class="rounded-sm bg-card/70 px-2 py-1 text-[13px] select-all" data-testid="one-time-value">{{ value }}</code>
       <CopyButton :value="value" />
       <Button type="button" variant="outline" @click="emit('close')">{{ $t('common.close') }}</Button>
     </div>

@@ -7,7 +7,7 @@ import { Input } from '~/components/ui/input'
 import { useZodForm } from '~/lib/useZodForm'
 import { loginSchema } from '~/lib/zod-schemas'
 
-definePageMeta({ layout: 'auth' })
+definePageMeta({ layout: 'auth', pageTransition: false })
 const { t } = useI18n()
 useHead({ title: () => t('auth.login.docTitle') })
 const route = useRoute()
@@ -26,7 +26,8 @@ const onSubmit = submit(async (v) => {
 })
 const { data: pub } = useAsyncData('public-config', () => publicApi.config().catch(() => ({ mail: false, registrationOpen: false })), { server: false })
 // No user exists yet: the first visitor registers (and becomes admin) instead of seeing a login form nobody can use.
-watch(() => pub.value?.registrationOpen, (open) => { if (open && !route.query.sig) navigateTo('/register', { replace: true }) }, { immediate: true })
+// A client-side navigation from here left the login form on screen under the /register URL (reproducible on the unchanged baseline), so this is a full navigation.
+watch(() => pub.value?.registrationOpen, (open) => { if (open && !route.query.sig) void navigateTo('/register', { replace: true, external: true }) }, { immediate: true })
 </script>
 
 <template>

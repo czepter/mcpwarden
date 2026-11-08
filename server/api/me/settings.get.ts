@@ -7,5 +7,6 @@ export default defineEventHandler(async (event): Promise<MeSettings> => {
   const { user } = await requireUser(event)
   const rt = await getRuntime()
   noStore(event)
-  return { notifyStatusMail: await rt.repo.getNotifyStatusMail(user.id) } satisfies MeSettings
+  const p = await rt.repo.getPrefs(user.id)
+  return { notifyStatusMail: p.notifyStatusMail, notifyNewClient: p.notifyNewClient, notifyWeekly: p.notifyWeekly, theme: p.theme, toolMode: await rt.repo.getToolMode(user.id) } satisfies MeSettings
 })

@@ -15,7 +15,7 @@ export const outcomeLabel = (v: string) => pick('outcome', OUTCOME_VALUES, v)
 
 export const scopeLabel = (v: string) => pick('scope', ['mcp:tools', 'mcpwarden:admin', 'openid', 'offline_access'], v)
 
-export const typeLabel = (v: UpstreamType | string) => ({ http: 'HTTP', stdio: 'stdio' } as Record<string, string>)[v] ?? v
+export const typeLabel = (v: UpstreamType | string) => ({ http: 'http', stdio: 'stdio', rest: 'rest' } as Record<string, string>)[v] ?? v
 export const authTypeLabel = (v: string) => pick('authType', ['none', 'bearer', 'header', 'oauth'], v)
 export const dcrModeLabel = (v: DcrMode) => t(`common.dcrMode.${v}`)
 export const roleLabel = (v: string) => pick('role', ['admin', 'user'], v)
