@@ -58,10 +58,10 @@ describe('SparkBars', () => {
 
 describe('ToolTable', () => {
   const tool = (name: string): UpstreamToolItem => ({ name, title: null, description: '<b>x</b>', enabled: false, gone: false, firstSeenAt: '', lastSeenAt: '', annotations: { readOnlyHint: true } })
-  it('Switch acts optimistically and is rolled back on error', async () => {
+  it('Checkbox acts optimistically and is rolled back on error', async () => {
     const save = vi.fn().mockRejectedValue(new Error('x'))
     const w = mount(ToolTable, { props: { tools: [tool('list_issues')], save }, attachTo: document.body })
-    const sw = () => w.find('button[role="switch"]')
+    const sw = () => w.find('button[role="checkbox"]')
     expect(sw().attributes('aria-checked')).toBe('false')
     await sw().trigger('click')
     await vi.waitFor(() => expect(save).toHaveBeenCalledWith('list_issues', true))
@@ -117,11 +117,11 @@ describe('ConfirmDialog', () => {
 
 describe('StdioChecklist', () => {
   const rows = (caps: { stdio: { allowed: boolean, reason?: string } }) => mount(StdioChecklist, { props: { caps: caps as never } }).findAll('li')
-  it('every row carries an icon and a state text, the command row stays open', () => {
+  it('every row carries a mark and a state text, the command row stays open', () => {
     const r = rows({ stdio: { allowed: true } })
     expect(r.map(x => x.attributes('data-state'))).toEqual(['ok', 'ok', 'open'])
     for (const li of r) {
-      expect(li.find('svg[aria-hidden="true"]').exists()).toBe(true)
+      expect(li.find('span[aria-hidden="true"]').exists()).toBe(true)
       expect(li.find('[data-testid="checklist-state"]').text()).toMatch(/^(Erfüllt|Blockiert|Offen)$/)
     }
   })
@@ -143,5 +143,27 @@ describe('StdioChecklist', () => {
   it.each(['supervisor_unreachable', 'no_capabilities'])('runtime reason %s: instance and account ok, isolation blocked', (reason) => {
     const r = rows({ stdio: { allowed: false, reason } })
     expect(r.map(x => x.attributes('data-state'))).toEqual(['ok', 'ok', 'blocked', 'open'])
+  })
+})
+
+describe('DeviceNameDialog', () => {
+  it('prefills the current label, saves the trimmed value and clears with empty input', async () => {
+    const { default: DeviceNameDialog } = await import('~/components/common/DeviceNameDialog.vue')
+    const save = vi.fn().mockResolvedValue(undefined)
+    const w = mount(DeviceNameDialog, { props: { open: true, subject: 'nas-cron', initial: 'NAS', save }, attachTo: document.body })
+    await w.vm.$nextTick()
+    const input = document.body.querySelector<HTMLInputElement>('#device-name')!
+    expect(input.value).toBe('NAS')
+    input.value = '  Mac mini '
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+    await w.vm.$nextTick()
+    document.body.querySelector('form')!.dispatchEvent(new Event('submit', { cancelable: true }))
+    await vi.waitFor(() => expect(save).toHaveBeenCalledWith('Mac mini'))
+    input.value = '  '
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+    await w.vm.$nextTick()
+    document.body.querySelector('form')!.dispatchEvent(new Event('submit', { cancelable: true }))
+    await vi.waitFor(() => expect(save).toHaveBeenLastCalledWith(null))
+    w.unmount()
   })
 })

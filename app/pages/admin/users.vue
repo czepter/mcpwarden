@@ -75,24 +75,30 @@ const saveLimits = lim.submit(async (v) => {
 </script>
 
 <template>
-  <PageHeader :title="$t('admin.title')" />
+  <PageHeader :title="$t('admin.title')" :crumbs="[{ label: $t('admin.title') }]" :crumb="$t('common.adminTabs.users')" :description="$t('common.adminTabs.hint')" data-testid="admin-hint" />
   <AdminTabs />
+  <div class="flex flex-col gap-8">
+  <section :aria-label="$t('admin.users.users')" class="flex flex-col gap-3">
+  <div class="flex flex-wrap items-center justify-between gap-3">
+    <div><h2 class="text-base font-semibold">{{ $t('admin.users.heading') }}</h2><p class="text-[13px] text-muted-foreground">{{ $t('admin.users.headingNote') }}</p></div>
+    <Button @click="invDialog = true">{{ $t('admin.users.createInviteBtn') }}</Button>
+  </div>
   <OneTimeSecret v-if="link" :title="$t('admin.users.inviteCreated')" :value="link" @close="link = null" />
 
-  <DataSection :title="$t('admin.users.users')" min-width="860px">
+  <DataSection min-width="860px">
     <LoadingRows v-if="users.status.value === 'pending' && !users.data.value" />
     <ErrorState v-else-if="users.error.value" :error="users.error.value" @retry="users.refresh()" />
     <Table v-else-if="users.data.value">
       <caption class="sr-only">{{ $t('admin.users.users') }}</caption>
-      <TableHeader><TableRow class="bg-table-head"><TableHead scope="col">{{ $t('admin.users.col.user') }}</TableHead><TableHead scope="col">{{ $t('admin.users.col.role') }}</TableHead><TableHead scope="col">{{ $t('admin.users.col.upstreams') }}</TableHead><TableHead scope="col">{{ $t('admin.users.col.lastActivity') }}</TableHead><TableHead scope="col">{{ $t('admin.users.col.stdioAllowed') }}</TableHead><TableHead scope="col"><span class="sr-only">{{ $t('admin.users.col.actions') }}</span></TableHead></TableRow></TableHeader>
+      <TableHeader><TableRow class="bg-table-head"><TableHead scope="col">{{ $t('admin.users.col.user') }}</TableHead><TableHead scope="col">{{ $t('admin.users.col.role') }}</TableHead><TableHead scope="col">{{ $t('admin.users.col.upstreams') }}</TableHead><TableHead scope="col">{{ $t('admin.users.col.lastActivity') }}</TableHead><TableHead scope="col">{{ $t('admin.users.stdioCol') }}</TableHead><TableHead scope="col" class="text-right">{{ $t('admin.users.actionCol') }}</TableHead></TableRow></TableHeader>
       <TableBody>
         <TableRow v-for="u in users.data.value.items" :key="u.id">
-          <TableCell><div class="font-medium">{{ u.name }}<span v-if="u.banned" class="ml-2 rounded-full bg-err-bg px-2 py-0.5 text-xs text-destructive">{{ $t('admin.users.bannedBadge') }}</span></div><div class="text-xs text-muted-foreground">{{ u.email }}</div></TableCell>
+          <TableCell class="min-h-14"><div class="font-semibold">{{ u.name }}<span v-if="u.banned" class="ml-2 rounded-full bg-err-bg px-2 py-0.5 text-xs text-destructive">{{ $t('admin.users.bannedBadge') }}</span></div><div class="text-xs text-muted-foreground">{{ u.email }}</div></TableCell>
           <TableCell>{{ roleLabel(u.role) }}</TableCell>
           <TableCell class="tnum">{{ u.upstreamCount }} / {{ u.limits.maxUpstreams }}</TableCell>
           <TableCell><RelativeTime :value="u.lastActivityAt" :empty="$t('admin.users.noActivity')" /></TableCell>
-          <TableCell><Checkbox :model-value="u.stdioAllowed" :aria-label="$t('admin.users.allowStdioAria', { name: u.name })" class="size-5" @update:model-value="(v) => setStdio(u, v)" /></TableCell>
-          <TableCell class="text-right">
+          <TableCell><label class="flex min-h-11 items-center gap-2"><Checkbox :model-value="u.stdioAllowed" :aria-label="$t('admin.users.allowStdioAria', { name: u.name })" class="size-[18px]" @update:model-value="(v) => setStdio(u, v)" />{{ $t('admin.users.stdioAllowedLabel') }}</label></TableCell>
+          <TableCell class="text-right whitespace-nowrap">
             <Button variant="ghost" :aria-label="$t('admin.users.limitsAria', { name: u.name })" @click="openLimits(u)">{{ $t('admin.users.limitsBtn') }}</Button>
             <Button v-if="u.banned" variant="outline" :aria-label="$t('admin.users.unbanAria', { name: u.name })" @click="unban(u)">{{ $t('admin.users.unban') }}</Button>
             <Button v-else variant="outline" :disabled="protectedUser(u)" :aria-label="$t('admin.users.banAria', { name: u.name })" @click="pending = { kind: 'ban', user: u }">{{ $t('admin.users.ban') }}</Button>
@@ -102,9 +108,9 @@ const saveLimits = lim.submit(async (v) => {
       </TableBody>
     </Table>
   </DataSection>
+  </section>
 
   <DataSection :title="$t('admin.users.openInvites')" min-width="640px">
-    <template #actions><Button @click="invDialog = true">{{ $t('admin.users.createInviteBtn') }}</Button></template>
     <LoadingRows v-if="invites.status.value === 'pending' && !invites.data.value" :rows="2" />
     <EmptyState v-else-if="!invites.data.value?.items.length" :title="$t('admin.users.noInvites')" />
     <Table v-else>
@@ -120,6 +126,7 @@ const saveLimits = lim.submit(async (v) => {
       </TableBody>
     </Table>
   </DataSection>
+  </div>
 
   <Dialog v-model:open="invDialog">
     <DialogContent>

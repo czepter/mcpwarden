@@ -99,7 +99,7 @@ test('stdio approval: checklist with icon and text per row, block reasons from t
   await expect(rows.first()).toContainText('Blockiert')
   await expect(page.getByTestId('stdio-block-reason')).toContainText('slim')
   for (const row of await rows.all()) {
-    await expect(row.locator('svg[aria-hidden="true"]')).toHaveCount(1)
+    await expect(row.getByTestId('checklist-state')).toHaveText(/\S/) // state as a text mark (mockup), not an icon
     await expect(row.getByTestId('checklist-state')).not.toHaveText('')
   }
   await expect(page.getByRole('button', { name: 'Freigeben' })).toBeDisabled()
@@ -127,8 +127,9 @@ test('Password toggle "Anzeigen": hit area 44 px, input group 44 px, icon stays 
 test('Upstream detail: status chip sits next to the heading, actions stay on the right', async ({ page }) => {
   await login(page)
   await page.goto('/upstreams/up_4')
-  const h1 = (await page.locator('h1').boundingBox())!
-  const chip = (await page.locator('header').getByTestId('status-badge').first().boundingBox())!
+  // Draft: the page header bar holds the h1, the detail column starts with an h2 carrying the status chip and the actions.
+  const h1 = (await page.locator('main h2').first().boundingBox())!
+  const chip = (await page.locator('main').getByTestId('status-badge').first().boundingBox())!
   const testBtn = (await page.getByRole('button', { name: 'Verbindung testen' }).boundingBox())!
   expect(chip.x).toBeGreaterThan(h1.x + h1.width - 1)
   expect(Math.abs((chip.y + chip.height / 2) - (h1.y + h1.height / 2))).toBeLessThan(16)
@@ -141,7 +142,7 @@ test('Admin users: "+ Einladung erzeugen" sits in the invitations section, not i
   const btn = page.getByRole('button', { name: '+ Einladung erzeugen' })
   await expect(btn).toHaveCount(1)
   await expect(page.locator('header').filter({ has: page.locator('h1') }).getByRole('button', { name: '+ Einladung erzeugen' })).toHaveCount(0)
-  await expect(page.locator('section').filter({ has: page.getByRole('heading', { name: 'Offene Einladungen' }) }).getByRole('button', { name: '+ Einladung erzeugen' })).toBeVisible()
+  await expect(page.locator('section').filter({ has: page.getByRole('heading', { name: 'Nutzer und Einladungen' }) }).getByRole('button', { name: '+ Einladung erzeugen' })).toBeVisible()
   await btn.click()
   await expect(page.getByRole('dialog')).toBeVisible()
 })

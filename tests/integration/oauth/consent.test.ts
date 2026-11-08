@@ -33,7 +33,7 @@ describe('consent-info', () => {
     const info = (r as { info: { status: number, json: ConsentInfo } }).info
     expect(info.status).toBe(200)
     const j = info.json satisfies ConsentInfo
-    expect(Object.keys(j).sort()).toEqual(['client', 'loopback', 'resource', 'scopes'])
+    expect(Object.keys(j).sort()).toEqual(['client', 'loopback', 'resource', 'scopes', 'suggestedDeviceName'])
     expect(Object.keys(j.client).sort()).toEqual(['allowlisted', 'id', 'name', 'redirects', 'registeredAt', 'viaDcr'])
     expect(j.client).toMatchObject({ name: 'Claude Code (x)', allowlisted: true, viaDcr: true })
     expect(Number.isNaN(Date.parse(j.client.registeredAt))).toBe(false)

@@ -5,6 +5,7 @@ import { mergeTimeouts } from '../config'
 import { classifyError, CredentialsMissingError, OAuthReauthError } from './errors'
 import { withRetry } from './retry'
 import type { UpstreamRow } from './types'
+import { RestClient, type RestToolRow } from '../rest/adapter'
 
 export type Credentials = { bearer?: string, headers?: Record<string, string>, env?: Record<string, string> }
 
@@ -17,6 +18,8 @@ export type ConnectDeps = {
   stdioTransport?: (up: UpstreamRow, creds: Credentials) => Promise<Transport>
   /** OAuth upstreams: session provider (tokens from the encrypted store, refresh through the SDK). */
   oauthProvider?: (up: UpstreamRow, owner: string) => OAuthClientProvider
+  /** REST upstreams: the user's tool definitions (loaded on every connection setup, so edits take effect after the version bump). */
+  restTools?: (up: UpstreamRow, owner: string) => Promise<RestToolRow[]>
 }
 
 /** The default is `legacy`; only `auto` speaks revision 2026-07-28 (abort = close stream) and otherwise falls back to `initialize`. */
@@ -50,7 +53,7 @@ function httpTransport(kind: 'streamable' | 'sse', url: URL, headers: Record<str
     : new SSEClientTransport(url, { fetch: safeFetch, requestInit, authProvider })
 }
 
-export type Connected = { client: Client, transport: 'streamable' | 'sse' | 'stdio' }
+export type Connected = { client: Client, transport: 'streamable' | 'sse' | 'stdio' | 'rest' }
 
 async function connectOnce(up: UpstreamRow, connectMs: number, kind: 'streamable' | 'sse', deps: ConnectDeps, headers: Record<string, string>, signal: AbortSignal, authProvider?: OAuthClientProvider): Promise<Client> {
   const client = new Client(deps.clientInfo ?? { name: 'mcpwarden', version: '0.1.0' }, clientOptions(connectMs))
@@ -81,6 +84,13 @@ export async function connectUpstream(up: UpstreamRow, deps: ConnectDeps, signal
       throw e
     }
     return { client, transport: 'stdio', retries: 0 }
+  }
+  if (up.type === 'rest') {
+    const creds = await deps.credentials(up, owner)
+    if ((up.authType === 'bearer' && !creds.bearer) || (up.authType === 'header' && !(up.authHeaderName && creds.headers?.[up.authHeaderName]))) throw new CredentialsMissingError()
+    const tools = (await deps.restTools?.(up, owner)) ?? []
+    const client = new RestClient({ baseUrl: up.url, tools, authHeaders: authHeaders(up, creds), safeFetch: deps.safeFetch, callMs: t.callMs })
+    return { client: client.asClient(), transport: 'rest', retries: 0 }
   }
   const creds = await deps.credentials(up, owner)
   // Never connect silently without a header for an auth kind without a matching secret

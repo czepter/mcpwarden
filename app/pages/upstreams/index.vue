@@ -15,6 +15,8 @@ import PageHeader from '~/components/shell/PageHeader.vue'
 import { Button } from '~/components/ui/button'
 import { Input } from '~/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '~/components/ui/select'
+import ImportDialog from '~/components/upstreams/ImportDialog.vue'
+import TagsFilter from '~/components/upstreams/TagsFilter.vue'
 import { RefreshCw, Pencil } from '@lucide/vue'
 import { formatCountdown, formatMs } from '~/lib/format'
 import { HEALTH_VALUES, healthLabel, typeLabel } from '~/lib/labels'
@@ -33,10 +35,14 @@ usePolling(refresh, refreshRate)
 const q = ref('')
 const statusFilter = ref('all')
 const typeFilter = ref('all')
+const tagFilter = ref<string[]>([])
+const importOpen = ref(false)
 const items = computed(() => data.value?.items ?? [])
+const allTags = computed(() => [...new Set(items.value.flatMap(u => u.tags ?? []))].sort((a, b) => a.localeCompare(b)))
 const filtered = computed(() => items.value.filter(u =>
   (statusFilter.value === 'all' || u.status === statusFilter.value)
   && (typeFilter.value === 'all' || u.type === typeFilter.value)
+  && tagFilter.value.every(tg => u.tags?.includes(tg))
   && (!q.value || `${u.name} ${u.slug} ${u.url ?? ''} ${u.command ?? ''}`.toLowerCase().includes(q.value.toLowerCase()))))
 const counts = computed(() => HEALTH_VALUES.filter(h => h !== 'unknown').map(h => ({ h, n: items.value.filter(u => u.status === h).length })))
 const hasP95 = computed(() => items.value.some(u => u.p95Ms != null))
@@ -50,32 +56,52 @@ async function runTest(u: UpstreamSummary) {
     await refresh()
   } catch { toast.error(t('upstreams.toast.testFailed')) } finally { testing.value = null }
 }
+const testingAll = ref(false)
+async function runTestAll() {
+  testingAll.value = true
+  let ok = 0
+  let fail = 0
+  try {
+    for (const u of items.value.filter(x => x.enabled && x.setup === 'ready')) {
+      try { if ((await upstreamApi.test(u.id)).ok) ok++; else fail++ } catch { fail++ }
+    }
+    toast[fail ? 'error' : 'success'](t('upstreams.list.testAllDone', { ok, fail }))
+    await refresh()
+  } finally { testingAll.value = false }
+}
 const message = (u: UpstreamSummary) => {
   if (u.status === 'open' && u.nextRetryAt) return t('upstreams.list.breakerOpen', { time: formatCountdown(u.nextRetryAt) })
   if (u.setup !== 'ready') return u.setup === 'awaiting_auth' ? t('upstreams.list.awaitingAuth') : t('upstreams.list.awaitingApproval')
   return u.statusReason ?? ''
 }
-const sub = (u: UpstreamSummary) => (u.url ?? u.command ?? '').replace(/^https?:\/\//, '')
+const sub = (u: UpstreamSummary) => (u.type === 'rest' ? t(u.toolsTotal === 1 ? 'upstreams.rest.sublineOne' : 'upstreams.rest.subline', { n: u.toolsTotal }) : (u.url ?? u.command ?? '').replace(/^https?:\/\//, ''))
 </script>
 
 <template>
   <PageHeader :title="$t('upstreams.list.title')">
-    <TimeWindow v-model="win" />
+    <TimeWindow v-model="win" variant="menu" />
     <AutoRefresh v-model="refreshRate" />
-    <Button as-child><NuxtLink to="/upstreams/new">{{ $t('upstreams.list.add') }}</NuxtLink></Button>
   </PageHeader>
 
-  <section :aria-label="$t('upstreams.list.filter')" class="flex flex-wrap items-center gap-2">
-    <label for="q" class="sr-only">{{ $t('upstreams.list.searchLabel') }}</label>
-    <Input id="q" v-model="q" type="search" :placeholder="$t('upstreams.list.searchPlaceholder')" class="w-60" />
-    <Select v-model="statusFilter">
-      <SelectTrigger class="w-44" :aria-label="$t('upstreams.list.filterStatus')"><SelectValue :placeholder="$t('upstreams.list.status')" /></SelectTrigger>
-      <SelectContent><SelectItem value="all">{{ $t('upstreams.list.allStatuses') }}</SelectItem><SelectItem v-for="h in HEALTH_VALUES" :key="h" :value="h">{{ healthLabel(h) }}</SelectItem></SelectContent>
-    </Select>
-    <Select v-model="typeFilter">
-      <SelectTrigger class="w-36" :aria-label="$t('upstreams.list.filterType')"><SelectValue :placeholder="$t('upstreams.list.type')" /></SelectTrigger>
-      <SelectContent><SelectItem value="all">{{ $t('upstreams.list.allTypes') }}</SelectItem><SelectItem value="http">HTTP</SelectItem><SelectItem value="stdio">stdio</SelectItem></SelectContent>
-    </Select>
+  <section :aria-label="$t('upstreams.list.filter')" class="flex flex-wrap items-center justify-between gap-2">
+    <div class="flex flex-wrap items-center gap-2">
+      <label for="q" class="sr-only">{{ $t('upstreams.list.searchLabel') }}</label>
+      <Input id="q" v-model="q" type="search" :placeholder="$t('upstreams.list.searchPlaceholder')" class="w-60" />
+      <Select v-model="statusFilter">
+        <SelectTrigger class="w-auto gap-2" :aria-label="$t('upstreams.list.filterStatus')"><SelectValue>{{ statusFilter === 'all' ? $t('upstreams.list.status') : healthLabel(statusFilter) }}</SelectValue></SelectTrigger>
+        <SelectContent><SelectItem value="all">{{ $t('upstreams.list.allStatuses') }}</SelectItem><SelectItem v-for="h in HEALTH_VALUES" :key="h" :value="h">{{ healthLabel(h) }}</SelectItem></SelectContent>
+      </Select>
+      <Select v-model="typeFilter">
+        <SelectTrigger class="w-auto gap-2" :aria-label="$t('upstreams.list.filterType')"><SelectValue>{{ typeFilter === 'all' ? $t('upstreams.list.type') : typeLabel(typeFilter) }}</SelectValue></SelectTrigger>
+        <SelectContent><SelectItem value="all">{{ $t('upstreams.list.allTypes') }}</SelectItem><SelectItem v-for="ty in ['http', 'stdio', 'rest']" :key="ty" :value="ty">{{ typeLabel(ty) }}</SelectItem></SelectContent>
+      </Select>
+      <TagsFilter v-model="tagFilter" :options="allTags" />
+    </div>
+    <div class="flex flex-wrap items-center gap-2">
+      <Button v-if="items.length" variant="outline" :disabled="testingAll" @click="runTestAll">{{ $t('upstreams.list.testAll') }}</Button>
+      <Button variant="outline" data-testid="import-open" @click="importOpen = true">{{ $t('upstreams.list.importJson') }}</Button>
+      <Button as-child><NuxtLink to="/upstreams/new">{{ $t('upstreams.list.add') }}</NuxtLink></Button>
+    </div>
   </section>
 
   <section v-if="items.length" :aria-label="$t('upstreams.list.kpis')" class="grid grid-cols-[repeat(auto-fit,minmax(min(190px,100%),1fr))] gap-3">
@@ -96,14 +122,14 @@ const sub = (u: UpstreamSummary) => (u.url ?? u.command ?? '').replace(/^https?:
         <tr class="border-b">
           <th scope="col" class="px-5 py-2.5 text-left font-medium">{{ $t('upstreams.list.colName') }}</th><th scope="col" class="px-3 text-left font-medium">{{ $t('upstreams.list.colStatus') }}</th><th scope="col" class="px-3 text-left font-medium">{{ $t('upstreams.list.colType') }}</th>
           <th scope="col" class="px-3 text-left font-medium">{{ $t('upstreams.list.colTools') }}</th><th v-if="hasP95" scope="col" class="px-3 text-left font-medium">p95</th><th v-if="hasRecent" scope="col" class="px-3 text-left font-medium">{{ $t('upstreams.list.colRecent') }}</th>
-          <th scope="col" class="px-3 text-left font-medium">{{ $t('upstreams.list.colMessage') }}</th><th scope="col" class="px-3 text-right font-medium"><span class="sr-only">{{ $t('upstreams.list.colActions') }}</span></th>
+          <th scope="col" class="px-3 text-left font-medium">{{ $t('upstreams.list.colMessage') }}</th><th scope="col" class="px-3 text-right font-medium">{{ $t('upstreams.list.colActions') }}</th>
         </tr>
       </thead>
       <tbody>
         <tr v-for="u in filtered" :key="u.id" class="border-b border-muted">
           <td class="px-5 py-2"><NuxtLink :to="`/upstreams/${u.id}`" class="flex min-h-11 items-center gap-3 hover:underline">
             <span class="flex size-9 shrink-0 items-center justify-center rounded-sm border bg-muted font-semibold text-secondary-foreground" aria-hidden="true">{{ u.name[0]?.toUpperCase() }}</span>
-            <span class="min-w-0"><span class="block font-semibold">{{ u.name }}</span><span class="mono block max-w-52 truncate text-xs text-muted-foreground">{{ sub(u) }}</span></span>
+            <span class="min-w-0"><span class="block font-semibold">{{ u.name }}</span><span class="mono block max-w-52 truncate text-xs text-muted-foreground">{{ sub(u) }}</span><span v-if="u.tags?.length" class="mt-0.5 flex flex-wrap gap-1" :aria-label="$t('upstreams.form.tags')"><span v-for="tg in u.tags" :key="tg" class="rounded-sm bg-muted px-1.5 text-[11px] text-secondary-foreground" data-testid="tag-chip">{{ tg }}</span></span></span>
           </NuxtLink></td>
           <td class="px-3"><StatusBadge :status="u.status" :setup="u.setup" /></td>
           <td class="px-3 text-secondary-foreground">{{ typeLabel(u.type) }}</td>
@@ -118,6 +144,7 @@ const sub = (u: UpstreamSummary) => (u.url ?? u.command ?? '').replace(/^https?:
         </tr>
       </tbody>
     </table>
-    <template v-if="filtered.length" #footer><span>{{ $t('upstreams.list.showing', { shown: filtered.length, total: items.length }) }}</span></template>
+    <template v-if="filtered.length" #footer><div class="flex flex-wrap items-center justify-between gap-3"><span>{{ $t('upstreams.list.showing', { shown: filtered.length, total: items.length }) }}</span><span>{{ $t('upstreams.list.perPage') }}</span></div></template>
   </DataSection>
+  <ImportDialog v-model:open="importOpen" @imported="refresh()" />
 </template>

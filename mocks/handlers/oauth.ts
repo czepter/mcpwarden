@@ -1,5 +1,5 @@
 import type { ConsentInfo } from '#shared/api-types'
-import { err, json, route } from '../util'
+import { err, json, noContent, route } from '../util'
 
 export const oauthHandlers = [
   route('get', '/api/oauth/consent-info', ({ request }) => {
@@ -17,6 +17,7 @@ export const oauthHandlers = [
       // Client 'agent-admin': phase 2 server that already offers the admin scope (the UI hides it until then).
       scopes: [{ name: 'mcp:tools', required: true }, { name: 'openid', required: true }, { name: 'offline_access', required: true }, ...(id === 'agent-admin' ? [{ name: 'mcpwarden:admin', required: false }] : [])],
       resource: 'https://mcp.example.test/mcp', loopback: known || loopback,
+      suggestedDeviceName: 'Mac · Safari',
     }
     return json(info)
   }),
@@ -30,6 +31,7 @@ export const oauthHandlers = [
   }),
   route('post', '/api/auth/device/approve', () => json({ success: true })),
   route('post', '/api/auth/device/deny', () => json({ success: true })),
+  route('post', '/api/oauth/consent-device', () => noContent()),
   route('post', '/api/auth/oauth2/consent', async ({ request }) => {
     const b = await request.json().catch(() => ({})) as { accept?: boolean }
     return json({ redirectURI: b.accept ? '/consent?done=granted' : '/consent?done=denied' })

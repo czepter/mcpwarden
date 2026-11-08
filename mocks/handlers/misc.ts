@@ -28,9 +28,9 @@ export const dashboardHandlers = [
         statusReason: u.statusReason ?? (u.setup === 'awaiting_auth' ? 'Zugangsdaten fehlen noch' : u.setup === 'awaiting_approval' ? 'Wartet auf Freigabe' : null),
       }))
     const clients: DashboardClient[] = empty ? [] : s.connections.map((c, i) => ({
-      kind: 'oauth' as const, id: c.clientId, name: c.name, allowlisted: c.allowlisted, active: c.active, lastActiveAt: c.lastUsedAt, callsPerMin: c.active ? 4 + i : 0, contextTokensEstimate: 1800 + i * 420,
+      kind: 'oauth' as const, id: c.clientId, name: c.name, deviceName: c.deviceName ?? null, allowlisted: c.allowlisted, active: c.active, lastActiveAt: c.lastUsedAt, callsPerMin: c.active ? 4 + i : 0, contextTokensEstimate: s.toolMode === 'meta' ? 310 : 1800 + i * 420, toolMode: s.toolMode ?? 'direct',
     }))
-    if (!empty) s.pats.filter(p => !p.revokedAt).slice(0, 1).forEach(p => clients.push({ kind: 'pat', id: p.id, name: p.name, allowlisted: null, active: true, lastActiveAt: p.lastUsedAt, callsPerMin: 2, contextTokensEstimate: 2100 }))
+    if (!empty) s.pats.filter(p => !p.revokedAt).slice(0, 1).forEach(p => clients.push({ kind: 'pat', id: p.id, name: p.name, deviceName: p.deviceName ?? null, allowlisted: null, active: true, lastActiveAt: p.lastUsedAt, callsPerMin: 2, contextTokensEstimate: s.toolMode === 'meta' ? 310 : 2100, toolMode: s.toolMode ?? 'direct' }))
     void nothing
     const perMin = Math.round(15.8 * 10) / 10
     const kpis = empty ? { clientsActive: 0, clientsTotal: 0, callsPerMin: 0, successRate: 1, overheadP95Ms: 0 }

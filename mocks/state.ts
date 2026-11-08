@@ -1,4 +1,4 @@
-import type { AdminSettings, AdminUser, AllowlistEntry, AuditItem, ConnectionSummary, DcrMode, InviteSummary, OAuthClientAdmin, PatSummary, StdioReason, UpstreamDetail, UpstreamToolItem } from '#shared/api-types'
+import type { RestTool, ThemePreference, ToolMode, AdminSettings, AdminUser, AllowlistEntry, AuditItem, ConnectionSummary, DcrMode, InviteSummary, OAuthClientAdmin, PatSummary, StdioReason, UpstreamDetail, UpstreamToolItem } from '#shared/api-types'
 import * as seed from './seed'
 
 export type MockScenario = 'default' | 'empty' | 'error' | 'slow' | 'forbidden' | 'huge'
@@ -20,6 +20,12 @@ export type MockState = {
   stdioDrafts: string[]
   /** Personal setting (GET/PATCH /api/me/settings); missing in older session states = on. */
   notifyStatusMail?: boolean
+  notifyNewClient?: boolean
+  notifyWeekly?: boolean
+  toolMode?: ToolMode
+  theme?: ThemePreference
+  /** REST tools per upstream id (type 'rest'). */
+  restTools?: Record<string, RestTool[]>
 }
 
 const KEY = 'mcpwarden.mock.state'

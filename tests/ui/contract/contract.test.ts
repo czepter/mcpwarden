@@ -68,3 +68,39 @@ describe('Mock rules like the backend', () => {
     expect((await call('/api/upstreams')).status).toBe(401)
   })
 })
+
+describe('REST upstreams (mock rules like the backend)', () => {
+  const send = (method: string, p: string, b: unknown) => call(p, { method, headers: { 'content-type': 'application/json' }, body: JSON.stringify(b) })
+  const tool = { name: 'get_item', urlTemplate: '/items/{id}', inputSchema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] } }
+  it('seed has a REST upstream with three tools in the detail, none in the list summary', async () => {
+    const d = await (await call('/api/upstreams/up_6')).json() as { type: string, restTools: unknown[] }
+    expect(d.type).toBe('rest'); expect(d.restTools).toHaveLength(3)
+    const list = await (await call('/api/upstreams')).json() as { items: Array<Record<string, unknown>> }
+    expect(list.items.find(u => u.slug === 'local')).not.toHaveProperty('restTools')
+  })
+  it('create validates the tools like the server (placeholder without parameter, relative path without base URL)', async () => {
+    const bad = await send('POST', '/api/upstreams', { name: 'R', slug: 'r1', type: 'rest', url: 'https://api.example.com', restTools: [{ name: 'a', urlTemplate: '/x/{nope}' }] })
+    expect(bad.status).toBe(422)
+    const noBase = await send('POST', '/api/upstreams', { name: 'R', slug: 'r2', type: 'rest', restTools: [tool] })
+    expect(noBase.status).toBe(422)
+    const hostInj = await send('POST', '/api/upstreams', { name: 'R', slug: 'r3', type: 'rest', restTools: [{ ...tool, urlTemplate: 'https://{id}/x' }] })
+    expect(hostInj.status).toBe(422)
+  })
+  it('create, read, replace tools; counts follow; oauth is refused', async () => {
+    const created = await send('POST', '/api/upstreams', { name: 'R', slug: 'r4', type: 'rest', url: 'https://api.example.com/v1', restTools: [tool] })
+    expect(created.status).toBe(201)
+    const u = await created.json() as { id: string, toolsTotal: number, restTools: Array<{ name: string }> }
+    expect(u.toolsTotal).toBe(1); expect(u.restTools[0]!.name).toBe('get_item')
+    const put = await send('PUT', `/api/upstreams/${u.id}/rest-tools`, { items: [tool, { name: 'ping', urlTemplate: '/ping' }] })
+    expect(put.status).toBe(200)
+    const listed = await (await call(`/api/upstreams/${u.id}/rest-tools`)).json()
+    expect(schemas.restToolList.safeParse(listed).success).toBe(true)
+    expect((listed as { items: unknown[] }).items).toHaveLength(2)
+    expect(schemas.upstreamDetail.safeParse(await (await call(`/api/upstreams/${u.id}`)).json()).success).toBe(true)
+    expect(((await (await call(`/api/upstreams/${u.id}`)).json()) as { toolsTotal: number }).toolsTotal).toBe(2)
+    expect((await send('POST', '/api/upstreams', { name: 'R', slug: 'r5', type: 'rest', url: 'https://api.example.com', authType: 'oauth' })).status).toBe(422)
+  })
+  it('only REST upstreams have REST tools', async () => {
+    expect((await call('/api/upstreams/up_1/rest-tools')).status).toBe(422)
+  })
+})

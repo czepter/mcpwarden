@@ -11,6 +11,8 @@ export const upstream = pgTable('upstream', {
   name: text('name').notNull(),
   description: text('description'),
   type: text('type').notNull(),
+  /** Free-form labels for filtering the list (lowercase, max 10 of 32 characters; validated in the API). */
+  tags: text('tags').array().notNull().default(sql`'{}'::text[]`),
   enabled: boolean('enabled').notNull().default(true),
   version: integer('version').notNull().default(1),
   url: text('url'),
@@ -36,13 +38,14 @@ export const upstream = pgTable('upstream', {
   unique('upstream_user_slug_uq').on(t.userId, t.slug),
   // Target of the composite foreign keys of upstream_secret/upstream_tool: a row can never belong to another user's upstream
   unique('upstream_user_id_id_uq').on(t.userId, t.id),
-  check('upstream_type_ck', sql`${t.type} in ('http','stdio')`),
+  check('upstream_type_ck', sql`${t.type} in ('http','stdio','rest')`),
   check('upstream_transport_ck', sql`${t.transport} in ('auto','streamable','sse')`),
   check('upstream_auth_type_ck', sql`${t.authType} in ('none','bearer','header','env','oauth')`),
   check('upstream_status_ck', sql`${t.status} in ('unknown','healthy','degraded','open','auth_expired','disabled')`),
   check('upstream_setup_ck', sql`${t.setup} in ('ready','awaiting_auth','awaiting_approval')`),
   check('upstream_slug_ck', sql`${t.slug} ~ '^[a-z0-9][a-z0-9-]{0,31}$'`),
   check('upstream_http_url_ck', sql`${t.type} <> 'http' or ${t.url} is not null`),
+  // REST upstreams: `url` is an optional base URL; each tool carries its own URL template (upstream_rest_tool)
   check('upstream_stdio_cmd_ck', sql`${t.type} <> 'stdio' or ${t.command} is not null`),
 ])
 
@@ -94,6 +97,31 @@ export const upstreamTool = pgTable('upstream_tool', {
   foreignKey({ name: 'upstream_tool_user_upstream_fk', columns: [t.userId, t.upstreamId], foreignColumns: [upstream.userId, upstream.id] }).onDelete('cascade'),
 ])
 
+/**
+ * Own REST tool of a `type = 'rest'` upstream (spec P0-8): an HTTP API call exposed as an MCP tool. `urlTemplate` / `bodyTemplate` /
+ * `headers` values may contain `{param}` placeholders filled from the tool arguments; `inputSchema` is the JSON Schema of those arguments.
+ */
+export const upstreamRestTool = pgTable('upstream_rest_tool', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  upstreamId: uuid('upstream_id').notNull(),
+  userId: userFk(),
+  name: text('name').notNull(),
+  description: text('description'),
+  method: text('method').notNull().default('GET'),
+  urlTemplate: text('url_template').notNull(),
+  inputSchema: jsonb('input_schema').notNull().default(sql`'{"type":"object","properties":{}}'::jsonb`),
+  headers: jsonb('headers').notNull().default(sql`'{}'::jsonb`),
+  bodyTemplate: text('body_template'),
+  enabled: boolean('enabled').notNull().default(true),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, t => [
+  unique('upstream_rest_tool_uq').on(t.upstreamId, t.name),
+  foreignKey({ name: 'upstream_rest_tool_user_upstream_fk', columns: [t.userId, t.upstreamId], foreignColumns: [upstream.userId, upstream.id] }).onDelete('cascade'),
+  check('upstream_rest_tool_method_ck', sql`${t.method} in ('GET','POST','PUT','PATCH','DELETE')`),
+  check('upstream_rest_tool_name_ck', sql`${t.name} ~ '^[a-zA-Z0-9_-]{1,64}$'`),
+])
+
 export const userGatewayLimits = pgTable('user_gateway_limits', {
   userId: text('user_id').primaryKey().references(() => user.id, { onDelete: 'cascade' }),
   maxUpstreams: integer('max_upstreams').notNull().default(50),
@@ -109,8 +137,21 @@ export const userGatewayLimits = pgTable('user_gateway_limits', {
 export const userPreference = pgTable('user_preference', {
   userId: text('user_id').primaryKey().references(() => user.id, { onDelete: 'cascade' }),
   notifyStatusMail: boolean('notify_status_mail').notNull().default(true),
+  /** Mail when a client connects for the first time (default on). */
+  notifyNewClient: boolean('notify_new_client').notNull().default(true),
+  /** Weekly summary mail (default off). */
+  notifyWeekly: boolean('notify_weekly').notNull().default(false),
+  /** When the last weekly summary went out (idempotency marker for the digest job). */
+  weeklyLastSentAt: timestamp('weekly_last_sent_at', { withTimezone: true }),
+  /** Tool exposure to clients: 'direct' = every active tool, 'meta' = find_tools / describe_tool / invoke_tool. */
+  toolMode: text('tool_mode').notNull().default('direct'),
+  /** Appearance: 'system' | 'light' | 'dark'. */
+  theme: text('theme').notNull().default('system'),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
-})
+}, t => [
+  check('user_preference_tool_mode_ck', sql`${t.toolMode} in ('direct','meta')`),
+  check('user_preference_theme_ck', sql`${t.theme} in ('system','light','dark')`),
+])
 
 export const userInvite = pgTable('user_invite', {
   id: uuid('id').primaryKey().defaultRandom(),

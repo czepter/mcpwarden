@@ -9,7 +9,8 @@ const toUser = (u: { id: string, role: string | null, banned: boolean | null, ba
   id: u.id, role: u.role === 'admin' ? 'admin' : 'user', banned: u.banned === true, banExpires: u.banExpires,
 })
 
-export function createDrizzleAccessStore(db: Db): AccessStore {
+/** `onFirstConnection`: called once per (user, client), when the first use row is created (never throws, not awaited). */
+export function createDrizzleAccessStore(db: Db, hooks: { onFirstConnection?: (userId: string, clientId: string) => void } = {}): AccessStore {
   return {
     async loadOAuthAccess(userId, clientId, now) {
       const [row] = await db.select({
@@ -35,8 +36,10 @@ export function createDrizzleAccessStore(db: Db): AccessStore {
       return row ? { pat: { id: row.patId, tokenHash: row.hash, revokedAt: row.revokedAt, expiresAt: row.expiresAt, upstreamIds: row.upstreamIds }, user: toUser(row) } : null
     },
     async touchConnection(userId, clientId, now) {
-      await db.insert(oauthConnectionUse).values({ userId, clientId, lastUsedAt: now })
+      const [r] = await db.insert(oauthConnectionUse).values({ userId, clientId, lastUsedAt: now })
         .onConflictDoUpdate({ target: [oauthConnectionUse.userId, oauthConnectionUse.clientId], set: { lastUsedAt: now } })
+        .returning({ inserted: sql<boolean>`(xmax = 0)` })
+      if (r?.inserted === true) { try { hooks.onFirstConnection?.(userId, clientId) } catch { /* a mail hook must never break the call path */ } }
     },
     async touchPat(patId, now) {
       await db.update(personalAccessToken).set({ lastUsedAt: now }).where(and(eq(personalAccessToken.id, patId)))

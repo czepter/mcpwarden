@@ -5,15 +5,16 @@
 import { createHash, randomBytes } from 'node:crypto'
 import { and, asc, count, desc, eq, gt, inArray, isNotNull, isNull, lt, max, notInArray, or, sql } from 'drizzle-orm'
 import type { Db } from '../../db'
-import { appSetting, auditLog, callStat, callStatHourly, personalAccessToken, upstream, upstreamOauth, upstreamSecret, upstreamTool, user, userGatewayLimits, userInvite, userPreference } from '../../db/schema'
+import { appSetting, auditLog, callStat, callStatHourly, personalAccessToken, upstream, upstreamOauth, upstreamRestTool, upstreamSecret, upstreamTool, user, userGatewayLimits, userInvite, userPreference } from '../../db/schema'
 import { ACTIVE_WINDOW_MS, DEFAULT_LIMITS, INVITE_TTL_DAYS, ROLLUP_BUCKETS_MS, STATS } from '../config'
 import type { Timeouts } from '../config'
 import type { CallStatRow } from '../stats/buffer'
 import { querySlowUpstreams, queryAdminStats, queryHealthHistory, queryStats, queryUpstreamOverview, queryUpstreamStats, type StatsQuery } from '../stats/query'
-import type { StatsWindow } from '#shared/api-types'
+import type { RestTool, StatsWindow, ToolMode } from '#shared/api-types'
 import type { StatusSnapshot } from './status'
 import type { GatewayStore, SecretRow, UpstreamRow, UserLimits } from './types'
 import { auditMeta, type AuditEntry } from '../../utils/audit'
+import type { RestToolRow } from '../rest/adapter'
 
 type UpstreamDb = typeof upstream.$inferSelect
 
@@ -30,9 +31,9 @@ export function toRow(r: UpstreamDb): UpstreamRow {
 }
 
 export type NewUpstream = {
-  slug: string, name: string, type: 'http' | 'stdio', description?: string | null, url?: string | null, transport?: string, authType?: string,
+  slug: string, name: string, type: 'http' | 'stdio' | 'rest', description?: string | null, url?: string | null, transport?: string, authType?: string,
   authHeaderName?: string | null, ratePerMin?: number, maxConcurrent?: number, timeouts?: Partial<Timeouts> | null,
-  command?: string | null, args?: string[], env?: Record<string, string>, cwd?: string | null,
+  command?: string | null, args?: string[], env?: Record<string, string>, cwd?: string | null, tags?: string[],
 }
 
 export class SlugTaken extends Error {}
@@ -73,6 +74,47 @@ export class GatewayRepo implements GatewayStore {
   async setNotifyStatusMail(userId: string, value: boolean) {
     await this.db.insert(userPreference).values({ userId, notifyStatusMail: value }).onConflictDoUpdate({ target: userPreference.userId, set: { notifyStatusMail: value, updatedAt: new Date() } })
   }
+  /** Default 'direct' (row missing). */
+  async getToolMode(userId: string): Promise<ToolMode> {
+    const [r] = await this.db.select({ v: userPreference.toolMode }).from(userPreference).where(eq(userPreference.userId, userId))
+    return r?.v === 'meta' ? 'meta' : 'direct'
+  }
+  async setToolMode(userId: string, mode: ToolMode) {
+    await this.db.insert(userPreference).values({ userId, toolMode: mode }).onConflictDoUpdate({ target: userPreference.userId, set: { toolMode: mode, updatedAt: new Date() } })
+  }
+  /** Preferences of F4 (mail switches, theme). Defaults apply while the row is missing. */
+  async getPrefs(userId: string): Promise<{ notifyStatusMail: boolean, notifyNewClient: boolean, notifyWeekly: boolean, theme: 'system' | 'light' | 'dark' }> {
+    const [r] = await this.db.select({ s: userPreference.notifyStatusMail, n: userPreference.notifyNewClient, w: userPreference.notifyWeekly, theme: userPreference.theme }).from(userPreference).where(eq(userPreference.userId, userId))
+    return { notifyStatusMail: r?.s ?? true, notifyNewClient: r?.n ?? true, notifyWeekly: r?.w ?? false, theme: (r?.theme as 'system' | 'light' | 'dark' | undefined) ?? 'system' }
+  }
+  async patchPrefs(userId: string, p: { notifyNewClient?: boolean, notifyWeekly?: boolean, theme?: 'system' | 'light' | 'dark' }) {
+    const now = new Date()
+    // Switching the weekly summary on starts the 7 days from now (no mail the moment someone opts in).
+    const starting = p.notifyWeekly === true && !(await this.getPrefs(userId)).notifyWeekly
+    const extra = starting ? { weeklyLastSentAt: now } : {}
+    await this.db.insert(userPreference).values({ userId, ...p, ...extra }).onConflictDoUpdate({ target: userPreference.userId, set: { ...p, ...extra, updatedAt: now } })
+  }
+  /** Claims the weekly mail for one user (conditional update: two instances never both send). */
+  async claimWeekly(userId: string, before: Date, now: Date): Promise<boolean> {
+    const r = await this.db.update(userPreference).set({ weeklyLastSentAt: now }).where(and(eq(userPreference.userId, userId), eq(userPreference.notifyWeekly, true), or(isNull(userPreference.weeklyLastSentAt), lt(userPreference.weeklyLastSentAt, before)))).returning({ id: userPreference.userId })
+    return r.length > 0
+  }
+  /** Opted-in users whose last weekly summary is older than `before` (or missing). Banned users are skipped. */
+  async weeklyDigestDue(before: Date): Promise<Array<{ userId: string, email: string, name: string }>> {
+    const rows = await this.db.select({ userId: user.id, email: user.email, name: user.name, banned: user.banned, last: userPreference.weeklyLastSentAt })
+      .from(userPreference).innerJoin(user, eq(user.id, userPreference.userId)).where(eq(userPreference.notifyWeekly, true))
+    return rows.filter(r => r.banned !== true && (!r.last || r.last < before)).map(r => ({ userId: r.userId, email: r.email, name: r.name }))
+  }
+  /** Hands a claim back after a failed send (only if it is still the claim of this run). */
+  async releaseWeekly(userId: string, claimedAt: Date) {
+    await this.db.update(userPreference).set({ weeklyLastSentAt: null }).where(and(eq(userPreference.userId, userId), eq(userPreference.weeklyLastSentAt, claimedAt)))
+  }
+  /** Account erasure: rows of the user are removed by the FK cascade (upstreams, secrets, tools, stats, prefs, tokens, grants, sessions); audit rows have no FK and are deleted here. */
+  async eraseUser(userId: string) {
+    await this.db.delete(auditLog).where(or(eq(auditLog.userId, userId), eq(auditLog.actor, `user:${userId}`), and(eq(auditLog.targetType, 'user'), eq(auditLog.targetId, userId))))
+    await this.db.delete(userInvite).where(eq(userInvite.createdBy, userId)) // invitations carry third-party addresses
+    await this.db.delete(user).where(eq(user.id, userId))
+  }
   async syncTools(userId: string, upstreamId: string, names: string[]) {
     const now = new Date()
     if (names.length) {
@@ -87,6 +129,36 @@ export class GatewayRepo implements GatewayStore {
     const rows = await this.db.select({ name: upstreamTool.name, enabled: upstreamTool.enabled }).from(upstreamTool)
       .where(and(eq(upstreamTool.userId, userId), eq(upstreamTool.upstreamId, upstreamId), eq(upstreamTool.gone, false)))
     return new Map(rows.map(r => [r.name, r.enabled]))
+  }
+
+  // --- REST tools ---
+  /** Active definitions for the adapter (the runtime path). */
+  async listRestTools(userId: string, upstreamId: string): Promise<RestToolRow[]> {
+    const rows = await this.db.select().from(upstreamRestTool).where(and(eq(upstreamRestTool.userId, userId), eq(upstreamRestTool.upstreamId, upstreamId))).orderBy(asc(upstreamRestTool.name))
+    return rows.map(r => ({
+      id: r.id, name: r.name, description: r.description, method: r.method as RestToolRow['method'], urlTemplate: r.urlTemplate,
+      inputSchema: r.inputSchema as RestToolRow['inputSchema'], headers: (r.headers as Record<string, string>) ?? {}, bodyTemplate: r.bodyTemplate, enabled: r.enabled,
+    }))
+  }
+  async listRestToolRecords(userId: string, upstreamId: string): Promise<RestTool[]> {
+    const rows = await this.db.select().from(upstreamRestTool).where(and(eq(upstreamRestTool.userId, userId), eq(upstreamRestTool.upstreamId, upstreamId))).orderBy(asc(upstreamRestTool.name))
+    return rows.map(r => ({
+      id: r.id, name: r.name, description: r.description, method: r.method as RestTool['method'], urlTemplate: r.urlTemplate,
+      inputSchema: r.inputSchema as Record<string, unknown>, headers: (r.headers as Record<string, string>) ?? {}, bodyTemplate: r.bodyTemplate, enabled: r.enabled,
+      createdAt: r.createdAt.toISOString(), updatedAt: r.updatedAt.toISOString(),
+    }))
+  }
+  /** Replaces the whole set in one transaction (the editor always sends the full list). */
+  async replaceRestTools(userId: string, upstreamId: string, tools: RestToolRow[]) {
+    await this.db.transaction(async (tx) => {
+      await tx.delete(upstreamRestTool).where(and(eq(upstreamRestTool.userId, userId), eq(upstreamRestTool.upstreamId, upstreamId)))
+      if (tools.length) {
+        await tx.insert(upstreamRestTool).values(tools.map(t => ({
+          upstreamId, userId, name: t.name, description: t.description, method: t.method, urlTemplate: t.urlTemplate,
+          inputSchema: t.inputSchema, headers: t.headers, bodyTemplate: t.bodyTemplate, enabled: t.enabled,
+        })))
+      }
+    })
   }
 
   // --- Upstream management ---
@@ -125,7 +197,7 @@ export class GatewayRepo implements GatewayStore {
         userId, slug: p.slug, name: p.name, description: p.description ?? null, type: p.type, url: p.url ?? null, transport: p.transport ?? 'auto',
         authType: p.authType ?? 'none', authHeaderName: p.authHeaderName ?? null, command: p.command ?? null, args: p.args ?? [], env: p.env ?? {},
         cwd: p.cwd ?? null, ratePerMin: p.ratePerMin ?? DEFAULT_LIMITS.ratePerMin, maxConcurrent: p.maxConcurrent ?? DEFAULT_LIMITS.maxConcurrent,
-        timeouts: p.timeouts ?? null, setup, status: 'unknown',
+        timeouts: p.timeouts ?? null, tags: p.tags ?? [], setup, status: 'unknown',
       }).returning()
       return r!
     })
@@ -364,6 +436,6 @@ export class GatewayRepo implements GatewayStore {
     return await this.db.select().from(upstream).where(and(eq(upstream.userId, userId), or(inArray(upstream.status, ['degraded', 'open', 'auth_expired']), inArray(upstream.setup, ['awaiting_auth', 'awaiting_approval'])))).orderBy(asc(upstream.name))
   }
   async patNames(userId: string) {
-    return await this.db.select({ id: personalAccessToken.id, name: personalAccessToken.name, lastUsedAt: personalAccessToken.lastUsedAt }).from(personalAccessToken).where(and(eq(personalAccessToken.userId, userId), isNull(personalAccessToken.revokedAt)))
+    return await this.db.select({ id: personalAccessToken.id, name: personalAccessToken.name, deviceName: personalAccessToken.deviceName, lastUsedAt: personalAccessToken.lastUsedAt }).from(personalAccessToken).where(and(eq(personalAccessToken.userId, userId), isNull(personalAccessToken.revokedAt)))
   }
 }

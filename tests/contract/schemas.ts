@@ -6,7 +6,7 @@ import { z } from 'zod'
 import type {
   AdminStats, HealthHistory, StatsSummary, UpstreamStats,
   AdminSettingsResult, AdminUserList, AllowlistList, AuditList, AuthSession, Capabilities, ConnectionList, ConsentInfo, Dashboard, DcrPolicy,
-  InviteCreated, InviteInfo, InviteList, MeSettings, OAuthClientAdminList, PatCreated, PatList, PublicConfig, UpstreamDetail, UpstreamList, UpstreamTestResult, UpstreamToolList,
+  InviteCreated, InviteInfo, InviteList, MeSettings, OAuthClientAdminList, PatCreated, PatList, PublicConfig, RestToolList, UpstreamDetail, UpstreamList, UpstreamTestResult, UpstreamToolList,
 } from '#shared/api-types'
 
 const { string: str, number: num, boolean: bool } = z
@@ -18,13 +18,17 @@ const outcome = z.enum(['ok', 'tool_error', 'timeout', 'upstream_error', 'rate_l
 const timeouts = z.strictObject({ connectMs: num(), listMs: num(), callMs: num() })
 const limits = z.strictObject({ maxUpstreams: num(), callsPerMin: num(), maxConnections: num(), stdioMaxProcs: num(), stdioIdleMin: num() })
 const summaryShape = {
-  id: str(), slug: str(), name: str(), description: nstr, type: z.enum(['http', 'stdio']), url: nstr, command: nstr, enabled: bool(),
+  id: str(), slug: str(), name: str(), description: nstr, type: z.enum(['http', 'stdio', 'rest']), url: nstr, command: nstr, enabled: bool(),
   status: health, statusReason: nstr, statusChangedAt: nstr, lastError: nstr, lastOkAt: nstr, setup, toolsEnabled: num(), toolsTotal: num(),
-  nextRetryAt: nstr, rateLimitHits5m: num(), hasSecret: bool(),
+  nextRetryAt: nstr, rateLimitHits5m: num(), hasSecret: bool(), tags: z.array(str()).optional(),
   p95Ms: num().nullable().optional(), recent: z.array(hour).optional(), hourly: z.array(hour).optional(),
 }
 const annotations = z.strictObject({ readOnlyHint: bool().optional(), destructiveHint: bool().optional(), idempotentHint: bool().optional() })
-const patSummary = { id: str(), name: str(), prefix: str(), createdAt: str(), lastUsedAt: nstr, revokedAt: nstr, expiresAt: nstr, upstreamIds: z.array(str()).nullable() }
+const restTool = z.strictObject({
+  id: str(), name: str(), description: nstr, method: z.enum(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']), urlTemplate: str(), inputSchema: z.record(str(), z.unknown()),
+  headers: z.record(str(), str()), bodyTemplate: nstr, enabled: bool(), createdAt: str(), updatedAt: str(),
+})
+const patSummary = { id: str(), name: str(), deviceName: nstr.optional(), prefix: str(), createdAt: str(), lastUsedAt: nstr, revokedAt: nstr, expiresAt: nstr, upstreamIds: z.array(str()).nullable() }
 
 export const schemas = {
   session: z.union([z.null(), z.strictObject({ user: z.strictObject({ id: str(), name: str(), email: str(), role: z.enum(['admin', 'user']), banned: bool() }), session: z.strictObject({ id: str(), expiresAt: str() }) })]) satisfies z.ZodType<AuthSession>,
@@ -32,8 +36,9 @@ export const schemas = {
   upstreamDetail: z.strictObject({
     ...summaryShape, transport: z.enum(['auto', 'streamable', 'sse']), authType: z.enum(['none', 'bearer', 'header', 'env', 'oauth']), authHeaderName: nstr,
     ratePerMin: num(), maxConcurrent: num(), timeouts, args: z.array(str()), cwd: nstr, env: z.record(str(), str()), secretNames: z.array(str()),
-    version: num(), createdAt: str(), updatedAt: str(),
+    version: num(), createdAt: str(), updatedAt: str(), restTools: z.array(restTool).optional(),
   }) satisfies z.ZodType<UpstreamDetail>,
+  restToolList: z.strictObject({ items: z.array(restTool) }) satisfies z.ZodType<RestToolList>,
   tools: z.strictObject({
     items: z.array(z.strictObject({ name: str(), title: nstr, description: nstr, enabled: bool(), gone: bool(), firstSeenAt: str(), lastSeenAt: str(), annotations: annotations.optional() })),
     fetchedAt: nstr, stale: bool(),
@@ -48,7 +53,7 @@ export const schemas = {
   ]) satisfies z.ZodType<UpstreamTestResult>,
   pats: z.strictObject({ items: z.array(z.strictObject(patSummary)), limit: z.strictObject({ max: num(), active: num() }) }) satisfies z.ZodType<PatList>,
   patCreated: z.strictObject({ ...patSummary, token: str() }) satisfies z.ZodType<PatCreated>,
-  connections: z.strictObject({ items: z.array(z.strictObject({ clientId: str(), name: str(), scopes: z.array(str()), redirectHost: str(), allowlisted: bool(), grantedAt: str(), lastUsedAt: nstr, active: bool() })) }) satisfies z.ZodType<ConnectionList>,
+  connections: z.strictObject({ items: z.array(z.strictObject({ clientId: str(), name: str(), deviceName: nstr.optional(), scopes: z.array(str()), redirectHost: str(), allowlisted: bool(), grantedAt: str(), lastUsedAt: nstr, active: bool() })) }) satisfies z.ZodType<ConnectionList>,
   capabilities: z.strictObject({
     mcpUrl: str(), role: z.enum(['admin', 'user']),
     stdio: z.strictObject({ allowed: bool(), reason: z.enum(['instance_disabled', 'not_granted', 'no_capabilities', 'supervisor_unreachable', 'image_slim']).optional() }),
@@ -80,10 +85,10 @@ export const schemas = {
   }) satisfies z.ZodType<OAuthClientAdminList>,
   consent: z.strictObject({
     client: z.strictObject({ id: str(), name: str(), redirects: z.array(z.strictObject({ uri: str(), host: str(), kind: z.enum(['web', 'loopback', 'app']), loopback: bool() })), allowlisted: bool(), registeredAt: str(), viaDcr: bool() }),
-    scopes: z.array(z.strictObject({ name: str(), required: bool() })), resource: str(), loopback: bool(),
+    scopes: z.array(z.strictObject({ name: str(), required: bool() })), resource: str(), loopback: bool(), suggestedDeviceName: nstr.optional(),
   }) satisfies z.ZodType<ConsentInfo>,
   dashboard: z.strictObject({
-    clients: z.array(z.strictObject({ kind: z.enum(['oauth', 'pat']), id: str(), name: str(), allowlisted: z.boolean().nullable(), active: bool(), lastActiveAt: nstr, callsPerMin: num(), contextTokensEstimate: num().nullable() })),
+    clients: z.array(z.strictObject({ kind: z.enum(['oauth', 'pat']), id: str(), name: str(), deviceName: nstr.optional(), allowlisted: z.boolean().nullable(), active: bool(), lastActiveAt: nstr, callsPerMin: num(), contextTokensEstimate: num().nullable(), toolMode: z.enum(['direct', 'meta']).optional() })),
     attention: z.array(z.strictObject({ upstreamId: str(), slug: str(), name: str(), status: health, setup: z.enum(['ready', 'awaiting_auth', 'awaiting_approval']), statusReason: nstr, nextRetryAt: nstr })),
     attentionCount: num(),
     kpis: z.strictObject({ clientsActive: num(), clientsTotal: num(), callsPerMin: num(), successRate: num(), overheadP95Ms: num() }).optional(),
@@ -115,7 +120,7 @@ export const schemas = {
     window: z.enum(['5m', '1h', '24h', '7d']), users: num(), activeUsers: num(), upstreams: num(), calls: num(), okRate: num(), callsPerMin: num(), p95Ms: num(), overheadP95Ms: num(),
     outcomes: z.array(z.strictObject({ outcome, count: num() })), statsDropped: num(),
   }) satisfies z.ZodType<AdminStats>,
-  meSettings: z.strictObject({ notifyStatusMail: bool() }) satisfies z.ZodType<MeSettings>,
+  meSettings: z.strictObject({ notifyStatusMail: bool(), notifyNewClient: bool(), notifyWeekly: bool(), toolMode: z.enum(['direct', 'meta']), theme: z.enum(['system', 'light', 'dark']) }) satisfies z.ZodType<MeSettings>,
   publicConfig: z.strictObject({ mail: bool(), registrationOpen: bool() }) satisfies z.ZodType<PublicConfig>,
   /** Nitro error shape (`ApiErrorBody`), not `/api/auth/*`. */
   apiError: z.looseObject({ statusCode: num(), statusMessage: str(), data: z.looseObject({ code: str().optional(), field: str().optional(), message: str().optional() }).optional() }),

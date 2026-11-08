@@ -19,6 +19,7 @@ import { Input } from '~/components/ui/input'
 import { RadioGroup, RadioGroupItem } from '~/components/ui/radio-group'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '~/components/ui/table'
 import { Textarea } from '~/components/ui/textarea'
+import { formatDate } from '~/lib/format'
 import { useZodForm } from '~/lib/useZodForm'
 import { allowlistSchema } from '~/lib/zod-schemas'
 
@@ -51,56 +52,55 @@ const daysLeft = (iso: string | null) => (iso ? Math.max(0, Math.ceil((new Date(
 </script>
 
 <template>
-  <PageHeader :title="$t('admin.title')" />
+  <PageHeader :title="$t('admin.title')" :crumbs="[{ label: $t('admin.title') }]" :crumb="$t('common.adminTabs.oauth')" :description="$t('common.adminTabs.hint')" data-testid="admin-hint" />
   <AdminTabs />
-  <section class="rounded-lg border bg-card p-5" aria-labelledby="h-mode">
-    <h2 id="h-mode" class="mb-1 text-base font-semibold">{{ $t('admin.oauth.dcrTitle') }}</h2>
-    <p class="mb-3 text-[13px] text-muted-foreground">{{ $t('admin.oauth.dcrNote') }}</p>
-    <RadioGroup v-if="policy.data.value" :model-value="policy.data.value.mode" :aria-label="$t('admin.oauth.modeAria')" class="gap-2" @update:model-value="setMode">
-      <label v-for="m in MODES" :key="m" class="flex min-h-11 cursor-pointer items-start gap-3 rounded-sm border px-3 py-2.5" :class="policy.data.value.mode === m ? 'border-primary bg-primary-tint' : 'bg-card'">
-        <RadioGroupItem :value="m" class="mt-0.5" /><span><span class="block font-medium">{{ $t(`admin.oauth.modes.${m}.label`) }}</span><span class="block text-[13px] text-secondary-foreground">{{ $t(`admin.oauth.modes.${m}.desc`) }}</span></span>
+  <section class="flex flex-col gap-3" aria-labelledby="h-mode">
+    <div><h2 id="h-mode" class="text-base font-semibold">{{ $t('admin.oauth.dcrTitle') }}</h2>
+    <p class="text-[13px] text-muted-foreground">{{ $t('admin.oauth.dcrNote') }}</p></div>
+    <RadioGroup v-if="policy.data.value" :model-value="policy.data.value.mode" :aria-label="$t('admin.oauth.modeAria')" class="grid grid-cols-[repeat(auto-fit,minmax(min(260px,100%),1fr))] gap-3" @update:model-value="setMode">
+      <label v-for="m in MODES" :key="m" class="flex min-h-11 cursor-pointer items-start gap-3 rounded-sm border px-3.5 py-3" :class="policy.data.value.mode === m ? 'border-primary bg-primary-tint' : 'bg-card'">
+        <RadioGroupItem :value="m" class="mt-0.5" /><span><span class="block font-semibold">{{ $t(`admin.oauth.modes.${m}.label`) }}</span><span class="block text-[13px] text-secondary-foreground">{{ $t(`admin.oauth.modes.${m}.desc`) }}</span></span>
       </label>
     </RadioGroup>
     <ErrorState v-else-if="policy.error.value" :error="policy.error.value" @retry="policy.refresh()" />
-    <Alert v-if="policy.data.value?.mode === 'open'" class="mt-3 border-warn-border bg-warn-bg text-[13px] text-warn-fg">{{ $t('admin.oauth.openWarning') }}</Alert>
-  </section>
+    <Alert v-if="policy.data.value?.mode === 'open'" class="border-warn-border bg-warn-bg text-[13px] text-warn-fg">{{ $t('admin.oauth.openWarning') }}</Alert>
 
-  <DataSection :title="$t('admin.oauth.allowlist')" min-width="720px">
-    <template #actions><Button @click="dialog = true">{{ $t('admin.oauth.addEntry') }}</Button></template>
+  <DataSection :title="$t('admin.oauth.allowlist')" min-width="640px">
+    <template #actions><Button variant="outline" @click="dialog = true">{{ $t('admin.oauth.addEntry') }}</Button></template>
     <LoadingRows v-if="allow.status.value === 'pending' && !allow.data.value" :rows="3" />
     <EmptyState v-else-if="!allow.data.value?.items.length" :title="$t('admin.oauth.allowlistEmpty')" />
     <Table v-else>
       <caption class="sr-only">{{ $t('admin.oauth.allowlist') }}</caption>
-      <TableHeader><TableRow class="bg-table-head"><TableHead scope="col">{{ $t('admin.oauth.col.label') }}</TableHead><TableHead scope="col">{{ $t('admin.oauth.col.namePattern') }}</TableHead><TableHead scope="col">{{ $t('admin.oauth.col.redirectPattern') }}</TableHead><TableHead scope="col"><span class="sr-only">{{ $t('admin.oauth.col.actions') }}</span></TableHead></TableRow></TableHeader>
+      <TableHeader><TableRow class="bg-table-head"><TableHead scope="col">{{ $t('admin.oauth.clientCol') }}</TableHead><TableHead scope="col">{{ $t('admin.oauth.redirectShort') }}</TableHead><TableHead scope="col" class="text-right">{{ $t('admin.oauth.actionCol') }}</TableHead></TableRow></TableHeader>
       <TableBody>
         <TableRow v-for="e in allow.data.value.items" :key="e.id">
-          <TableCell class="font-medium">{{ e.label }}</TableCell><TableCell><code class="text-xs">{{ e.namePattern }}</code></TableCell>
-          <TableCell><div v-for="r in e.redirectPatterns" :key="r"><code class="text-xs">{{ r }}</code></div></TableCell>
-          <TableCell class="text-right"><Button variant="ghost" size="icon" class="text-destructive" :aria-label="$t('admin.oauth.removeEntryAria', { label: e.label })" @click="removeAllow(e.id)"><span aria-hidden="true" class="text-lg">✕</span></Button></TableCell>
+          <TableCell class="font-semibold">{{ e.label }}<div class="mono text-xs font-normal text-muted-foreground" :title="$t('admin.oauth.col.namePattern')">{{ e.namePattern }}</div></TableCell>
+          <TableCell><div v-for="r in e.redirectPatterns" :key="r"><code class="text-xs text-secondary-foreground">{{ r }}</code></div></TableCell>
+          <TableCell class="text-right"><Button variant="ghost" size="icon" class="size-11 text-destructive" :aria-label="$t('admin.oauth.removeEntryAria', { label: e.label })" @click="removeAllow(e.id)"><span aria-hidden="true" class="text-lg">✕</span></Button></TableCell>
         </TableRow>
       </TableBody>
     </Table>
   </DataSection>
 
-  <DataSection :title="$t('admin.oauth.registeredClients')" min-width="900px">
+  <DataSection :title="$t('admin.oauth.registeredClients')" :description="$t('admin.oauth.registeredNote')" min-width="820px">
     <LoadingRows v-if="clients.status.value === 'pending' && !clients.data.value" />
     <ErrorState v-else-if="clients.error.value" :error="clients.error.value" @retry="clients.refresh()" />
     <EmptyState v-else-if="!clients.data.value?.items.length" :title="$t('admin.oauth.noClients')" />
     <Table v-else>
       <caption class="sr-only">{{ $t('admin.oauth.registeredClients') }}</caption>
-      <TableHeader><TableRow class="bg-table-head"><TableHead scope="col">{{ $t('admin.oauth.col.name') }}</TableHead><TableHead scope="col">{{ $t('admin.oauth.col.redirectUris') }}</TableHead><TableHead scope="col">{{ $t('admin.oauth.col.created') }}</TableHead><TableHead scope="col">{{ $t('admin.oauth.col.lastUsed') }}</TableHead><TableHead scope="col">{{ $t('admin.oauth.col.users') }}</TableHead><TableHead scope="col">{{ $t('admin.oauth.col.allowlist') }}</TableHead><TableHead scope="col">{{ $t('admin.oauth.col.expiry') }}</TableHead><TableHead scope="col"><span class="sr-only">{{ $t('admin.oauth.col.actions') }}</span></TableHead></TableRow></TableHeader>
+      <TableHeader><TableRow class="bg-table-head"><TableHead scope="col">{{ $t('admin.oauth.col.name') }}</TableHead><TableHead scope="col">{{ $t('admin.oauth.col.redirectUris') }}</TableHead><TableHead scope="col">{{ $t('admin.oauth.col.created') }}</TableHead><TableHead scope="col">{{ $t('admin.oauth.col.lastUsed') }}</TableHead><TableHead scope="col">{{ $t('admin.oauth.col.users') }}</TableHead><TableHead scope="col" class="text-right">{{ $t('admin.oauth.actionCol') }}</TableHead></TableRow></TableHeader>
       <TableBody>
         <TableRow v-for="c in clients.data.value.items" :key="c.id">
-          <TableCell class="font-medium">{{ c.name }}</TableCell>
-          <TableCell><div v-for="u in c.redirectUris" :key="u"><code class="text-xs">{{ u }}</code></div></TableCell>
-          <TableCell><RelativeTime :value="c.createdAt" /></TableCell><TableCell><RelativeTime :value="c.lastUsedAt" :empty="$t('admin.oauth.never')" /></TableCell>
-          <TableCell class="tnum">{{ c.userCount }}</TableCell><TableCell>{{ c.allowlisted ? $t('admin.oauth.inAllowlist') : $t('admin.oauth.notInAllowlist') }}</TableCell>
-          <TableCell>{{ c.expiresAt ? $t('admin.oauth.expiresIn', { n: daysLeft(c.expiresAt) }, daysLeft(c.expiresAt) ?? 0) : '–' }}</TableCell>
+          <TableCell class="font-semibold">{{ c.name }}<div class="text-xs font-medium" :class="c.allowlisted ? 'text-st-healthy-fg' : 'text-warn-fg'">{{ c.allowlisted ? $t('admin.oauth.inAllowlist') : $t('admin.oauth.notInAllowlist') }}<template v-if="c.expiresAt">, {{ $t('admin.oauth.expiresIn', { n: daysLeft(c.expiresAt) }, daysLeft(c.expiresAt) ?? 0) }}</template></div></TableCell>
+          <TableCell class="whitespace-normal break-all"><div v-for="u in c.redirectUris" :key="u"><code class="text-xs text-secondary-foreground">{{ u }}</code></div></TableCell>
+          <TableCell>{{ formatDate(c.createdAt) }}</TableCell><TableCell><RelativeTime :value="c.lastUsedAt" :empty="$t('admin.oauth.never')" /></TableCell>
+          <TableCell class="tnum">{{ c.userCount }}</TableCell>
           <TableCell class="text-right"><Button variant="destructive-outline" :aria-label="$t('admin.oauth.revokeAria', { name: c.name })" @click="revoke = c">{{ $t('admin.oauth.revoke') }}</Button></TableCell>
         </TableRow>
       </TableBody>
     </Table>
   </DataSection>
+  </section>
 
   <Dialog v-model:open="dialog">
     <DialogContent>

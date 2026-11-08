@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import type { GatewayStore, SecretRow, UpstreamRow, UserLimits } from '../../server/gateway/upstream/types'
+import type { RestToolRow } from '../../server/gateway/rest/adapter'
 import { DEFAULT_LIMITS } from '../../server/gateway/config'
 
 /** In-memory replacement for the Drizzle repository (waits for 0a/0b). userId first everywhere, like in the real repo. */
@@ -8,6 +9,7 @@ export class MemoryStore implements GatewayStore {
   secrets: Array<SecretRow & { userId: string }> = []
   tools = new Map<string, Map<string, boolean>>() // `${userId}:${upstreamId}` -> name -> enabled
   limits = new Map<string, Partial<UserLimits>>()
+  restTools = new Map<string, RestToolRow[]>() // `${userId}:${upstreamId}` -> definitions
 
   addUpstream(userId: string, p: Partial<UpstreamRow> & Pick<UpstreamRow, 'slug' | 'url'>): UpstreamRow {
     const up: UpstreamRow = {
@@ -31,6 +33,7 @@ export class MemoryStore implements GatewayStore {
     this.tools.set(k, m)
     return new Map(m)
   }
+  async listRestTools(userId: string, upstreamId: string) { return this.restTools.get(`${userId}:${upstreamId}`) ?? [] }
   async toolFlags(userId: string, upstreamId: string) { return new Map(this.tools.get(`${userId}:${upstreamId}`) ?? []) }
   setToolEnabled(userId: string, upstreamId: string, name: string, enabled: boolean) { this.tools.get(`${userId}:${upstreamId}`)!.set(name, enabled) }
 }

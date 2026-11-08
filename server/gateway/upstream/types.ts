@@ -6,7 +6,7 @@ export type UpstreamRow = {
   userId: string
   slug: string
   name: string
-  type: 'http' | 'stdio'
+  type: 'http' | 'stdio' | 'rest'
   enabled: boolean
   version: number
   url: string | null
@@ -45,4 +45,6 @@ export interface GatewayStore {
   /** Upsert of the tools seen (`first_seen_at`, `last_seen_at`, `gone`), returns `enabled` per name. */
   syncTools(userId: string, upstreamId: string, names: string[]): Promise<Map<string, boolean>>
   toolFlags(userId: string, upstreamId: string): Promise<Map<string, boolean>>
+  /** REST upstreams: the tool definitions (only the active ones are exposed). Optional for stores without REST support. */
+  listRestTools?(userId: string, upstreamId: string): Promise<import('../rest/adapter').RestToolRow[]>
 }

@@ -4,10 +4,9 @@ import { meApi, upstreamApi } from '~/api'
 import ConfirmDialog from '~/components/common/ConfirmDialog.vue'
 import ErrorState from '~/components/common/ErrorState.vue'
 import LoadingRows from '~/components/common/LoadingRows.vue'
-import RelativeTime from '~/components/common/RelativeTime.vue'
-import PageHeader from '~/components/shell/PageHeader.vue'
 import { Alert } from '~/components/ui/alert'
 import { Button } from '~/components/ui/button'
+import { formatDateTime } from '~/lib/format'
 import StdioChecklist from '~/components/upstreams/StdioChecklist.vue'
 
 definePageMeta({ middleware: 'phase2' })
@@ -25,24 +24,26 @@ async function doDiscard() { try { await upstreamApi.remove(id); await navigateT
 <template>
   <ErrorState v-if="draft.error.value" :error="draft.error.value" @retry="draft.refresh()" />
   <LoadingRows v-else-if="!draft.data.value" />
-  <template v-else>
-    <PageHeader :title="$t('upstreams.approve.heading', { slug: draft.data.value.slug })" :crumbs="[{ label: $t('upstreams.list.title'), to: '/upstreams' }]" />
-    <Alert role="alert" class="border-warn-border bg-warn-bg text-warn-fg"><strong>{{ $t('upstreams.approve.warnStrong') }}</strong> {{ $t('upstreams.approve.warnRest') }}</Alert>
-    <div class="flex max-w-[600px] flex-col gap-4">
+  <!-- Draft: one 600 px card (back link, heading, state, warning, facts, checklist, buttons). -->
+  <div v-else class="mx-auto flex w-full max-w-[600px] flex-col gap-5 rounded-lg border bg-card p-7">
+    <div class="flex flex-col gap-1">
+      <NuxtLink to="/upstreams" class="text-[13px] text-secondary-foreground">‹ {{ $t('upstreams.list.title') }}</NuxtLink>
+      <h1 class="mt-1 text-xl font-semibold tracking-tight">{{ $t('upstreams.approve.heading', { slug: draft.data.value.slug }) }}</h1>
+      <div class="flex items-center gap-2 font-medium text-st-degraded-fg"><span class="size-2 rounded-full bg-st-degraded-fg" aria-hidden="true" />{{ $t('upstreams.approve.state') }}</div>
+    </div>
+    <Alert role="alert" class="gap-1 border-0 bg-warn-bg text-warn-fg">
+      <strong>{{ $t('upstreams.approve.warnStrong') }}</strong>
+      <div>{{ $t('upstreams.approve.origin', { client: draft.data.value.createdVia.client, at: formatDateTime(draft.data.value.createdVia.at) }) }} {{ $t('upstreams.approve.warnRest') }}</div>
+    </Alert>
+    <dl class="grid grid-cols-[110px_minmax(0,1fr)] gap-x-4 gap-y-2.5">
+      <dt class="text-secondary-foreground">{{ $t('upstreams.approve.command') }}</dt><dd><code class="mono block rounded-sm bg-muted px-2.5 py-2 text-[13px] [overflow-wrap:anywhere]">{{ draft.data.value.command }} {{ draft.data.value.args.join(' ') }}</code></dd>
+      <dt class="text-secondary-foreground">{{ $t('upstreams.approve.cwd') }}</dt><dd class="mono text-[13px] [overflow-wrap:anywhere]">{{ draft.data.value.cwd }}</dd>
+      <dt class="text-secondary-foreground">{{ $t('upstreams.approve.env') }}</dt><dd>{{ draft.data.value.envNames.length ? $t('upstreams.approve.envSet', { names: draft.data.value.envNames.join(', ') }) : $t('upstreams.approve.envNone') }}</dd>
+      <dt class="text-secondary-foreground">{{ $t('upstreams.approve.network') }}</dt><dd>{{ $t('upstreams.approve.networkText') }}</dd>
+    </dl>
     <StdioChecklist v-if="caps.data.value" :caps="caps.data.value" />
     <p v-else-if="caps.error.value" role="status" class="text-[13px] text-muted-foreground">{{ $t('upstreams.approve.capsError') }}</p>
-    <section class="flex w-full max-w-[600px] flex-col gap-3 rounded-lg border bg-card p-5" aria-labelledby="h-draft">
-      <h2 id="h-draft" class="text-[15px] font-semibold">{{ $t('upstreams.approve.draft') }}</h2>
-      <dl class="grid grid-cols-[140px_minmax(0,1fr)] gap-x-4 gap-y-2 text-sm">
-        <dt class="text-muted-foreground">{{ $t('upstreams.approve.command') }}</dt><dd class="mono text-xs">{{ draft.data.value.command }} {{ draft.data.value.args.join(' ') }}</dd>
-        <dt class="text-muted-foreground">{{ $t('upstreams.approve.cwd') }}</dt><dd class="mono text-xs">{{ draft.data.value.cwd }}</dd>
-        <dt class="text-muted-foreground">{{ $t('upstreams.approve.env') }}</dt><dd class="mono text-xs">{{ draft.data.value.envNames.join(', ') || $t('upstreams.approve.envNone') }} {{ $t('upstreams.approve.envSecret') }}</dd>
-        <dt class="text-muted-foreground">{{ $t('upstreams.approve.origin') }}</dt><dd>{{ draft.data.value.createdVia.client }}, <RelativeTime :value="draft.data.value.createdVia.at" /></dd>
-      </dl>
-      <ul class="list-disc pl-5 text-[13px] text-secondary-foreground"><li>{{ $t('upstreams.approve.check1') }}</li><li>{{ $t('upstreams.approve.check2') }}</li><li>{{ $t('upstreams.approve.check3') }}</li></ul>
-      <div class="flex justify-end gap-2"><Button variant="destructive-outline" @click="discard = true">{{ $t('upstreams.approve.discard') }}</Button><Button :disabled="blocked" @click="approve">{{ $t('upstreams.approve.approve') }}</Button></div>
-    </section>
-    </div>
+    <div class="flex flex-wrap justify-end gap-2"><Button variant="destructive-outline" @click="discard = true">{{ $t('upstreams.approve.discard') }}</Button><Button :disabled="blocked" class="px-5" @click="approve">{{ $t('upstreams.approve.approve') }}</Button></div>
     <ConfirmDialog :open="discard" :title="$t('upstreams.approve.discardTitle')" :confirm-label="$t('upstreams.approve.discard')" :description="$t('upstreams.approve.discardText')" @update:open="discard = $event" @confirm="doDiscard" />
-  </template>
+  </div>
 </template>

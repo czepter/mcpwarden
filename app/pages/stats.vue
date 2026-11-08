@@ -9,7 +9,6 @@ import TimeWindow from '~/components/common/TimeWindow.vue'
 import PageHeader from '~/components/shell/PageHeader.vue'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '~/components/ui/select'
 import { formatNumber, formatPercent } from '~/lib/format'
-import { outcomeLabel } from '~/lib/labels'
 
 const { t } = useI18n()
 useHead({ title: () => `${t('stats.title')} · mcpwarden` })
@@ -23,14 +22,7 @@ const upstream = ref<string>(typeof route.query.upstream === 'string' && route.q
 const { data: upstreams } = useAsyncData('stats-upstreams', () => upstreamApi.list(), { server: false })
 watch(upstreams, (l) => { if (l && upstream.value !== ALL && !l.items.some(u => u.slug === upstream.value)) upstream.value = ALL })
 watch([win, upstream], () => { void router.replace({ query: { ...route.query, window: win.value === '24h' ? undefined : win.value, upstream: upstream.value === ALL ? undefined : upstream.value } }) })
-// Tool filter: options come from the unfiltered view of the current upstream/window; the choice lives in `?tool=`.
-const tool = ref<string>(typeof route.query.tool === 'string' && route.query.tool ? route.query.tool : ALL)
-watch(upstream, () => { tool.value = ALL })
-watch([win, upstream, tool], () => { void router.replace({ query: { ...route.query, window: win.value === '24h' ? undefined : win.value, upstream: upstream.value === ALL ? undefined : upstream.value, tool: tool.value === ALL ? undefined : tool.value } }) })
-const { data, error, status, refresh } = useAsyncData('stats', () => statsApi.summary(win.value, upstream.value === ALL ? undefined : upstream.value, tool.value === ALL ? undefined : tool.value), { server: false, watch: [win, upstream, tool] })
-const toolOptions = ref<string[]>([])
-watch(data, (d) => { if (d && tool.value === ALL) toolOptions.value = [...new Set(d.tools.map(x => x.tool).filter(Boolean))].sort() })
-const fmtMs = (ms: number) => (ms >= 10_000 ? `${formatNumber(ms / 1000, 1)} s` : `${formatNumber(ms)} ms`)
+const { data, error, status, refresh } = useAsyncData('stats', () => statsApi.summary(win.value, upstream.value === ALL ? undefined : upstream.value), { server: false, watch: [win, upstream] })
 const max = computed(() => Math.max(1, ...(data.value?.perHour.map(p => p.calls) ?? [])))
 const total = computed(() => data.value?.outcomes.reduce((a, o) => a + o.count, 0) || 1)
 // Y axis: grid lines at round values, height proportional to the value (comparison item 27).
@@ -52,28 +44,23 @@ const windowStart = computed(() => ({ '5m': t('stats.win5m'), '1h': t('stats.win
 
 <template>
   <PageHeader :title="$t('stats.title')">
+    <TimeWindow v-model="win" />
     <Select v-model="upstream">
       <SelectTrigger class="h-11 w-52" :aria-label="$t('stats.filterUpstream')"><SelectValue /></SelectTrigger>
       <SelectContent><SelectItem :value="ALL">{{ $t('stats.allUpstreams') }}</SelectItem><SelectItem v-for="u in upstreams?.items ?? []" :key="u.slug" :value="u.slug">{{ u.slug }}</SelectItem></SelectContent>
     </Select>
-    <Select v-if="toolOptions.length" v-model="tool">
-      <SelectTrigger class="h-11 w-52" :aria-label="$t('stats.filterTool')"><SelectValue /></SelectTrigger>
-      <SelectContent><SelectItem :value="ALL">{{ $t('stats.allTools') }}</SelectItem><SelectItem v-for="x in toolOptions" :key="x" :value="x">{{ x }}</SelectItem></SelectContent>
-    </Select>
-    <TimeWindow v-model="win" />
   </PageHeader>
   <LoadingRows v-if="status === 'pending' && !data" />
   <ErrorState v-else-if="error" :error="error" @retry="refresh()" />
   <template v-else-if="data">
-    <section :aria-label="$t('stats.kpis')" class="grid grid-cols-[repeat(auto-fit,minmax(min(180px,100%),1fr))] gap-3">
+    <section :aria-label="$t('stats.kpis')" class="grid grid-cols-[repeat(auto-fit,minmax(min(170px,100%),1fr))] gap-3">
       <KpiCard :label="$t('stats.kpiCalls')" :value="formatNumber(data.calls)" />
-      <KpiCard :label="$t('stats.kpiCallsPerMin')" :value="formatNumber(data.callsPerMin, 1)" />
-      <KpiCard :label="$t('stats.kpiSuccessRate')" :value="formatPercent(data.okRate)" />
-      <KpiCard :label="$t('stats.kpiPeak')" :value="String(data.peakConcurrent)" />
+      <KpiCard :label="$t('stats.kpiCallsPerMin')" :value="formatNumber(data.callsPerMin, 1)" unit="/ min" />
+      <KpiCard :label="$t('stats.kpiSuccessRate')" :value="formatNumber(data.okRate * 100, 1)" unit="%" />
+      <KpiCard :label="$t('stats.kpiPeak')" :value="String(data.peakConcurrent)" :unit="$t('stats.kpiPeakUnit')" />
       <KpiCard :label="$t('stats.kpiActiveClients')" :value="String(data.activeClients)" />
-      <KpiCard :label="$t('stats.kpiAvg')" :value="formatNumber(data.avgMs)" unit="ms" />
-      <KpiCard :label="$t('stats.kpiMax')" :value="formatNumber(data.maxMs)" unit="ms" />
     </section>
+    <div class="grid items-start gap-4 lg:grid-cols-[3fr_2fr]">
     <DataSection :title="win === '24h' ? $t('stats.callsPerHour') : $t('stats.callsOverTime')">
       <figure class="px-5 pb-4" role="img" :aria-label="$t(win === '24h' ? 'stats.callsPerHourPeak' : 'stats.callsOverTimePeak', { peak: formatNumber(max) })">
         <div class="relative mt-3 flex h-40 items-end gap-1 border-b border-l pl-1">
@@ -85,13 +72,14 @@ const windowStart = computed(() => ({ '5m': t('stats.win5m'), '1h': t('stats.win
     </DataSection>
     <DataSection :title="$t('stats.outcomes')">
       <ul class="flex flex-col gap-2 px-5 pb-4">
-        <li v-for="o in data.outcomes" :key="o.outcome" class="grid grid-cols-[130px_1fr_70px] items-center gap-3 text-sm">
-          <span :title="o.outcome">{{ outcomeLabel(o.outcome) }}</span>
+        <li v-for="o in data.outcomes" :key="o.outcome" class="grid grid-cols-[110px_minmax(0,1fr)_56px] items-center gap-3 text-sm">
+          <span>{{ o.outcome }}</span>
           <span class="h-2 rounded-sm bg-muted" aria-hidden="true"><span class="block h-2 rounded-sm" :class="OUTCOME_BAR[o.outcome] ?? 'bg-st-disabled-dot'" :style="{ width: `${(o.count / total) * 100}%` }" /></span>
           <span class="tnum text-right">{{ formatNumber(o.count) }}</span>
         </li>
       </ul>
     </DataSection>
+    </div>
     <p v-if="!data.calls" class="text-sm text-muted-foreground">{{ $t('stats.empty') }}</p>
     <DataSection :title="$t('stats.latency')" :description="$t('stats.latencyDesc')" min-width="860px">
       <table class="w-full text-sm">
@@ -105,19 +93,6 @@ const windowStart = computed(() => ({ '5m': t('stats.win5m'), '1h': t('stats.win
               <td v-for="(v, i) in [r.stat.p5Ms, r.stat.p50Ms, r.stat.p75Ms, r.stat.p95Ms, r.stat.p99Ms, r.stat.overheadP95Ms]" :key="i" class="px-3 text-right" :class="i === 3 && 'font-semibold'">{{ formatNumber(v) }} ms</td>
             </template>
             <template v-else><td class="px-3 text-right">0</td><td v-for="i in 7" :key="i" class="px-3 text-right text-muted-foreground" :aria-label="$t('stats.noData')">–</td></template>
-          </tr>
-        </tbody>
-      </table>
-    </DataSection>
-    <DataSection v-if="data.tools.length" :title="$t('stats.toolLatency')" :description="$t('stats.toolLatencyDesc')" min-width="860px">
-      <table class="w-full text-sm">
-        <caption class="sr-only">{{ $t('stats.toolCaption') }}</caption>
-        <thead class="bg-table-head text-xs text-muted-foreground"><tr class="border-y"><th scope="col" class="px-5 py-2.5 text-left font-medium">{{ $t('stats.colTool') }}</th><th v-for="h in [$t('stats.colCalls'), $t('stats.colSuccess'), 'p50', 'p95', 'p99', $t('stats.colAvg'), $t('stats.colMax')]" :key="h" scope="col" class="px-3 text-right font-medium">{{ h }}</th></tr></thead>
-        <tbody>
-          <tr v-for="r in data.tools" :key="`${r.upstream}/${r.tool}`" class="tnum border-b border-muted">
-            <td class="px-5 py-2"><span class="text-muted-foreground">{{ r.upstream }}__</span><span class="mono text-xs font-medium">{{ r.tool || '–' }}</span></td>
-            <td class="px-3 text-right">{{ formatNumber(r.calls) }}</td><td class="px-3 text-right font-medium" :class="okClass(r.okRate)">{{ formatPercent(r.okRate) }}</td>
-            <td v-for="(v, i) in [r.p50Ms, r.p95Ms, r.p99Ms, r.avgMs, r.maxMs]" :key="i" class="px-3 text-right" :class="i === 1 && 'font-semibold'">{{ fmtMs(v) }}</td>
           </tr>
         </tbody>
       </table>

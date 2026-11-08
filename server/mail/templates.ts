@@ -95,3 +95,46 @@ export function upstreamStatusMail(to: string, baseUrl: string | URL, up: { id: 
     html: layout(`${name}: ${t.subject}`, [intro, detail, optOutShort].filter(Boolean), link),
   }
 }
+
+/** "A client connected for the first time": name is foreign text (DCR), so it is sanitized; the link is fixed (from BASE_URL). */
+export function newClientMail(to: string, baseUrl: string | URL, clientName: string | null): Mail {
+  const name = sanitizeUntrusted(clientName, MAX_NAME).replace(/[<>]/g, '') || 'Ein unbekannter Client'
+  const link = buildLink(baseUrl, '/settings/connections')
+  const settings = buildLink(baseUrl, '/settings')
+  const intro = `„${name}“ hat sich zum ersten Mal mit deinem mcpwarden-Konto verbunden.`
+  const check = 'Warst du das nicht, widerrufe den Zugang unter „Clients“.'
+  const optOut = 'Du kannst diese Benachrichtigung in den Einstellungen abschalten.'
+  return {
+    to,
+    subject: `mcpwarden: Neuer Client verbunden (${name})`,
+    text: `${intro}\n\n${check}\n${link}\n\n${optOut}\n${settings}\n`,
+    html: layout('Neuer Client verbunden', [intro, check, optOut], link),
+  }
+}
+
+export type WeeklyDigest = {
+  calls: number
+  okRate: number // 0..1
+  activeClients: number
+  attention: number
+  slowest: Array<{ name: string, p95Ms: number, calls: number }>
+}
+
+/** Weekly summary: numbers only, upstream names sanitized, never call contents. */
+export function weeklyDigestMail(to: string, baseUrl: string | URL, d: WeeklyDigest): Mail {
+  const link = buildLink(baseUrl, '/stats')
+  const settings = buildLink(baseUrl, '/settings')
+  const pct = `${(d.okRate * 100).toFixed(1).replace('.', ',')} %`
+  const lines = [
+    d.calls === 0 ? 'In den letzten sieben Tagen gab es keine Aufrufe.' : `Aufrufe: ${d.calls} · Erfolgsquote: ${pct} · aktive Clients: ${d.activeClients}`,
+    d.attention > 0 ? `${d.attention} Upstream${d.attention === 1 ? ' braucht' : 's brauchen'} deine Aufmerksamkeit.` : '',
+    d.slowest.length ? `Langsamste Upstreams (p95): ${d.slowest.map(s => `${sanitizeUntrusted(s.name, MAX_NAME)} ${s.p95Ms} ms`).join(', ')}` : '',
+  ].filter(Boolean)
+  const optOut = 'Du kannst diese Zusammenfassung in den Einstellungen abschalten.'
+  return {
+    to,
+    subject: 'mcpwarden: Deine Wochenübersicht',
+    text: `${lines.join('\n')}\n\nZur Statistik:\n${link}\n\n${optOut}\n${settings}\n`,
+    html: layout('Deine Wochenübersicht', [...lines, optOut], link),
+  }
+}

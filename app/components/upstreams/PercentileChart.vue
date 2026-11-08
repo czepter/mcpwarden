@@ -1,12 +1,15 @@
 <script setup lang="ts">
 import type { UpstreamStats } from '#shared/api-types'
+import { formatNumber } from '~/lib/format'
 
 /** Latency over time: p50 solid, p95 dashed, p99 dotted (line style carries the meaning, not just colour). */
 const props = defineProps<{ series: UpstreamStats['series'], start: string, end: string, label: string }>()
 const W = 400; const L = 36; const R = 392; const T = 20; const B = 140
-const top = computed(() => { const m = Math.max(100, ...props.series.map(p => p.p99Ms ?? 0)); const step = Math.pow(10, Math.floor(Math.log10(m))); return Math.ceil(m / step) * step })
-const fmt = (ms: number) => (ms >= 1000 ? `${(ms / 1000).toLocaleString(undefined, { maximumFractionDigits: 1 })} s` : `${ms} ms`)
-const ticks = computed(() => [0, 1, 2, 3].map(i => ({ v: (top.value / 3) * i, y: B - (i / 3) * (B - T) })))
+// Round axis: four labels (0 and three equal steps of 1, 2 or 5 x 10^n ms).
+const step = computed(() => { const rough = Math.max(100, ...props.series.map(p => p.p99Ms ?? 0)) / 3; const mag = Math.pow(10, Math.floor(Math.log10(rough))); return ([1, 2, 5, 10].map(f => f * mag).find(v => v >= rough))! })
+const top = computed(() => step.value * 3)
+const fmt = (ms: number) => (ms >= 1000 ? `${formatNumber(ms / 1000, 1).replace(/[.,]0$/, '')} s` : `${formatNumber(ms)} ${ms === 0 ? '' : 'ms'}`.trim())
+const ticks = computed(() => [0, 1, 2, 3].map(i => ({ v: step.value * i, y: B - (i / 3) * (B - T) })))
 function line(k: 'p50Ms' | 'p95Ms' | 'p99Ms') {
   const n = props.series.length
   return props.series.map((p, i) => (p[k] == null ? null : `${L + (n > 1 ? (i / (n - 1)) * (R - L) : 0)},${B - (p[k]! / top.value) * (B - T)}`)).filter(Boolean).join(' ')

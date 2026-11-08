@@ -50,7 +50,7 @@ onBeforeUnmount(cancel)
       <AlertDialogFooter>
         <AlertDialogCancel>{{ $t('common.cancel') }}</AlertDialogCancel>
         <Button
-          type="button" class="relative select-none overflow-hidden" :class="destructive ? 'bg-destructive-soft text-white hover:bg-destructive' : ''"
+          type="button" class="relative select-none overflow-hidden" :class="destructive ? 'bg-destructive-soft text-white hover:bg-destructive-soft/90' : ''"
           :aria-describedby="destructive ? 'hold-hint' : undefined"
           @click="onClick" @pointerdown="destructive && start()" @pointerup="cancel" @pointerleave="cancel" @pointercancel="cancel"
           @keydown="onKey" @keyup="cancel" @blur="cancel" @contextmenu.prevent

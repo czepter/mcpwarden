@@ -1,6 +1,6 @@
 import { trySendMail } from './index'
 import type { Mailer } from './types'
-import { upstreamStatusMail, type NotifyState } from './templates'
+import { newClientMail, upstreamStatusMail, type NotifyState } from './templates'
 
 export interface StatusChange {
   upstreamId: string
@@ -88,6 +88,47 @@ export function createStatusNotifier(d: StatusNotifierDeps): StatusNotifier {
         return false
       }
       const p = run(c, state).finally(() => inflight.delete(p))
+      inflight.add(p)
+      return true
+    },
+    idle: async () => { await Promise.all([...inflight]) },
+  }
+}
+
+export interface NewClientNotifierDeps {
+  mailer: Mailer
+  baseUrl: string | URL
+  /** Owner and client name from the DB (never from the event). null = unknown or banned, no send. Read only in the background. */
+  lookup: (userId: string, clientId: string) => Promise<{ email: string, notify: boolean, clientName: string | null } | null>
+  log?: (m: string) => void
+  maxPending?: number
+}
+
+export interface NewClientNotifier {
+  /** Never throws, does not wait for the send. */
+  notify: (userId: string, clientId: string) => boolean
+  idle: () => Promise<void>
+}
+
+/** "New client connected" mail to the user themself: once per (user, client) by construction (the caller reports only first uses). */
+export function createNewClientNotifier(d: NewClientNotifierDeps): NewClientNotifier {
+  const log = d.log ?? (m => console.error(m))
+  const maxPending = d.maxPending ?? 50
+  const inflight = new Set<Promise<void>>()
+  async function run(userId: string, clientId: string) {
+    try {
+      const o = await d.lookup(userId, clientId)
+      if (!o || !o.notify) return
+      await trySendMail(d.mailer, newClientMail(o.email, d.baseUrl, o.clientName), 'new client notification', log)
+    } catch {
+      log('[mcpwarden] mail: new client notification not sent (internal)')
+    }
+  }
+  return {
+    notify(userId, clientId) {
+      if (!d.mailer.enabled) return false
+      if (inflight.size >= maxPending) { log('[mcpwarden] mail: new client notification dropped (queue full)'); return false }
+      const p = run(userId, clientId).finally(() => inflight.delete(p))
       inflight.add(p)
       return true
     },

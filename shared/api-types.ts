@@ -61,6 +61,9 @@ export type DeviceVerification = {
   resource?: string | string[]
 }
 
+/** Body of PATCH /api/me/pats/:id and /api/me/connections/:clientId (null or empty clears the label). */
+export type PatDeviceInput = { deviceName: string | null }
+
 export type ConsentInfo = {
   client: {
     id: string
@@ -73,6 +76,7 @@ export type ConsentInfo = {
   scopes: ConsentScope[] // 'mcpwarden:admin' only if enabled (never in 0b)
   resource: string // BASE_URL + '/mcp'
   loopback: boolean // at least one redirect URI is loopback (additional warning)
+  suggestedDeviceName?: string | null // guess from the browser's user agent ('Mac · Safari'); prefill of the optional device field
 }
 
 // PATs: plaintext only in PatCreated.token
@@ -85,10 +89,11 @@ export type PatSummary = {
   revokedAt: string | null
   expiresAt: string | null // null = läuft nie ab
   upstreamIds: string[] | null // null = alle Upstreams
+  deviceName?: string | null // optional device label (max 64 characters); null/absent = none
 }
 export type PatList = { items: PatSummary[], limit: { max: number, active: number } } // max = 20
 export type PatCreated = PatSummary & { token: string }
-export type PatCreateInput = { name: string, expiresInDays?: number | null, upstreamIds?: string[] | null } // name 1 to 64 characters; expiresInDays 1 to 365 (null = never); upstreamIds null = all
+export type PatCreateInput = { name: string, expiresInDays?: number | null, upstreamIds?: string[] | null, deviceName?: string | null } // name 1 to 64 characters; expiresInDays 1 to 365 (null = never); upstreamIds null = all
 
 // Clients of the user (UI word "Clients", path stays "connections")
 export type ConnectionSummary = {
@@ -100,6 +105,7 @@ export type ConnectionSummary = {
   grantedAt: string
   lastUsedAt: string | null // last call on /mcp, throttled to 1 min precision
   active: boolean // lastUsedAt at most 5 min ago; display "Aktiv"/"Inaktiv" in the frontend
+  deviceName?: string | null // device label of this connection (e.g. from the user agent at consent); null/absent = unknown
 }
 export type ConnectionList = { items: ConnectionSummary[] }
 
@@ -132,7 +138,7 @@ export type OAuthClientAdminList = { items: OAuthClientAdmin[] }
 
 export type UpstreamStatus = 'unknown' | 'healthy' | 'degraded' | 'open' | 'auth_expired' | 'disabled'
 export type UpstreamSetup = 'ready' | 'awaiting_auth' | 'awaiting_approval'
-export type UpstreamType = 'http' | 'stdio'
+export type UpstreamType = 'http' | 'stdio' | 'rest'
 export type UpstreamAuthType = 'none' | 'bearer' | 'header' | 'env' | 'oauth' // 'env': stdio only, 'oauth': http only
 export type UpstreamTimeouts = { connectMs: number, listMs: number, callMs: number }
 
@@ -151,6 +157,7 @@ export type UpstreamSummary = {
   lastError: string | null
   lastOkAt: string | null
   setup: UpstreamSetup
+  tags?: string[] // lowercase labels, max 10 of 32 characters; absent = none
   toolsEnabled: number
   toolsTotal: number
   nextRetryAt: string | null
@@ -176,8 +183,34 @@ export type UpstreamDetail = UpstreamSummary & {
   version: number
   createdAt: string
   updatedAt: string
+  /** type 'rest' only. */
+  restTools?: RestTool[]
 }
 export type UpstreamList = { items: UpstreamSummary[] }
+
+// REST upstreams (spec P0-8): an HTTP API call exposed as an MCP tool. `{param}` placeholders in urlTemplate/headers/bodyTemplate come from the tool arguments.
+export type RestMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
+export type RestToolInput = {
+  name: string // [a-zA-Z0-9_-]{1,64}, unique per upstream
+  description?: string | null
+  method?: RestMethod // default 'GET'
+  urlTemplate: string // absolute URL or path relative to the upstream's `url`
+  inputSchema?: Record<string, unknown> // JSON Schema (type object); default {type:'object',properties:{}}
+  headers?: Record<string, string>
+  bodyTemplate?: string | null
+  enabled?: boolean
+}
+export type RestTool = Required<Omit<RestToolInput, 'description' | 'bodyTemplate'>> & { id: string, description: string | null, bodyTemplate: string | null, createdAt: string, updatedAt: string }
+export type RestToolList = { items: RestTool[] }
+
+// Import of existing client configs (`POST /api/upstreams/import`): body is `{ json: string }` holding `{ "mcpServers": { "<name>": { url | command, args, env, headers } } }`.
+export type UpstreamImportInput = { json: string, dryRun?: boolean }
+export type UpstreamImportItem =
+  | { name: string, slug: string, type: UpstreamType, status: 'created' | 'would_create', id?: string, setup?: UpstreamSetup, notes?: string[] }
+  | { name: string, slug?: string, type?: UpstreamType, status: 'skipped', reason: 'slug_taken' | 'invalid' | 'unsupported' | 'stdio_not_allowed' | 'limit_reached', message: string }
+export type UpstreamImportResult = { items: UpstreamImportItem[], created: number, skipped: number }
+/** `GET /api/upstreams/tags`: the distinct tags of the user's upstreams, for the filter. */
+export type UpstreamTagList = { items: string[] }
 export type UpstreamInput = {
   name: string
   slug: string
@@ -194,6 +227,9 @@ export type UpstreamInput = {
   args?: string[]
   env?: Record<string, string>
   cwd?: string | null
+  tags?: string[]
+  /** type 'rest' only: the tools, created together with the upstream. */
+  restTools?: RestToolInput[]
 }
 export type UpstreamPatch = Partial<Omit<UpstreamInput, 'slug' | 'type'>> & { enabled?: boolean }
 export type SecretInput = { kind: 'bearer' | 'header' | 'env', name?: string, value: string }
@@ -277,7 +313,7 @@ export type AuditItem = {
 }
 export type AuditList = { items: AuditItem[], nextCursor: string | null }
 
-export type DashboardClient = { kind: 'oauth' | 'pat', id: string, name: string, allowlisted: boolean | null, active: boolean, lastActiveAt: string | null, callsPerMin: number, contextTokensEstimate: number | null }
+export type DashboardClient = { kind: 'oauth' | 'pat', id: string, name: string, allowlisted: boolean | null, active: boolean, lastActiveAt: string | null, callsPerMin: number, contextTokensEstimate: number | null, deviceName?: string | null, toolMode?: ToolMode }
 export type DashboardAttention = { upstreamId: string, slug: string, name: string, status: UpstreamStatus, setup: UpstreamSetup, statusReason: string | null, nextRetryAt: string | null }
 export type Dashboard = {
   clients: DashboardClient[], attention: DashboardAttention[], attentionCount: number
@@ -332,7 +368,18 @@ export type ToolMode = 'direct' | 'meta' // Phase 3
 export type PublicConfig = { mail: boolean, registrationOpen: boolean }
 
 /** Personal settings (`GET`/`PATCH /api/me/settings`). `notifyStatusMail` applies only with an active mailer. */
-export type MeSettings = { notifyStatusMail: boolean }
+export type ThemePreference = 'system' | 'light' | 'dark'
+/** The four fields after `notifyStatusMail` are always returned by the backend; optional only so older mocks/handlers still type-check. */
+export type MeSettings = {
+  notifyStatusMail: boolean
+  notifyNewClient?: boolean // mail on the first connection of a client; default true
+  notifyWeekly?: boolean // weekly summary mail; default false
+  toolMode?: ToolMode // 'direct' (default) = every active tool; 'meta' = find_tools / describe_tool / invoke_tool
+  theme?: ThemePreference // default 'system'
+}
+export type MeSettingsPatch = Partial<Pick<MeSettings, 'notifyStatusMail' | 'notifyNewClient' | 'notifyWeekly' | 'toolMode' | 'theme'>>
+/** `DELETE /api/me` (self-deletion): the user must confirm with the current password and the literal e-mail address. */
+export type AccountDeleteInput = { password: string, confirmEmail: string }
 
 // Statistics (spec P0-15)
 export type StatsWindow = '5m' | '1h' | '24h' | '7d'

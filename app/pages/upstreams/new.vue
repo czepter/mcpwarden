@@ -3,7 +3,6 @@ import type { UpstreamTestResult as TestResultT, UpstreamDetail } from '#shared/
 import { meApi } from '~/api'
 import ErrorState from '~/components/common/ErrorState.vue'
 import LoadingRows from '~/components/common/LoadingRows.vue'
-import PageHeader from '~/components/shell/PageHeader.vue'
 import { Button } from '~/components/ui/button'
 import TestResult from '~/components/upstreams/TestResult.vue'
 import UpstreamForm from '~/components/upstreams/UpstreamForm.vue'
@@ -15,13 +14,12 @@ const done = ref<{ u: UpstreamDetail, test: TestResultT | null } | null>(null)
 </script>
 
 <template>
-  <PageHeader :title="$t('upstreams.new.title')" :crumbs="[{ label: $t('upstreams.list.title'), to: '/upstreams' }]" />
   <ErrorState v-if="error" :error="error" @retry="refresh()" />
   <LoadingRows v-else-if="!caps" :rows="5" />
-  <div v-else-if="done" class="flex max-w-[600px] flex-col gap-4 rounded-lg border bg-card p-5">
+  <div v-else-if="done" class="flex w-full max-w-[600px] flex-col self-center gap-4 rounded-lg border bg-card p-5">
     <h2 class="text-base font-semibold">{{ $t('upstreams.new.created', { name: done.u.name }) }}</h2>
     <TestResult v-if="done.test" :result="done.test" />
     <div class="flex gap-2"><Button as-child><NuxtLink :to="`/upstreams/${done.u.id}`">{{ $t('upstreams.new.goTo') }}</NuxtLink></Button></div>
   </div>
-  <UpstreamForm v-else :caps="caps" @saved="(u, test) => (u.authType === 'oauth' ? navigateTo(`/upstreams/${u.id}?tab=auth`) : (done = { u, test }))" />
+  <UpstreamForm v-else :caps="caps" :heading="$t('upstreams.new.title')" @saved="(u, test) => (u.authType === 'oauth' ? navigateTo(`/upstreams/${u.id}?tab=auth`) : (done = { u, test }))" />
 </template>

@@ -2,6 +2,8 @@
  * Application logic for upstreams, tools, capabilities, dashboard and admin. The routes under server/api/** are
  * thin wrappers; validation, authorization, audit and coordination with pool/catalog/status live here.
  */
+import { metaContextTokens } from './proxy/meta'
+import { GET_STATS_DEF } from './proxy/handlers'
 import { createError } from 'h3'
 import type {
   AdminSettings, AdminSettingsResult, AdminUser, AdminUserList, AdminUserLimitsInput, AuditItem, AdminStats, Capabilities, Dashboard, HealthHistory, InviteSummary, StatsSummary, UpstreamStats,
@@ -26,6 +28,7 @@ import { notifyToolsChanged, closeUserStreams } from '../mcp/notify'
 import { UUID_RE } from '../auth/dcr-store'
 import { runUserBanned, runUserDeleted, runUserDisabled } from '../utils/user-lifecycle'
 import type { upstream as upstreamTable } from '../db/schema'
+import { guardRestFields, prepareRestTools, probeRest, syncRestCatalog, withRestTools } from './rest/service'
 
 type Who = { id: string, role: 'admin' | 'user' }
 type DbUpstream = typeof upstreamTable.$inferSelect & { toolsEnabled?: number, toolsTotal?: number, secretNames?: string[] }
@@ -38,6 +41,23 @@ const ENV_RE = /^[A-Za-z_][A-Za-z0-9_]{0,63}$/
 // ---------- Validation ----------
 
 type Checked = Omit<NewUpstream, 'slug' | 'type' | 'name'> & { name?: string }
+
+export const MAX_TAGS = 10
+const TAG_RE = /^[\p{L}\p{N}][\p{L}\p{N} _.:/-]{0,31}$/u
+/** Tags: trimmed, lowercase, de-duplicated, at most 10 of 32 characters. */
+export function checkTags(v: unknown): string[] {
+  if (!Array.isArray(v)) throw bad('tags', 'tags muss eine Liste von Texten sein')
+  const out: string[] = []
+  for (const raw of v) {
+    if (typeof raw !== 'string') throw bad('tags', 'tags muss eine Liste von Texten sein')
+    const t = raw.trim().toLowerCase().replace(/\s+/g, ' ')
+    if (!t) continue
+    if (!TAG_RE.test(t)) throw bad('tags', `Tag „${raw.slice(0, 40)}“ ist ungültig (höchstens 32 Zeichen: Buchstaben, Ziffern, Leerzeichen und _ . : / -)`)
+    if (!out.includes(t)) out.push(t)
+  }
+  if (out.length > MAX_TAGS) throw bad('tags', `Höchstens ${MAX_TAGS} Tags je Upstream`)
+  return out
+}
 
 function checkCommon(b: Record<string, unknown>, partial: boolean): Checked {
   const out: Checked = {}
@@ -86,6 +106,7 @@ function checkCommon(b: Record<string, unknown>, partial: boolean): Checked {
       out.timeouts = t
     } else throw bad('timeouts', 'timeouts ungültig')
   }
+  if (b.tags !== undefined) out.tags = checkTags(b.tags)
   const command = str('command', 512); if (command !== undefined) { if (!command) throw bad('command', 'command darf nicht leer sein'); out.command = command }
   if (b.args !== undefined) {
     if (!Array.isArray(b.args) || b.args.length > 50 || b.args.some(a => typeof a !== 'string' || a.length > 1024)) throw bad('args', 'args muss eine Liste von höchstens 50 Texten sein')
@@ -115,7 +136,7 @@ export function toSummary(rt: Runtime, r: DbUpstream): UpstreamSummary {
   return {
     id: r.id, slug: r.slug, name: r.name, description: r.description, type: r.type as UpstreamSummary['type'], url: r.url, command: r.command, enabled: r.enabled,
     status: r.status as UpstreamSummary['status'], statusReason: r.statusReason, statusChangedAt: iso(r.statusChangedAt), lastError: r.lastError, lastOkAt: iso(r.lastOkAt),
-    setup: r.setup as UpstreamSummary['setup'], toolsEnabled: r.toolsEnabled ?? 0, toolsTotal: r.toolsTotal ?? 0,
+    setup: r.setup as UpstreamSummary['setup'], tags: r.tags ?? [], toolsEnabled: r.toolsEnabled ?? 0, toolsTotal: r.toolsTotal ?? 0,
     nextRetryAt: r.status === 'open' && next ? new Date(next).toISOString() : null,
     rateLimitHits5m: rt.gw.limiter.hitsLast5m(r.id), hasSecret: (r.secretNames?.length ?? 0) > 0,
   }
@@ -174,14 +195,19 @@ export async function listUpstreams(rt: Runtime, who: Who, q: { window?: unknown
     }),
   }
 }
+/** Distinct tags of the user's upstreams (filter options), alphabetical. */
+export async function listTags(rt: Runtime, userId: string): Promise<{ items: string[] }> {
+  const rows = await rt.repo.listUpstreams(userId)
+  return { items: [...new Set(rows.flatMap(r => r.tags ?? []))].sort((a, b) => a.localeCompare(b)) }
+}
 export async function getUpstream(rt: Runtime, who: Who, id: string) {
-  return toDetail(rt, await load(rt, who, id))
+  return await withRestTools(rt, who, toDetail(rt, await load(rt, who, id)))
 }
 
 export async function createUpstream(rt: Runtime, who: Who, body: Record<string, unknown>): Promise<UpstreamDetail> {
   const slug = typeof body.slug === 'string' ? body.slug : ''
   if (!isValidSlug(slug)) throw bad('slug', 'slug muss ^[a-z0-9][a-z0-9-]{0,31}$ entsprechen')
-  if (body.type !== 'http' && body.type !== 'stdio') throw bad('type', 'type muss http oder stdio sein')
+  if (body.type !== 'http' && body.type !== 'stdio' && body.type !== 'rest') throw bad('type', 'type muss http, stdio oder rest sein')
   const c = checkCommon(body, false)
   if (body.type === 'http' && !c.url) throw bad('url', 'url fehlt')
   await precheckUrl(rt, c.url)
@@ -189,13 +215,18 @@ export async function createUpstream(rt: Runtime, who: Who, body: Record<string,
   if ((c.authType ?? 'none') === 'header' && !c.authHeaderName) throw bad('authHeaderName', 'authHeaderName fehlt')
   if (body.type === 'stdio' && ['bearer', 'header', 'oauth'].includes(c.authType ?? '')) throw bad('authType', 'stdio kennt nur env')
   if (body.type === 'http' && c.authType === 'env') throw bad('authType', 'http kennt kein env')
+  if (body.type === 'rest') guardRestFields(c)
+  else if (body.restTools !== undefined) throw bad('restTools', 'restTools gehört nur zu REST-Upstreams')
+  const restTools = body.type === 'rest' ? await prepareRestTools(rt, body.restTools, !!c.url) : undefined
   const limits = await rt.repo.getLimits(who.id)
   const setup = (c.authType ?? 'none') === 'none' ? 'ready' : 'awaiting_auth'
   try {
     const row = await rt.repo.createUpstream(who.id, { ...c, slug, type: body.type, name: c.name! }, setup, limits.maxUpstreams)
+    if (restTools?.length) await rt.repo.replaceRestTools(who.id, row.id, restTools)
+    if (restTools?.length) await syncRestCatalog(rt, who, row.id)
     await rec(rt, who, 'upstream.create', 'upstream', row.id, row.slug)
     notifyToolsChanged(who.id)
-    return toDetail(rt, (await rt.repo.getUpstreamDetail(who.id, row.id))!)
+    return await withRestTools(rt, who, toDetail(rt, (await rt.repo.getUpstreamDetail(who.id, row.id))!))
   } catch (e) {
     if (e instanceof SlugTaken) throw apiError(409, 'slug_taken', 'Dieser Kurzname ist schon vergeben', 'slug')
     if (e instanceof LimitReached) throw apiError(409, 'limit_reached', 'Das Upstream-Limit ist erreicht')
@@ -209,6 +240,9 @@ export async function patchUpstream(rt: Runtime, who: Who, id: string, body: Rec
   const c = checkCommon(body, true)
   await precheckUrl(rt, c.url)
   if (body.enabled !== undefined && typeof body.enabled !== 'boolean') throw bad('enabled', 'enabled muss boolean sein')
+  if (cur.type === 'rest') guardRestFields(c)
+  else if (body.restTools !== undefined) throw bad('restTools', 'restTools gehört nur zu REST-Upstreams')
+  const restTools = cur.type === 'rest' ? await prepareRestTools(rt, body.restTools, !!(c.url ?? cur.url)) : undefined
   if (cur.type === 'http' && (c.command !== undefined || c.args !== undefined || c.cwd !== undefined || c.env !== undefined)) throw bad('command', 'Feld gehört zu stdio')
   if (cur.type === 'stdio' && (c.url !== undefined || c.transport !== undefined)) throw bad('url', 'Feld gehört zu http')
   if (cur.type === 'stdio' && body.enabled === true) await requireStdio(rt, who)
@@ -230,14 +264,16 @@ export async function patchUpstream(rt: Runtime, who: Who, id: string, body: Rec
     await rt.repo.deleteOAuth(who.id, id)
     if (authType === 'oauth') patch.setup = 'awaiting_auth'
   }
+  if (restTools) await rt.repo.replaceRestTools(who.id, id, restTools)
   const row = await rt.repo.updateUpstream(who.id, id, patch)
   if (!row) throw apiError(404, 'not_found', 'Upstream nicht gefunden')
   await evict(rt, who.id, id)
   const action: AuditAction = body.enabled === true && !cur.enabled ? 'upstream.enable' : body.enabled === false && cur.enabled ? 'upstream.disable' : 'upstream.update'
   await rec(rt, who, action, 'upstream', id, row.slug)
+  if (restTools) await syncRestCatalog(rt, who, id)
   const h = rt.gw.healthFor(toRowForHealth(row))
   h.configure({ enabled: row.enabled, setup: row.setup as 'ready' })
-  return toDetail(rt, (await rt.repo.getUpstreamDetail(who.id, id))!)
+  return await withRestTools(rt, who, toDetail(rt, (await rt.repo.getUpstreamDetail(who.id, id))!))
 }
 const toRowForHealth = (r: DbUpstream) => ({ id: r.id, userId: r.userId, enabled: r.enabled, setup: r.setup, status: r.status }) as never
 
@@ -385,6 +421,7 @@ export async function testUpstream(rt: Runtime, who: Who, id: string): Promise<U
   try {
     rt.gw.catalog.invalidate(who.id, id)
     const r = await rt.gw.catalog.list(row, undefined, undefined, who.id)
+    if (row.type === 'rest') await probeRest(rt, row, who.id)
     h.success()
     notifyToolsChanged(who.id)
     return { ok: true, tools: r.tools.map(t => ({ name: t.name, ...(t.description ? { description: t.description } : {}) })), latencyMs: Math.round(performance.now() - t0) }
@@ -440,26 +477,28 @@ export async function capabilities(rt: Runtime, who: Who, baseUrl: URL): Promise
     stdio: pol.allowed ? { allowed: true } : { allowed: false, reason: pol.reason },
     limits: { maxUpstreams: limits.maxUpstreams, upstreamsUsed: await rt.repo.countUpstreams(who.id), maxConnections: limits.maxConnections, callsPerMin: limits.callsPerMin },
     defaults: { ratePerMin: DEFAULT_LIMITS.ratePerMin, maxConcurrent: DEFAULT_LIMITS.maxConcurrent, timeouts: { connectMs: TIMEOUTS.connectMs, listMs: TIMEOUTS.listMs, callMs: TIMEOUTS.callMs } },
-    features: { healthHistory: true },
+    features: { healthHistory: true, toolMode: true },
   }
 }
 
-export async function dashboard(rt: Runtime, who: Who, deps: { connections: Array<{ clientId: string, name: string, allowlisted: boolean, lastUsedAt: string | null }>, window?: unknown }, now = new Date()): Promise<Dashboard> {
+export async function dashboard(rt: Runtime, who: Who, deps: { connections: Array<{ clientId: string, name: string, allowlisted: boolean, lastUsedAt: string | null, deviceName?: string | null }>, window?: unknown }, now = new Date()): Promise<Dashboard> {
   const window = deps.window ?? '1h'
   if (!isStatsWindow(window)) throw bad('window', 'window ungültig (5m, 1h, 24h, 7d)')
   const usage = await rt.repo.dashboardUsage(who.id, now)
   const pats = await rt.repo.patNames(who.id)
+  const toolMode = await rt.repo.getToolMode(who.id)
+  const metaTokens = metaContextTokens([GET_STATS_DEF])
   const clients: Dashboard['clients'] = []
-  const mk = (kind: 'oauth' | 'pat', id: string, name: string, allowlisted: boolean | null, key: string, lastUsed: Date | null) => {
+  const mk = (kind: 'oauth' | 'pat', id: string, name: string, allowlisted: boolean | null, key: string, lastUsed: Date | null, deviceName: string | null = null) => {
     const u = usage.get(key)
     const last = u?.lastTs && (!lastUsed || u.lastTs > lastUsed) ? u.lastTs : lastUsed
     clients.push({
-      kind, id, name, allowlisted, active: !!last && now.getTime() - last.getTime() < ACTIVE_WINDOW_MS, lastActiveAt: iso(last),
-      callsPerMin: Math.round(((u?.calls5m ?? 0) / 5) * 100) / 100, contextTokensEstimate: u?.listBytes == null ? null : Math.round(u.listBytes / 4),
+      kind, id, name, deviceName, allowlisted, active: !!last && now.getTime() - last.getTime() < ACTIVE_WINDOW_MS, lastActiveAt: iso(last),
+      callsPerMin: Math.round(((u?.calls5m ?? 0) / 5) * 100) / 100, contextTokensEstimate: u?.listBytes == null ? null : toolMode === 'meta' ? metaTokens : Math.round(u.listBytes / 4), toolMode,
     })
   }
-  for (const c of deps.connections) mk('oauth', c.clientId, c.name, c.allowlisted, c.clientId, c.lastUsedAt ? new Date(c.lastUsedAt) : null)
-  for (const p of pats) mk('pat', p.id, p.name, null, `pat:${p.id}`, p.lastUsedAt)
+  for (const c of deps.connections) mk('oauth', c.clientId, c.name, c.allowlisted, c.clientId, c.lastUsedAt ? new Date(c.lastUsedAt) : null, c.deviceName ?? null)
+  for (const p of pats) mk('pat', p.id, p.name, null, `pat:${p.id}`, p.lastUsedAt, p.deviceName ?? null)
   const att = await rt.repo.attention(who.id)
   const attention = att.map((r) => {
     const s = toSummary(rt, r)
@@ -627,6 +666,28 @@ export async function adminDelete(rt: Runtime, admin: Who, api: AuthAdminApi, ta
   })
   await runUserDeleted(targetId)
   await audit(rt.repo, { userId: targetId, actor: `admin:${admin.id}`, action: 'user.delete', targetType: 'user', targetId })
+}
+
+/**
+ * Self-deletion (GDPR erasure). Confirmed by the literal e-mail address and the current password (`verifyPassword` is injected: it
+ * checks the credential account without creating a session). Serialized with the admin actions so that the last active admin cannot
+ * remove themselves while another admin demotes/bans at the same time. All user data goes with the FK cascade; the only trace is an
+ * anonymized instance audit entry (no id, no address).
+ */
+export async function selfDelete(rt: Runtime, me: Who & { email: string }, input: Record<string, unknown>, verifyPassword: (password: string) => Promise<boolean>) {
+  if (typeof input.password !== 'string' || !input.password) throw bad('password', 'Passwort fehlt')
+  if (typeof input.confirmEmail !== 'string' || input.confirmEmail.trim().toLowerCase() !== me.email.toLowerCase()) throw bad('confirmEmail', 'Die E-Mail-Adresse stimmt nicht überein')
+  if (!(await verifyPassword(input.password))) throw apiError(403, 'invalid_password', 'Das Passwort ist falsch', 'password')
+  await serialized(async () => {
+    const t = await rt.repo.getUserLite(me.id)
+    if (!t) throw apiError(404, 'not_found', 'Nutzer nicht gefunden')
+    if (t.role === 'admin' && !t.banned && (await rt.repo.activeAdminCount(t.id)) === 0) throw apiError(409, 'last_admin', 'Der letzte aktive Admin kann sein Konto nicht löschen')
+    await runUserBanned(me.id)
+    await closeUserStreams(me.id)
+    await rt.repo.eraseUser(me.id)
+  })
+  await runUserDeleted(me.id)
+  await audit(rt.repo, { userId: null, actor: 'system', action: 'user.self_delete', targetType: 'user' })
 }
 
 export async function adminListInvites(rt: Runtime): Promise<{ items: InviteSummary[] }> {

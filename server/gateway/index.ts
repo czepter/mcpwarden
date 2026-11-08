@@ -1,8 +1,9 @@
+import { MetaToolSource } from './proxy/meta'
 import { POOL_IDLE_MS } from './config'
 import { decryptSecret } from './crypto/secrets'
 import { createSafeFetch, type FetchLike } from './net/safe-fetch'
 import type { AllowList } from './net/ssrf'
-import { GatewayCore } from './proxy/handlers'
+import { GatewayCore, GET_STATS_DEF } from './proxy/handlers'
 import { StatsBuffer, type CallStatRow } from './stats/buffer'
 import type { StatsQuery } from './stats/query'
 import type { StatsSummary } from '#shared/api-types'
@@ -28,6 +29,8 @@ export type GatewayOptions = {
   /** OAuth upstreams: encrypted session store and the callback URL registered at the upstream's authorization server. */
   oauth?: { vault: OAuthVault, redirectUrl: string }
   notifyChanged?: (userId: string) => void
+  /** Per-user tool mode ('direct' | 'meta'). Without it the gateway always serves the full catalog. */
+  getToolMode?: (userId: string) => Promise<import('#shared/api-types').ToolMode>
   log?: (msg: string, err?: unknown) => void
   now?: () => number
   /** Idle limit of the pool connections (default POOL_IDLE_MS) and interval of the cleanup loop (default 60 s); for tests. */
@@ -62,6 +65,7 @@ export function createGateway(o: GatewayOptions) {
   const oauth = o.oauth
   const deps: ConnectDeps = {
     safeFetch, credentials, stdioTransport: o.stdioTransport,
+    restTools: (up, owner) => (o.store.listRestTools ? o.store.listRestTools(owner, up.id) : Promise.resolve([])),
     oauthProvider: oauth ? (up, owner) => new UpstreamOAuthProvider({ vault: oauth.vault, userId: owner, upstreamId: up.id, redirectUrl: oauth.redirectUrl, interactive: false }) : undefined,
   }
   const pool = new Pool({ connect: (up, signal, owner) => connectUpstream(up, deps, signal, owner), maxFor: async u => (await o.store.getLimits(u)).maxConnections })
@@ -81,7 +85,9 @@ export function createGateway(o: GatewayOptions) {
   }
   const core = new GatewayCore({ store: o.store, pool, catalog, limiter, stats, healthFor, notifyChanged: o.notifyChanged, statsRead: o.statsRead })
   return {
-    toolSource: core as import('./ports').ToolSource,
+    toolSource: (o.getToolMode
+      ? new MetaToolSource({ inner: core, getMode: o.getToolMode, stats, alwaysVisible: () => (o.statsRead ? [GET_STATS_DEF] : []) })
+      : core) as import('./ports').ToolSource,
     core, pool, catalog, limiter, stats, healthFor, safeFetch, credentials, oauth,
     /** Latency check (p95 vs 7-day baseline): `slow` maps upstream ID -> reason; everything else is cleared. Unknown IDs are ignored. */
     applySlow(slow: Map<string, string>) { for (const [id, h] of health) h.setSlow(slow.get(id) ?? null) },
