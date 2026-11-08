@@ -60,6 +60,15 @@ Personal access token: create it under Settings (Tokens); the plaintext is shown
 claude mcp add --transport http mcpwarden <BASE_URL>/mcp --header "Authorization: Bearer <pat>"
 ```
 
+Headless sessions (`claude -p`, CI, SSH boxes): Claude Code cannot run an OAuth flow there. `tools/mcpwarden-auth.mjs` (Node 18+, no dependencies) signs in with the OAuth device grant (RFC 8628) and hands Claude Code a fresh token through `headersHelper`. Copy the script to the machine, then:
+
+```sh
+node mcpwarden-auth.mjs login --url <BASE_URL>      # prints a URL and a code; approve it in any browser where you are signed in
+claude mcp add-json --scope user mcpwarden '{"type":"http","url":"<BASE_URL>/mcp","headersHelper":"node /abs/path/mcpwarden-auth.mjs headers"}'
+```
+
+The helper stores the tokens in `~/.config/mcpwarden/credentials.json` (mode 0600) and refreshes them on its own (access tokens live 5 minutes, refresh tokens 30 days; a machine that stays unused for longer has to run `login` again). `headersHelper` runs on every connect and again after a 401, so no token ever sits in the Claude Code config. If `login` is started by an agent, it can relay the printed URL and code to you (`--json` prints them as one JSON line on stdout). The connection shows up as "mcpwarden CLI" in the web UI under Clients; revoking it there cuts the machine off immediately. Only this first-party client may use the device grant (dynamic registration refuses it), and admins can disable it like any other client.
+
 Note: manual acceptance with real clients (Claude Code, Cursor) has not been recorded yet; the automated OAuth PKCE flow test is `tests/integration/oauth/flow.test.ts`.
 
 ## Upstreams with OAuth

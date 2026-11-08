@@ -5,6 +5,7 @@
  */
 import { APIError } from 'better-auth/api'
 import type { DcrMode } from '../../shared/api-types'
+import { deviceGrantInRegistration } from './device'
 import { evaluateRegistration, isAllowlisted, sanitizeClientName, type AllowlistPattern } from './dcr-policy'
 
 export const REGISTER_PATH = '/oauth2/register'
@@ -22,6 +23,8 @@ function metadata(body: unknown) {
 
 export async function dcrBefore(path: string, body: unknown, deps: DcrDeps): Promise<void> {
   if (path !== REGISTER_PATH) return
+  const deviceGrant = deviceGrantInRegistration(body)
+  if (deviceGrant) throw new APIError('BAD_REQUEST', { error: 'invalid_client_metadata', error_description: deviceGrant })
   const { mode, allowlist } = await deps.getPolicy()
   const m = metadata(body)
   const d = evaluateRegistration(mode, allowlist, m.shapeOk ? m : { ...m, redirectUris: [] })

@@ -8,11 +8,14 @@ import { getConfig } from '../utils/config'
 import { runUserBanned } from '../utils/user-lifecycle'
 import { GatewayRepo } from '../gateway/upstream/repo'
 import { getRegistrationPolicy, recordClientMeta, seedAllowlist } from './dcr-store'
+import { seedDeviceClient } from './device'
+import { mcpResource } from './mcp-plugin'
 import { buildAuthOptions } from './options'
 
 function create() {
   return getDb().then(async (db) => {
     await seedAllowlist(db)
+    await seedDeviceClient(db, mcpResource(getConfig().baseUrl.origin))
     const cfg = getConfig()
     return betterAuth({
       ...buildAuthOptions({

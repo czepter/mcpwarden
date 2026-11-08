@@ -52,6 +52,15 @@ export type DcrPolicy = { mode: DcrMode } // Standard 'open'
 export type ConsentRedirectKind = 'web' | 'loopback' | 'app'
 export type ConsentRedirect = { uri: string, host: string, kind: ConsentRedirectKind, loopback: boolean }
 export type ConsentScope = { name: string, required: boolean }
+/** `GET /api/auth/device?user_code=` (RFC 8628 verification). `client_id`/`scope` only for the user the code is bound to. */
+export type DeviceVerification = {
+  user_code: string
+  status: 'pending' | 'approved' | 'denied'
+  client_id?: string
+  scope?: string
+  resource?: string | string[]
+}
+
 export type ConsentInfo = {
   client: {
     id: string
