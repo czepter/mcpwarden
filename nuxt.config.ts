@@ -40,6 +40,7 @@ export default defineNuxtConfig({
   app: {
     head: {
       title: 'mcpwarden',
+      link: [{ rel: 'icon', type: 'image/svg+xml', href: '/favicon.svg' }],
       // Theme before the first paint (no flash): reads the cookie `mcpw_theme` (see composables/useTheme.ts); 'system' follows prefers-color-scheme.
       script: [{ innerHTML: '(function(){try{var m=document.cookie.match(/(?:^|; )mcpw_theme=([^;]*)/);var t=m?decodeURIComponent(m[1]).replace(/"/g,\'\'):\'system\';var d=t===\'dark\'||(t!==\'light\'&&matchMedia(\'(prefers-color-scheme: dark)\').matches);document.documentElement.classList.toggle(\'dark\',d)}catch(e){}})()', tagPosition: 'head' }],
     },
