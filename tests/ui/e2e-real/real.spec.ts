@@ -9,6 +9,8 @@ test.describe.configure({ mode: 'serial' })
 const ADMIN = { name: 'Real Admin', email: 'real-admin@example.test', password: 'real-admin-password-1' }
 let fake: FakeHttp
 const mockRequests: string[] = []
+// The production CSP must not block anything the app needs: any violation reported by the browser fails the test.
+const cspViolations: string[] = []
 
 test.beforeAll(async () => { fake = await startFakeHttp() })
 test.afterAll(async () => { await fake.close() })
@@ -33,6 +35,10 @@ async function login(page: Page) {
 
 test.beforeEach(({ page }) => {
   page.on('request', (r) => { if (/mockServiceWorker|\/__styleguide/.test(r.url())) mockRequests.push(r.url()) })
+  page.on('console', (m) => { if (/Content[- ]Security[- ]Policy|Refused to (load|execute|apply|connect|frame)/i.test(m.text())) cspViolations.push(m.text()) })
+})
+test.afterEach(() => {
+  expect(cspViolations).toEqual([])
 })
 
 test('real build: no service worker, no mock banner, registration open on a fresh instance', async ({ page }) => {
@@ -44,6 +50,11 @@ test('real build: no service worker, no mock banner, registration open on a fres
   await expect(page.getByText('Mock')).toHaveCount(0)
   expect((await page.request.get('/mockServiceWorker.js')).status()).not.toBe(200)
   await axe(page)
+  // The CSP is enforced and the violation listener works: an injected inline script must not run and must be reported.
+  const ran = await page.evaluate(() => { const el = document.createElement('script'); el.textContent = 'window.__injected = 1'; document.head.append(el); return (window as unknown as { __injected?: number }).__injected })
+  expect(ran).toBeUndefined()
+  await expect.poll(() => cspViolations.length).toBeGreaterThan(0)
+  cspViolations.length = 0
 })
 
 test('First registration via the UI makes the user an admin and lands on the dashboard', async ({ page }) => {

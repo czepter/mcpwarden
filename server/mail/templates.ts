@@ -57,7 +57,9 @@ const MAX_REASON = 200
  * whitespace collapsed, URLs, hostnames and addresses defused (no links from foreign text), truncated.
  */
 export function sanitizeUntrusted(v: string | null | undefined, max: number): string {
-  let s = (v ?? '')
+  // Bound the input BEFORE the backtracking regexes run: foreign text (e.g. an anonymously registered client name) may be
+  // arbitrarily long, and the regex cost would be paid synchronously on the event loop. Anything beyond is truncated anyway.
+  let s = (v ?? '').slice(0, Math.max(max * 4, 256))
     // eslint-disable-next-line no-control-regex
     .replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff]/g, ' ')
     .replace(/\b[a-z][a-z0-9+.-]*:\/\/\S*/gi, '[Link entfernt]')

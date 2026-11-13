@@ -5,6 +5,11 @@ export interface Mail {
   text: string
   /** Optional; only from the templates in templates.ts (escaped). */
   html?: string
+  /**
+   * Quota class for the per-recipient limit. Mails an anonymous third party can trigger (password reset) use their own class,
+   * so that triggering them cannot use up the quota of the notifications a user depends on. Default: `notify`.
+   */
+  quota?: 'notify' | 'reset'
 }
 
 export type MailErrorCode = 'invalid' | 'rate_limited' | 'disabled' | 'transport'

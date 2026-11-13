@@ -18,7 +18,7 @@ export function withRecipientLimit(inner: Mailer, limit: RecipientLimit = { max:
     sendMail: async (mail) => {
       assertMail(mail)
       const t = now()
-      const key = mail.to.toLowerCase()
+      const key = `${mail.quota ?? 'notify'}:${mail.to.toLowerCase()}`
       if (hits.size >= MAX_TRACKED) {
         for (const [k, v] of hits) if (!v.some(x => t - x < limit.windowMs)) hits.delete(k)
         if (hits.size >= MAX_TRACKED) throw new MailError('rate_limited', 'Too many recipients in the window')

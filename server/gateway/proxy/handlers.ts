@@ -52,6 +52,11 @@ export const limiterTokenKey = (ctx: AuthContext) => (ctx.clientId ? `${ctx.clie
 
 const bytes = (v: unknown) => { try { return JSON.stringify(v)?.length ?? 0 } catch { return 0 } }
 
+/** Thrown by `listTools` when the per-user list quota is exhausted (the SDK turns it into a JSON-RPC error). */
+export class ListRateLimitedError extends Error {
+  constructor(public readonly retryAfterSec: number) { super(`Rate-Limit für tools/list erreicht. Erneut versuchen in ${retryAfterSec} s.`) }
+}
+
 export class GatewayCore implements ToolSource {
   draining = false
   private active = new Set<AbortController>()
@@ -66,6 +71,8 @@ export class GatewayCore implements ToolSource {
 
   async listTools(ctx: AuthContext): Promise<ToolDef[]> {
     const t0 = performance.now()
+    const wait = this.d.limiter.acquireList(ctx.userId)
+    if (wait) throw new ListRateLimitedError(wait)
     const ups = (await this.d.store.listEnabledUpstreams(ctx.userId)).filter(u => !ctx.upstreamIds || ctx.upstreamIds.includes(u.id))
     const parts = await Promise.all(ups.map(async (up) => {
       if (up.userId !== ctx.userId) return [] // Defense: the store must never return foreign rows

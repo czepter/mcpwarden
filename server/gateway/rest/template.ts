@@ -148,7 +148,8 @@ export function checkArguments(schema: Schema, args: Record<string, unknown>): v
   const props = schema.properties
   for (const r of schema.required ?? []) if (args[r] === undefined || args[r] === null) throw new RestToolError(`Parameter ${r} fehlt`)
   for (const [k, v] of Object.entries(args)) {
-    const p = props[k]
+    // Own keys only: `constructor`, `toString`, `__proto__` etc. must not pass as declared parameters.
+    const p = Object.hasOwn(props, k) ? props[k] : undefined
     if (!p) throw new RestToolError(`Unbekannter Parameter ${k}`)
     if (v === undefined || v === null) continue
     if (!typeOk(p.type, v)) throw new RestToolError(`Parameter ${k} muss ${p.type} sein`)

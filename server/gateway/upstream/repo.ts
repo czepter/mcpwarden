@@ -36,6 +36,9 @@ export type NewUpstream = {
   command?: string | null, args?: string[], env?: Record<string, string>, cwd?: string | null, tags?: string[],
 }
 
+/** Rows kept per upstream for tools that disappeared from its catalog. */
+export const MAX_GONE_TOOLS = 200
+
 export class SlugTaken extends Error {}
 export class LimitReached extends Error {}
 
@@ -123,6 +126,13 @@ export class GatewayRepo implements GatewayStore {
     }
     const own = and(eq(upstreamTool.userId, userId), eq(upstreamTool.upstreamId, upstreamId))
     await this.db.update(upstreamTool).set({ gone: true }).where(names.length ? and(own, notInArray(upstreamTool.name, names)) : own)
+    // Rows of vanished tools are kept only for a bounded tail (so toggles survive a short outage); an upstream that rotates
+    // names must not make the table grow without bound.
+    const stale = await this.db.select({ name: upstreamTool.name }).from(upstreamTool)
+      .where(and(own, eq(upstreamTool.gone, true))).orderBy(desc(upstreamTool.lastSeenAt), asc(upstreamTool.name)).limit(100_000).offset(MAX_GONE_TOOLS)
+    for (let i = 0; i < stale.length; i += 500) {
+      await this.db.delete(upstreamTool).where(and(own, eq(upstreamTool.gone, true), inArray(upstreamTool.name, stale.slice(i, i + 500).map(r => r.name))))
+    }
     return this.toolFlags(userId, upstreamId)
   }
   async toolFlags(userId: string, upstreamId: string) {

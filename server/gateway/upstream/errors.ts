@@ -1,6 +1,6 @@
 import { SdkHttpError, ProtocolError, UnauthorizedError } from '@modelcontextprotocol/client'
 import { SsrfBlockedError, SSRF_MESSAGE } from '../net/ssrf'
-import { UpstreamRedirectError } from '../net/safe-fetch'
+import { UpstreamRedirectError, UpstreamResponseTooLargeError } from '../net/safe-fetch'
 import { CatalogLimitError } from './catalog'
 
 export type ErrorCode = 'ssrf_blocked' | 'redirect' | 'timeout' | 'connect_failed' | 'unauthorized' | 'upstream_error' | 'protocol' | 'awaiting_auth' | 'stdio_not_allowed' | 'cancelled'
@@ -24,6 +24,7 @@ export function classifyError(e: unknown, opts: { hasAuth?: boolean, aborted?: b
   if (all.some(x => x instanceof SsrfBlockedError || (x as Error)?.message?.includes(SSRF_MESSAGE))) return { code: 'ssrf_blocked', message: SSRF_MESSAGE, counts: false, auth: false }
   if (all.some(x => x instanceof CredentialsMissingError)) return { code: 'awaiting_auth', message: 'Zugangsdaten fehlen noch', counts: false, auth: false }
   if (all.some(x => x instanceof UpstreamRedirectError)) return { code: 'redirect', message: 'Upstream leitet um, bitte Ziel-URL direkt eintragen', counts: false, auth: false }
+  if (all.some(x => x instanceof UpstreamResponseTooLargeError)) return { code: 'protocol', message: 'Upstream-Antwort ist zu groß', counts: true, auth: false }
   if (all.some(x => x instanceof CatalogLimitError)) return { code: 'protocol', message: 'Upstream liefert eine zu grosse Tool-Liste', counts: true, auth: false }
   if (all.some(x => x instanceof OAuthReauthError || x instanceof UnauthorizedError)) {
     return { code: 'unauthorized', message: 'Anmeldung beim Upstream abgelaufen, bitte neu verbinden', counts: false, auth: true }

@@ -105,15 +105,20 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Create manifests
         working-directory: digests
+        # Dispatch inputs reach the shell only through env (never expanded into the script) and the tag is validated.
+        env:
+          TAG: ${{ inputs.tag }}
+          LATEST: ${{ inputs.latest }}
         run: |
+          [[ "$TAG" =~ ^[A-Za-z0-9_][A-Za-z0-9._-]{0,127}$ ]] || { echo "invalid image tag" >&2; exit 1; }
           for target in full slim; do
             ls "$target"-* >/dev/null 2>&1 || continue
             # full is the default image: plain tags. slim gets a -slim suffix.
             sfx=''; [ "$target" = slim ] && sfx='-slim'
-            args="-t $IMAGE:${{ inputs.tag }}$sfx -t $IMAGE:sha-${GITHUB_SHA::7}$sfx"
-            [ '${{ inputs.latest }}' = true ] && args="$args -t $IMAGE:latest$sfx"
-            refs=''
-            for f in "$target"-*; do refs="$refs $IMAGE@sha256:${f#"$target"-}"; done
-            docker buildx imagetools create $args $refs
-            docker buildx imagetools inspect "$IMAGE:${{ inputs.tag }}$sfx"
+            args=(-t "$IMAGE:$TAG$sfx" -t "$IMAGE:sha-${GITHUB_SHA::7}$sfx")
+            if [ "$LATEST" = true ]; then args+=(-t "$IMAGE:latest$sfx"); fi
+            refs=()
+            for f in "$target"-*; do refs+=("$IMAGE@sha256:${f#"$target"-}"); done
+            docker buildx imagetools create "${args[@]}" "${refs[@]}"
+            docker buildx imagetools inspect "$IMAGE:$TAG$sfx"
           done
