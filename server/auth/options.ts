@@ -48,7 +48,7 @@ function passwordReset(baseUrl: string, mailer: Mailer) {
     resetPasswordTokenExpiresIn: RESET_TTL_MINUTES * 60,
     revokeSessionsOnPasswordReset: true,
     sendResetPassword: async ({ user, token }: { user: { email: string }, token: string }) => {
-      void trySendMail(mailer, resetPasswordMail(user.email, baseUrl, token), 'password reset')
+      void trySendMail(mailer, { ...resetPasswordMail(user.email, baseUrl, token), quota: 'reset' }, 'password reset')
     },
   }
 }

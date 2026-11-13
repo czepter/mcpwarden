@@ -1,4 +1,5 @@
 import { getAuth } from '../../auth'
+import { dispatchAuth } from '../../utils/auth-dispatch'
 import { toAuthRequest } from '../../utils/client-ip'
 
 // Discovery at the root (RFC 8414 / RFC 9728). Better Auth hangs off the basePath /api/auth (issuer
@@ -24,7 +25,9 @@ export default defineEventHandler(async (event) => {
   const url = new URL(req.url)
   const alias = ROOT_ALIASES[url.pathname]
   if (alias) req = new Request(new URL(alias, url), req)
-  const res = await (await getAuth()).handler(req)
+  // Same entry as /api/auth/**: bounded body and sign-up mutex on the NORMALISED path (a dot-segment target such as
+  // /.well-known/%2e%2e/api/auth/sign-up/email must not skip the lock).
+  const res = await dispatchAuth(await getAuth(), req)
   const headers = new Headers(res.headers)
   for (const [k, v] of Object.entries(CORS)) headers.set(k, v)
   return new Response(res.body, { status: res.status, headers })

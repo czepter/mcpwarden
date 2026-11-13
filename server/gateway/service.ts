@@ -282,6 +282,7 @@ export async function deleteUpstream(rt: Runtime, who: Who, id: string) {
   await rt.gw.pool.invalidate(who.id, id)
   if (!(await rt.repo.deleteUpstream(who.id, id))) throw apiError(404, 'not_found', 'Upstream nicht gefunden')
   rt.gw.catalog.invalidate(who.id, id)
+  rt.gw.forgetUpstream(id) // drop the in-memory health entry (otherwise create/delete churn leaks one per cycle)
   notifyToolsChanged(who.id)
   await rec(rt, who, 'upstream.delete', 'upstream', id, cur.slug)
 }
@@ -765,6 +766,8 @@ export async function putSettings(rt: Runtime, admin: Who, body: Record<string, 
     await audit(rt.repo, { userId: null, actor: `admin:${admin.id}`, action: 'setting.change', targetType: 'setting', targetId: k, meta: { key: k } })
   }
   rt.invalidateSettings()
-  if (patch['stdio.enabled'] === false) for (const u of await rt.repo.listUsers()) await rt.gw.onUserDisabled(u.u.id)
+  // Full revocation (pool close AND worker stop with kill of remaining children), same as revoking a single user's stdioAllowed;
+  // pool close alone only sends SIGTERM to the direct child and would leave a SIGTERM-resistant process running.
+  if (patch['stdio.enabled'] === false) for (const u of await rt.repo.listUsers()) await runUserDisabled(u.u.id)
   return await getSettings(rt)
 }

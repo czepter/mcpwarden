@@ -8,6 +8,39 @@ export class UpstreamRedirectError extends Error {
   constructor() { super('Upstream leitet um, bitte Ziel-URL direkt eintragen') }
 }
 
+/** An upstream response exceeded the size the gateway is willing to buffer. */
+export class UpstreamResponseTooLargeError extends Error {
+  readonly code = 'too_large'
+  constructor(max: number) { super(`Upstream-Antwort überschreitet ${max} Bytes`) }
+}
+
+/** Largest single (non-streaming) body and largest cumulative event stream accepted from an upstream. */
+export const MAX_UPSTREAM_BODY_BYTES = 16 * 1024 * 1024
+export const MAX_UPSTREAM_STREAM_BYTES = 64 * 1024 * 1024
+
+/**
+ * Counts decompressed bytes while the SDK reads the response and errors the stream once the bound is exceeded
+ * (the SDK would otherwise buffer `response.json()` / a single SSE event without limit).
+ */
+export function capResponse(res: Response, bodyMax = MAX_UPSTREAM_BODY_BYTES, streamMax = MAX_UPSTREAM_STREAM_BYTES): Response {
+  if (!res.body) return res
+  const max = (res.headers.get('content-type') ?? '').toLowerCase().includes('text/event-stream') ? streamMax : bodyMax
+  const declared = Number(res.headers.get('content-length'))
+  if (Number.isFinite(declared) && declared > max) {
+    void res.body.cancel().catch(() => {})
+    throw new UpstreamResponseTooLargeError(max)
+  }
+  let n = 0
+  const capped = res.body.pipeThrough(new TransformStream<Uint8Array, Uint8Array>({
+    transform(chunk, ctl) {
+      n += chunk.byteLength
+      if (n > max) ctl.error(new UpstreamResponseTooLargeError(max))
+      else ctl.enqueue(chunk)
+    },
+  }))
+  return new Response(capped, { status: res.status, statusText: res.statusText, headers: res.headers })
+}
+
 export type SafeFetchOptions = {
   /** Read fresh (the short cache lives with the caller, <= 10 s). */
   getAllow?: () => AllowList | Promise<AllowList>
@@ -40,7 +73,7 @@ export function createSafeFetch(opts: SafeFetchOptions = {}): FetchLike & { clos
         const ra = Number(res.headers.get('retry-after'))
         if (Number.isFinite(ra) && ra > 0) opts.onRetryAfter(url.host, ra)
       }
-      return res
+      return capResponse(res)
     } catch (e) {
       const ssrf = findCause(e, (x): x is SsrfBlockedError => x instanceof SsrfBlockedError)
       if (ssrf) throw ssrf

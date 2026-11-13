@@ -1,6 +1,6 @@
 import { createError, sendNoContent, setHeader, type H3Event } from 'h3'
 
-const STATUS_TEXT: Record<number, string> = { 400: 'Bad Request', 401: 'Unauthorized', 403: 'Forbidden', 404: 'Not Found', 409: 'Conflict', 500: 'Internal Server Error' }
+const STATUS_TEXT: Record<number, string> = { 400: 'Bad Request', 401: 'Unauthorized', 403: 'Forbidden', 404: 'Not Found', 409: 'Conflict', 411: 'Length Required', 413: 'Payload Too Large', 500: 'Internal Server Error' }
 
 /** Error shape `ApiErrorBody` (plan 0b E19): { statusCode, statusMessage, data: { code, field?, message } }. */
 export function apiError(statusCode: number, code: string, message: string, field?: string) {

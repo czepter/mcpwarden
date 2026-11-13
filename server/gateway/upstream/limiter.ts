@@ -1,6 +1,9 @@
 /** Rate limit: token bucket per user/token/upstream plus semaphore per upstream (P0-5). Time source injectable. */
 export type Clock = () => number
 
+/** `tools/list` requests per user and minute. */
+export const LIST_PER_MIN = 60
+
 export class TokenBucket {
   private tokens: number
   private last: number
@@ -96,6 +99,15 @@ export class Limiter {
     }
   }
 
+  /** `tools/list` is not a call but costs gateway CPU/memory per request: its own per-user bucket. 0 = allowed (token taken), otherwise seconds to wait. */
+  acquireList(userId: string, perMin: number = LIST_PER_MIN): number {
+    const b = this.bucket(`l:${userId}`, perMin)
+    const w = b.waitSec()
+    if (w) return w
+    b.take()
+    return 0
+  }
+
   inflightCount(userId: string, upstreamId: string) { return this.inflight.get(`${userId}:${upstreamId}`) ?? 0 }
 
   /** Hits of the last 5 min (for `rateLimitHits5m`). */
@@ -121,7 +133,7 @@ export class Limiter {
   /** Cleanup on delete/ban. */
   forgetUser(userId: string) {
     // User IDs contain no ':'; exact match or prefix with a separator, so that 'ab' does not match 'abc'
-    for (const k of [...this.buckets.keys()]) if (k === `u:${userId}` || k.startsWith(`p:${userId}:`)) this.buckets.delete(k)
+    for (const k of [...this.buckets.keys()]) if (k === `u:${userId}` || k === `l:${userId}` || k.startsWith(`p:${userId}:`)) this.buckets.delete(k)
     for (const [tok, owner] of [...this.tokenOwner]) if (owner === userId) { this.buckets.delete(`t:${tok}`); this.tokenOwner.delete(tok) }
     for (const k of [...this.inflight.keys()]) if (k.startsWith(`${userId}:`)) this.inflight.delete(k)
   }

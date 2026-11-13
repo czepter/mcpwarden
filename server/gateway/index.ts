@@ -91,6 +91,8 @@ export function createGateway(o: GatewayOptions) {
     core, pool, catalog, limiter, stats, healthFor, safeFetch, credentials, oauth,
     /** Latency check (p95 vs 7-day baseline): `slow` maps upstream ID -> reason; everything else is cleared. Unknown IDs are ignored. */
     applySlow(slow: Map<string, string>) { for (const [id, h] of health) h.setSlow(slow.get(id) ?? null) },
+    /** An upstream was deleted: drop its health entry. */
+    forgetUpstream(upstreamId: string) { health.delete(upstreamId) },
     /** Lifecycle: ban/delete. */
     async onUserDisabled(userId: string) {
       await pool.closeUser(userId)

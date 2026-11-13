@@ -5,7 +5,7 @@ services:
     environment:
       POSTGRES_PASSWORD: test
     ports:
-      - "${TEST_PG_PORT:-54329}:5432"
+      - "127.0.0.1:${TEST_PG_PORT:-54329}:5432"
     tmpfs:
       - /var/lib/postgresql/data
     healthcheck:

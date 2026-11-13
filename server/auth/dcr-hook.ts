@@ -21,8 +21,21 @@ function metadata(body: unknown) {
   return { clientName: typeof b.client_name === 'string' ? b.client_name : undefined, redirectUris: uris.filter((u): u is string => typeof u === 'string'), shapeOk: Array.isArray(b.redirect_uris) && uris.every(u => typeof u === 'string') }
 }
 
+/** Anonymous registration stores whatever it is given: bound the free-form fields (names are shown in UI and mails). */
+export const MAX_CLIENT_NAME_LENGTH = 256
+export const MAX_REDIRECT_URIS = 10
+
+function metadataLimits(body: unknown): string | null {
+  const b = (body && typeof body === 'object' ? body : {}) as Record<string, unknown>
+  if (typeof b.client_name === 'string' && b.client_name.length > MAX_CLIENT_NAME_LENGTH) return `client_name darf höchstens ${MAX_CLIENT_NAME_LENGTH} Zeichen lang sein`
+  if (Array.isArray(b.redirect_uris) && b.redirect_uris.length > MAX_REDIRECT_URIS) return `höchstens ${MAX_REDIRECT_URIS} redirect_uris erlaubt`
+  return null
+}
+
 export async function dcrBefore(path: string, body: unknown, deps: DcrDeps): Promise<void> {
   if (path !== REGISTER_PATH) return
+  const tooBig = metadataLimits(body)
+  if (tooBig) throw new APIError('BAD_REQUEST', { error: 'invalid_client_metadata', error_description: tooBig })
   const deviceGrant = deviceGrantInRegistration(body)
   if (deviceGrant) throw new APIError('BAD_REQUEST', { error: 'invalid_client_metadata', error_description: deviceGrant })
   const { mode, allowlist } = await deps.getPolicy()

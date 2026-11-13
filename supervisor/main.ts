@@ -72,7 +72,7 @@ export async function startSupervisor(o: SupervisorOptions) {
   // --- Capability probe
   if (o.stdioMode !== 'off' && isRoot) {
     canSwitchUser = await new Promise<boolean>((res) => {
-      const p = spawn(process.execPath, ['-e', '0'], { uid: 65534, gid: 65534, stdio: 'ignore' })
+      const p = spawn(process.execPath, ['-e', '0'], { uid: 65534, gid: 65534, stdio: 'ignore', env: {} }) // empty env: the secrets are still in ours at this point
       p.on('error', () => res(false))
       p.on('exit', code => res(code === 0))
     })
