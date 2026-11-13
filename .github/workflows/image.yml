@@ -20,7 +20,7 @@ on:
       latest:
         description: Also move the `latest` tag (full) / `latest-slim` tag (slim)
         type: boolean
-        default: false
+        default: true
 
 permissions:
   contents: read
