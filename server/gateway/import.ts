@@ -2,7 +2,8 @@
  * Import of existing client configs (`{ "mcpServers": { "<name>": { url | command, args, env, headers } } }`, the Claude Desktop / Cursor
  * format). Every entry goes through the normal create path (validation, SSRF check, limits, audit); secrets (Authorization/other headers,
  * env values) are stored encrypted and never echoed. stdio entries are created DISABLED: nothing runs until the user switches the
- * upstream on in the web UI (which re-checks the stdio permission).
+ * upstream on in the web UI (which re-checks the stdio permission). `npx mcp-remote <url>` entries are only a local bridge to a remote
+ * server, so they are imported as the HTTP upstream they point to (see fromMcpRemote).
  */
 import type { UpstreamImportItem, UpstreamImportResult, UpstreamType } from '#shared/api-types'
 import { apiError } from '../utils/api'
@@ -65,20 +66,74 @@ function parseEntry(name: string, raw: unknown): Parsed {
       if (!Array.isArray(raw.args) || raw.args.some(a => typeof a !== 'string')) return { name, reason: 'invalid', message: 'args muss eine Liste von Texten sein' }
       args = raw.args as string[]
     }
+    const bridged = fromMcpRemote(name, command, args, env, notes)
+    if (bridged) return bridged
     return { entry: { name, type: 'stdio', command, args, env, notes } }
   }
   const entry: Entry = { name, type: 'http', url, transport: t === 'sse' ? 'sse' : t ? 'streamable' : 'auto', env: {}, notes }
   if (Object.keys(env).length) notes.push('env wird bei HTTP-Upstreams ignoriert')
   if (raw.headers !== undefined) {
     if (!isObj(raw.headers)) return { name, reason: 'invalid', message: 'headers ist kein Objekt' }
-    const hs = Object.entries(raw.headers).filter(([k, v]) => !FORBIDDEN_KEYS.has(k) && typeof v === 'string' && v !== '') as Array<[string, string]>
-    const auth = hs.find(([k]) => k.toLowerCase() === 'authorization')
-    const bearer = auth && /^bearer\s+(\S.*)$/i.exec(auth[1])
-    if (bearer) entry.secret = { kind: 'bearer', value: bearer[1]!.trim() }
-    const rest = hs.filter(h => h !== auth || !bearer)
-    if (!entry.secret && rest.length) { const [k, v] = rest.shift()!; entry.secret = { kind: 'header', headerName: k, value: v } }
-    if (rest.length) notes.push(`${rest.length} weitere(r) Header nicht übernommen (ein Zugangs-Header je Upstream): ${rest.map(([k]) => k).slice(0, 5).join(', ')}`)
+    applyHeaders(entry, Object.entries(raw.headers).filter(([k, v]) => !FORBIDDEN_KEYS.has(k) && typeof v === 'string' && v !== '') as Array<[string, string]>)
   }
+  return { entry }
+}
+
+/** One header becomes the upstream's auth secret: a Bearer Authorization wins, otherwise the first header; the rest is reported. */
+function applyHeaders(entry: Entry, hs: Array<[string, string]>) {
+  const auth = hs.find(([k]) => k.toLowerCase() === 'authorization')
+  const bearer = auth && /^bearer\s+(\S.*)$/i.exec(auth[1])
+  if (bearer) entry.secret = { kind: 'bearer', value: bearer[1]!.trim() }
+  const rest = hs.filter(h => h !== auth || !bearer)
+  if (!entry.secret && rest.length) { const [k, v] = rest.shift()!; entry.secret = { kind: 'header', headerName: k, value: v } }
+  if (rest.length) entry.notes.push(`${rest.length} weitere(r) Header nicht übernommen (ein Zugangs-Header je Upstream): ${rest.map(([k]) => k).slice(0, 5).join(', ')}`)
+}
+
+/** Launcher words that may precede the bridge package (`npx -y`, `pnpm dlx`, `cmd /c npx`, ...). */
+const LAUNCHERS = new Set(['npx', 'bunx', 'pnpx', 'pnpm', 'yarn', 'dlx', 'exec', 'cmd', '/c', '-y', '--yes', '-q', '--quiet'])
+const MCP_REMOTE_VALUE_FLAGS = new Set(['--header', '--transport', '--host', '--resource', '--auth-timeout', '--static-oauth-client-metadata', '--static-oauth-client-info', '--ignore-tool'])
+
+/**
+ * `npx mcp-remote <url> [--transport ...] [--header "Name: value"]` is only a local stdio wrapper around a remote HTTP server.
+ * The gateway can talk to that server directly, so such an entry is imported as an HTTP upstream instead of stdio.
+ * Returns null when the command is not the bridge (or has no URL), so the entry stays stdio.
+ */
+function fromMcpRemote(name: string, command: string, args: string[], env: Record<string, string>, notes: string[]): Parsed | null {
+  const tokens = [command.split(/[\\/]/).pop()!.toLowerCase().replace(/\.(cmd|exe)$/, ''), ...args]
+  const at = tokens.findIndex(t => /^mcp-remote(@[\w.-]+)?$/i.test(t))
+  if (at < 0 || tokens.slice(0, at).some(t => !LAUNCHERS.has(t.toLowerCase()))) return null
+  const rest = tokens.slice(at + 1)
+  let url: string | undefined
+  let transport: Entry['transport'] = 'auto'
+  const headers: Array<[string, string]> = []
+  const ignored: string[] = []
+  const unresolved = new Set<string>()
+  // mcp-remote expands ${VAR} in header values from the entry's env
+  const expand = (v: string) => v.replace(/\$\{([A-Za-z_][A-Za-z0-9_]*)\}/g, (m, k: string) => {
+    if (Object.hasOwn(env, k)) return env[k]!
+    unresolved.add(k); return m
+  })
+  for (let i = 0; i < rest.length; i++) {
+    const a = rest[i]!
+    if (a.startsWith('--')) {
+      const v = MCP_REMOTE_VALUE_FLAGS.has(a) ? rest[++i] : undefined
+      if (a === '--header' && v !== undefined) {
+        const c = v.indexOf(':')
+        const hn = c > 0 ? v.slice(0, c).trim() : ''
+        const hv = c > 0 ? expand(v.slice(c + 1).trim()) : ''
+        if (!hn || !hv || FORBIDDEN_KEYS.has(hn)) return { name, reason: 'invalid', message: 'mcp-remote: --header muss „Name: Wert“ sein' }
+        headers.push([hn, hv])
+      } else if (a === '--transport' && v !== undefined) {
+        transport = v === 'http-only' ? 'streamable' : v === 'sse-only' ? 'sse' : 'auto'
+      } else if (!['--allow-http', '--debug', '--silent'].includes(a)) ignored.push(a)
+    } else if (!url && /^https?:\/\//i.test(a)) url = a
+  }
+  if (!url) return null
+  if (unresolved.size) return { name, reason: 'invalid', message: `mcp-remote: Variable ${[...unresolved].slice(0, 3).join(', ')} fehlt in env` }
+  notes.push('mcp-remote erkannt: wird direkt als HTTP-Upstream angebunden, ohne lokalen Prozess')
+  if (ignored.length) notes.push(`mcp-remote-Optionen nicht übernommen: ${[...new Set(ignored)].slice(0, 5).join(', ')}`)
+  const entry: Entry = { name, type: 'http', url, transport, env: {}, notes }
+  applyHeaders(entry, headers)
   return { entry }
 }
 
