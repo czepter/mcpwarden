@@ -37,6 +37,32 @@ describe('parseMcpServers', () => {
     expect(JSON.stringify(b.notes)).not.toContain('"o"')
   })
 
+  it('imports an mcp-remote wrapper as the HTTP upstream it points to', () => {
+    const r = parseMcpServers(JSON.stringify({ mcpServers: {
+      noco: { command: 'npx', args: ['-y', 'mcp-remote', 'http://noco.example/mcp/abc', '--transport', 'http-only', '--header', 'x-api-key: k1'] },
+      envAuth: { command: 'npx', args: ['mcp-remote@latest', 'https://b.example/sse', '--transport', 'sse-only', '--header', 'Authorization:${AUTH}', '--debug'], env: { AUTH: 'Bearer t0k' } },
+      win: { command: 'C:\\Program Files\\nodejs\\npx.cmd', args: ['-y', 'mcp-remote', 'https://c.example/mcp', '--static-oauth-client-info', '{}'] },
+    } }))
+    expect(entry(r[0]!)).toMatchObject({ type: 'http', url: 'http://noco.example/mcp/abc', transport: 'streamable', secret: { kind: 'header', headerName: 'x-api-key', value: 'k1' } })
+    expect(entry(r[0]!)!.command).toBeUndefined()
+    expect(entry(r[1]!)).toMatchObject({ type: 'http', transport: 'sse', secret: { kind: 'bearer', value: 't0k' }, env: {} })
+    expect(entry(r[2]!)).toMatchObject({ type: 'http', url: 'https://c.example/mcp', transport: 'auto' })
+    expect(entry(r[2]!)!.notes.join()).toContain('--static-oauth-client-info')
+  })
+
+  it('keeps other npx commands as stdio and rejects broken mcp-remote headers', () => {
+    const r = parseMcpServers(JSON.stringify({ mcpServers: {
+      pkg: { command: 'npx', args: ['-y', 'some-server', 'mcp-remote', 'https://x.example'] },
+      noUrl: { command: 'npx', args: ['mcp-remote'] },
+      badHeader: { command: 'npx', args: ['mcp-remote', 'https://x.example', '--header', 'novalue'] },
+      missingVar: { command: 'npx', args: ['mcp-remote', 'https://x.example', '--header', 'Authorization:${NOPE}'] },
+    } }))
+    expect(entry(r[0]!)).toMatchObject({ type: 'stdio' })
+    expect(entry(r[1]!)).toMatchObject({ type: 'stdio' })
+    expect(r[2]).toMatchObject({ reason: 'invalid' })
+    expect(r[3]).toMatchObject({ reason: 'invalid' })
+  })
+
   it('reports unusable entries per entry instead of failing the whole import', () => {
     const r = parseMcpServers(JSON.stringify({ mcpServers: { none: {}, both: { url: 'https://x', command: 'y' }, weird: { url: 'https://x', type: 'carrier-pigeon' }, notObj: 3, envBad: { command: 'x', env: { A: 1 } } } }))
     expect(r.map(p => ('reason' in p ? p.reason : 'ok'))).toEqual(['invalid', 'invalid', 'unsupported', 'invalid', 'invalid'])
