@@ -2,7 +2,8 @@ import { createServer, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { AllowList, assertAddressesAllowed, assertUrlAllowed, isBlockedAddress, precheckUrl, SsrfBlockedError, validateAllowEntry } from '../../server/gateway/net/ssrf'
-import { createSafeFetch, UpstreamRedirectError } from '../../server/gateway/net/safe-fetch'
+import { createSafeFetch, isHttpsUpgrade, UpstreamRedirectError } from '../../server/gateway/net/safe-fetch'
+import { classifyError } from '../../server/gateway/upstream/errors'
 
 const BLOCKED_LITERALS = [
   'http://127.0.0.1/', 'http://[::1]/', 'http://10.0.0.1/', 'http://172.16.0.1/', 'http://192.168.1.1/',
@@ -113,7 +114,9 @@ describe('ssrf with real local server (no connection reaches the target)', () =>
   it('redirect to metadata IP / localhost is not followed', async () => {
     reset()
     const f = createSafeFetch({ getAllow: () => new AllowList(['127.0.0.0/8']) })
-    await expect(f(`http://127.0.0.1:${port}/redir`)).rejects.toBeInstanceOf(UpstreamRedirectError)
+    const err = await f(`http://127.0.0.1:${port}/redir`).catch(e => e)
+    expect(err).toBeInstanceOf(UpstreamRedirectError)
+    expect(err.message).toContain('http://169.254.169.254/')
     expect(requests).toEqual(['/redir'])
     await f.close()
   })
@@ -168,5 +171,80 @@ describe('ssrf extended ranges and allow-list hardening (L2, L3)', () => {
     expect(invalid).toEqual(['10.0.0.0/abc'])
     expect(() => assertUrlAllowed('http://10.1.2.3/', list)).not.toThrow()
     expect(() => assertUrlAllowed('http://10.2.2.3/', list)).toThrow(SsrfBlockedError)
+  })
+})
+
+describe('redirects: only a pure HTTPS upgrade is followed', () => {
+  it('recognises the pure upgrade only', () => {
+    const up = (a: string, b: string) => isHttpsUpgrade(new URL(a), new URL(b))
+    expect(up('http://h.example/mcp/x?a=1', 'https://h.example/mcp/x?a=1')).toBe(true)
+    expect(up('http://h.example:80/mcp', 'https://h.example:443/mcp')).toBe(true)
+    expect(up('http://h.example/mcp', 'https://other.example/mcp')).toBe(false)
+    expect(up('http://h.example/mcp', 'https://h.example/login')).toBe(false)
+    expect(up('http://h.example/mcp', 'https://h.example/mcp?next=1')).toBe(false)
+    expect(up('http://h.example/mcp', 'https://h.example:8443/mcp')).toBe(false)
+    expect(up('http://h.example:8080/mcp', 'https://h.example/mcp')).toBe(false)
+    expect(up('http://h.example/mcp', 'https://u:p@h.example/mcp')).toBe(false)
+    expect(up('https://h.example/mcp', 'https://h.example/mcp')).toBe(false)
+    expect(up('http://h.example/mcp', 'http://h.example/mcp')).toBe(false)
+  })
+
+  const fake = (routes: Record<string, (init: RequestInit) => Response>) => {
+    const calls: Array<{ url: string, method?: string, body?: unknown, headers?: unknown }> = []
+    const fetchImpl = async (url: URL, init: RequestInit) => {
+      calls.push({ url: url.href, method: init.method, body: init.body, headers: init.headers })
+      const r = routes[url.href]
+      return r ? r(init) : new Response('nope', { status: 404 })
+    }
+    return { calls, fetchImpl }
+  }
+  const redirect = (status: number, location: string) => () => new Response(null, { status, headers: { location } })
+
+  it('follows http -> https on the same host and path, replays method, body and headers, then goes to https directly', async () => {
+    const { calls, fetchImpl } = fake({
+      'http://h.example/mcp/x': redirect(307, 'https://h.example/mcp/x'),
+      'https://h.example/mcp/x': () => new Response('ok'),
+    })
+    const f = createSafeFetch({ fetchImpl })
+    const init = { method: 'POST', body: '{"jsonrpc":"2.0"}', headers: { 'x-api-key': 'k' } }
+    expect(await (await f('http://h.example/mcp/x', init)).text()).toBe('ok')
+    expect(calls.map(c => c.url)).toEqual(['http://h.example/mcp/x', 'https://h.example/mcp/x'])
+    expect(calls[1]).toMatchObject({ method: 'POST', body: '{"jsonrpc":"2.0"}', headers: { 'x-api-key': 'k' } })
+    expect(f.upgradedUrl('http://h.example/mcp/x')).toBe('https://h.example/mcp/x')
+    expect(f.upgradedUrl('http://other.example/mcp')).toBeNull()
+    calls.length = 0
+    await f('http://h.example/mcp/x', init)
+    expect(calls.map(c => c.url)).toEqual(['https://h.example/mcp/x'])
+    await f.close()
+  })
+
+  it('refuses other redirects and names the target without query', async () => {
+    const { calls, fetchImpl } = fake({
+      'http://h.example/a': redirect(302, 'https://evil.example/steal?token=abc#x'),
+      'http://h.example/b': redirect(301, '/login'),
+      'http://h.example/c': redirect(308, 'https://h.example/c'),
+      'https://h.example/c': redirect(302, 'https://h.example/elsewhere'),
+    })
+    const f = createSafeFetch({ fetchImpl })
+    const a = await f('http://h.example/a').catch(e => e)
+    expect(a).toBeInstanceOf(UpstreamRedirectError)
+    expect(a.message).toContain('https://evil.example/steal')
+    expect(a.message).not.toContain('token')
+    expect(classifyError(a)).toMatchObject({ code: 'redirect', message: a.message })
+    expect((await f('http://h.example/b').catch(e => e)).message).toContain('http://h.example/login')
+    // A second redirect after the upgrade is not followed
+    expect((await f('http://h.example/c').catch(e => e)).message).toContain('https://h.example/elsewhere')
+    expect(calls.map(c => c.url)).toEqual(['http://h.example/a', 'http://h.example/b', 'http://h.example/c', 'https://h.example/c'])
+    await f.close()
+  })
+
+  it('does not replay a streamed body', async () => {
+    const { calls, fetchImpl } = fake({ 'http://h.example/s': redirect(308, 'https://h.example/s') })
+    const f = createSafeFetch({ fetchImpl })
+    const body = new ReadableStream({ start(c) { c.close() } })
+    await expect(f('http://h.example/s', { method: 'POST', body })).rejects.toBeInstanceOf(UpstreamRedirectError)
+    expect(calls).toHaveLength(1)
+    expect(f.upgradedUrl('http://h.example/s')).toBeNull()
+    await f.close()
   })
 })

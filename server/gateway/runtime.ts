@@ -81,6 +81,13 @@ async function create(): Promise<Runtime> {
     statsWrite: rows => repo.writeStats(rows),
     statsRead: q => repo.statsSummary(q),
     notifyChanged: notifyToolsChanged,
+    onUrlUpgraded: async (up, url) => {
+      // Only if nobody changed the URL in the meantime
+      const cur = await repo.getUpstream(up.userId, up.id)
+      if (!cur || cur.url !== up.url) return
+      await repo.updateUpstream(up.userId, up.id, { url })
+      await audit(repo, { userId: up.userId, actor: 'system', action: 'upstream.update', targetType: 'upstream', targetId: up.id, targetLabel: up.name, meta: { change: 'https_upgrade' } }, log)
+    },
     getToolMode: userId => repo.getToolMode(userId),
     log,
     statusSink: {
