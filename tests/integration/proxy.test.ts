@@ -2,6 +2,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { ToolNotFoundError } from '../../server/gateway/ports'
 import { startFakeHttp, type FakeHttp } from '../fixtures/fake-upstream/http'
 import { ctxFor, makeGateway, sig } from '../helpers/gateway'
+import { createSafeFetch } from '../../server/gateway/net/safe-fetch'
 
 let a: FakeHttp, b: FakeHttp
 beforeAll(async () => { a = await startFakeHttp(); b = await startFakeHttp({ toolNames: ['only_b'] }) })
@@ -126,5 +127,24 @@ describe('proxy passthrough', () => {
     expect(r.isError).toBe(true)
     expect(r._meta).toMatchObject({ code: 'rate_limited', limit_scope: 'upstream' })
     expect(Number(r._meta!.retry_after)).toBeGreaterThanOrEqual(1)
+  })
+})
+
+describe('http upstream that redirects to https', () => {
+  it('follows the pure HTTPS upgrade and reports the https URL to store (not for OAuth upstreams)', async () => {
+    // up.example answers http with a 308 to https; https is served by the fake upstream
+    const fetchImpl = async (url: URL, init: RequestInit) => {
+      if (url.protocol === 'http:') return new Response(null, { status: 308, headers: { location: url.href.replace('http:', 'https:') } })
+      return fetch(new URL(url.pathname + url.search, a.url), init)
+    }
+    const upgraded: Array<[string, string]> = []
+    const h = makeGateway({ safeFetch: createSafeFetch({ fetchImpl }), onUrlUpgraded: async (up, u) => { upgraded.push([up.slug, u]) } })
+    try {
+      const path = new URL(a.url).pathname
+      h.store.addUpstream('A', { slug: 'plain', url: `http://up.example${path}` })
+      const list = await h.gw.toolSource.listTools(ctxFor('A'))
+      expect(list.map(t => t.name)).toContain('plain__echo')
+      expect(upgraded).toEqual([['plain', `https://up.example${path}`]])
+    } finally { await h.gw.shutdown(500) }
   })
 })

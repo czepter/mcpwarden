@@ -1,7 +1,7 @@
 import { MetaToolSource } from './proxy/meta'
 import { POOL_IDLE_MS } from './config'
 import { decryptSecret } from './crypto/secrets'
-import { createSafeFetch, type FetchLike } from './net/safe-fetch'
+import { createSafeFetch, type FetchLike, type SafeFetch } from './net/safe-fetch'
 import type { AllowList } from './net/ssrf'
 import { GatewayCore, GET_STATS_DEF } from './proxy/handlers'
 import { StatsBuffer, type CallStatRow } from './stats/buffer'
@@ -29,6 +29,8 @@ export type GatewayOptions = {
   /** OAuth upstreams: encrypted session store and the callback URL registered at the upstream's authorization server. */
   oauth?: { vault: OAuthVault, redirectUrl: string }
   notifyChanged?: (userId: string) => void
+  /** An http upstream answered with a pure HTTPS upgrade: store the https URL so the credentials stop going out over http. */
+  onUrlUpgraded?: (up: UpstreamRow, url: string) => Promise<void>
   /** Per-user tool mode ('direct' | 'meta'). Without it the gateway always serves the full catalog. */
   getToolMode?: (userId: string) => Promise<import('#shared/api-types').ToolMode>
   log?: (msg: string, err?: unknown) => void
@@ -68,7 +70,15 @@ export function createGateway(o: GatewayOptions) {
     restTools: (up, owner) => (o.store.listRestTools ? o.store.listRestTools(owner, up.id) : Promise.resolve([])),
     oauthProvider: oauth ? (up, owner) => new UpstreamOAuthProvider({ vault: oauth.vault, userId: owner, upstreamId: up.id, redirectUrl: oauth.redirectUrl, interactive: false }) : undefined,
   }
-  const pool = new Pool({ connect: (up, signal, owner) => connectUpstream(up, deps, signal, owner), maxFor: async u => (await o.store.getLimits(u)).maxConnections })
+  const upgradedUrl = (url: string) => (safeFetch as Partial<SafeFetch>).upgradedUrl?.(url) ?? null
+  const connect = async (up: UpstreamRow, signal: AbortSignal | undefined, owner: string) => {
+    const c = await connectUpstream(up, deps, signal, owner)
+    // OAuth sessions are bound to the stored URL (resource indicator): those keep the runtime upgrade only
+    const next = up.url && up.authType !== 'oauth' && o.onUrlUpgraded ? upgradedUrl(up.url) : null
+    if (next) await o.onUrlUpgraded!(up, next).catch(e => o.log?.('url upgrade', e))
+    return c
+  }
+  const pool = new Pool({ connect, maxFor: async u => (await o.store.getLimits(u)).maxConnections })
   // Without a cleanup loop connections (and thus stdio child processes) would stay open forever: the worker's idle timer
   // (processes = 0) would never kick in.
   const sweeper = setInterval(() => { limiter.prune(); void pool.sweepIdle(o.poolIdleMs ?? POOL_IDLE_MS).catch(e => o.log?.('pool sweep', e)) }, o.sweepMs ?? 60_000)

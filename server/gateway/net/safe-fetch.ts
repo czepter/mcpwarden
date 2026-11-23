@@ -5,8 +5,28 @@ export type FetchLike = (url: string | URL, init?: RequestInit) => Promise<Respo
 
 export class UpstreamRedirectError extends Error {
   readonly code = 'redirect'
-  constructor() { super('Upstream leitet um, bitte Ziel-URL direkt eintragen') }
+  /** Redirect target without query and fragment (they may carry tokens), or undefined when unusable. */
+  readonly target?: string
+  constructor(target?: URL) {
+    const shown = target && ['http:', 'https:'].includes(target.protocol) ? `${target.origin}${target.pathname}` : undefined
+    super(shown ? `Upstream leitet um auf ${shown}, bitte diese URL eintragen` : 'Upstream leitet um, bitte Ziel-URL direkt eintragen')
+    this.target = shown
+  }
 }
+
+/**
+ * A pure HTTPS upgrade: `http://host[:80]/path?q` -> `https://host[:443]/path?q`. Only this redirect is followed;
+ * every other target could hand the upstream credentials to someone else.
+ */
+export function isHttpsUpgrade(from: URL, to: URL): boolean {
+  return from.protocol === 'http:' && to.protocol === 'https:' && from.hostname === to.hostname
+    && from.port === '' && to.port === '' && !to.username && !to.password
+    && from.pathname === to.pathname && from.search === to.search
+}
+
+const toHttps = (u: URL) => { const x = new URL(u); x.protocol = 'https:'; return x }
+const REDIRECT_STATUS = new Set([301, 302, 303, 307, 308])
+const MAX_UPGRADED_HOSTS = 1000
 
 /** An upstream response exceeded the size the gateway is willing to buffer. */
 export class UpstreamResponseTooLargeError extends Error {
@@ -48,6 +68,8 @@ export type SafeFetchOptions = {
   connectTimeoutMs?: number
   /** Called on 429/503 with Retry-After (seconds). */
   onRetryAfter?: (host: string, seconds: number) => void
+  /** Tests only: replaces the network call (the SSRF literal check and the redirect handling still run). */
+  fetchImpl?: (url: URL, init: RequestInit & { redirect: 'manual' }) => Promise<Response>
 }
 
 function findCause<T extends Error>(e: unknown, pred: (x: unknown) => x is T): T | undefined {
@@ -56,31 +78,73 @@ function findCause<T extends Error>(e: unknown, pred: (x: unknown) => x is T): T
 
 /**
  * fetch for ALL SDK client transports: literal check before every request, DNS check at the
- * Connect-Lookup (undici-Dispatcher), `redirect: 'error'`.
+ * Connect-Lookup (undici-Dispatcher). Redirects are refused, except a pure HTTPS upgrade of the same host and path: that
+ * one is followed and remembered for the host (like HSTS), so later requests go straight to https.
  */
-export function createSafeFetch(opts: SafeFetchOptions = {}): FetchLike & { close: () => Promise<void> } {
+export type SafeFetch = FetchLike & {
+  close: () => Promise<void>
+  /** The https URL this http URL was upgraded to (its host answered with a pure HTTPS upgrade), else null. */
+  upgradedUrl: (url: string) => string | null
+}
+
+export function createSafeFetch(opts: SafeFetchOptions = {}): SafeFetch {
   const getAllow = opts.getAllow ?? (() => new AllowList())
   const dispatcher = new Agent({
     bodyTimeout: 0, // SSE-Streams
     headersTimeout: 60_000,
     connect: { timeout: opts.connectTimeoutMs ?? 10_000, lookup: createSafeLookup(getAllow, opts.resolver ?? systemResolver) as never },
   })
-  const f = (async (input: string | URL, init?: RequestInit) => {
-    const url = assertUrlAllowed(input, await getAllow())
+  // Hosts (host[:port] of the http URL) that answered with a pure HTTPS upgrade
+  const upgraded = new Set<string>()
+  const remember = (host: string) => {
+    if (upgraded.size >= MAX_UPGRADED_HOSTS) upgraded.delete(upgraded.values().next().value!)
+    upgraded.add(host)
+  }
+  const once = async (url: URL, init?: RequestInit) => {
     try {
-      const res = await undiciFetch(url, { ...(init as object), redirect: 'error', dispatcher }) as unknown as Response
-      if ((res.status === 429 || res.status === 503) && opts.onRetryAfter) {
-        const ra = Number(res.headers.get('retry-after'))
-        if (Number.isFinite(ra) && ra > 0) opts.onRetryAfter(url.host, ra)
-      }
-      return capResponse(res)
+      if (opts.fetchImpl) return await opts.fetchImpl(url, { ...init, redirect: 'manual' })
+      return await undiciFetch(url, { ...(init as object), redirect: 'manual', dispatcher }) as unknown as Response
     } catch (e) {
       const ssrf = findCause(e, (x): x is SsrfBlockedError => x instanceof SsrfBlockedError)
       if (ssrf) throw ssrf
-      if (/redirect/i.test(String((e as { cause?: Error }).cause?.message ?? ''))) throw new UpstreamRedirectError()
       throw e
     }
-  }) as FetchLike & { close: () => Promise<void> }
+  }
+  const f = (async (input: string | URL, init?: RequestInit) => {
+    const allow = await getAllow()
+    let url = assertUrlAllowed(input, allow)
+    if (url.protocol === 'http:' && upgraded.has(url.host)) url = assertUrlAllowed(toHttps(url), allow)
+    let res = await once(url, init)
+    if (REDIRECT_STATUS.has(res.status)) {
+      const loc = res.headers.get('location')
+      void res.body?.cancel().catch(() => {})
+      let target: URL | undefined
+      try { target = loc ? new URL(loc, url) : undefined } catch { target = undefined }
+      // The body must be sendable a second time (the SDK sends strings); a stream was already consumed
+      const replayable = init?.body === undefined || init.body === null || typeof init.body === 'string'
+      if (!target || !isHttpsUpgrade(url, target) || !replayable) throw new UpstreamRedirectError(target)
+      remember(url.host)
+      url = assertUrlAllowed(target, allow)
+      res = await once(url, init)
+      if (REDIRECT_STATUS.has(res.status)) {
+        void res.body?.cancel().catch(() => {})
+        let next: URL | undefined
+        try { next = new URL(res.headers.get('location') ?? '', url) } catch { next = undefined }
+        throw new UpstreamRedirectError(next)
+      }
+    }
+    if ((res.status === 429 || res.status === 503) && opts.onRetryAfter) {
+      const ra = Number(res.headers.get('retry-after'))
+      if (Number.isFinite(ra) && ra > 0) opts.onRetryAfter(url.host, ra)
+    }
+    return capResponse(res)
+  }) as SafeFetch
+  f.upgradedUrl = (raw: string) => {
+    try {
+      const u = new URL(raw)
+      return u.protocol === 'http:' && upgraded.has(u.host) ? toHttps(u).href : null
+    } catch { return null }
+  }
   let closing: Promise<void> | null = null
   f.close = () => (closing ??= dispatcher.close().catch(() => {}))
   return f

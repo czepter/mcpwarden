@@ -23,7 +23,8 @@ export function classifyError(e: unknown, opts: { hasAuth?: boolean, aborted?: b
   const all = chain(e)
   if (all.some(x => x instanceof SsrfBlockedError || (x as Error)?.message?.includes(SSRF_MESSAGE))) return { code: 'ssrf_blocked', message: SSRF_MESSAGE, counts: false, auth: false }
   if (all.some(x => x instanceof CredentialsMissingError)) return { code: 'awaiting_auth', message: 'Zugangsdaten fehlen noch', counts: false, auth: false }
-  if (all.some(x => x instanceof UpstreamRedirectError)) return { code: 'redirect', message: 'Upstream leitet um, bitte Ziel-URL direkt eintragen', counts: false, auth: false }
+  const redirect = all.find((x): x is UpstreamRedirectError => x instanceof UpstreamRedirectError)
+  if (redirect) return { code: 'redirect', message: redirect.message, counts: false, auth: false }
   if (all.some(x => x instanceof UpstreamResponseTooLargeError)) return { code: 'protocol', message: 'Upstream-Antwort ist zu groß', counts: true, auth: false }
   if (all.some(x => x instanceof CatalogLimitError)) return { code: 'protocol', message: 'Upstream liefert eine zu grosse Tool-Liste', counts: true, auth: false }
   if (all.some(x => x instanceof OAuthReauthError || x instanceof UnauthorizedError)) {
